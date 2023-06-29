@@ -256,7 +256,7 @@ drake_cc_library(
         "//multibody/math:spatial_algebra",
     ],
 )
-'''
+
 drake_cc_library(
     name = "SparseGrid",
     srcs = [
@@ -273,7 +273,7 @@ drake_cc_library(
         "//geometry/proximity:posed_half_space",
     ],
 )
-'''
+
 drake_cc_binary(
     name = "helloworld",
     srcs = [
