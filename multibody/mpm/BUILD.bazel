@@ -12,6 +12,173 @@ load(
 )
 load("//tools/lint:lint.bzl", "add_lint_tests")
 
+drake_cc_library(
+    name = "Utils",
+    hdrs = [
+        "Utils.h",
+    ],
+    deps = [
+        "//common:essential",
+    ]
+)
+
+drake_cc_library(
+    name = "MathUtils",
+    srcs = [
+        "MathUtils.cc",
+    ],
+    hdrs = [
+        "MathUtils.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "MPMParameters",
+    hdrs = [
+        "MPMParameters.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "particles_to_bgeo",
+    srcs = [
+        "particles_to_bgeo.cc",
+    ],
+    hdrs = [
+        "particles_to_bgeo.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//common:find_resource",
+        "//common:temp_directory",
+        "@partio",
+    ],
+)
+
+drake_cc_library(
+    name = "poisson_disk_sampling",
+    hdrs = [
+        "poisson_disk_sampling.h",
+        "//common:eigen_types.h",
+    ],
+)
+
+drake_cc_library(
+    name = "TotalMassEnergyMomentum",
+    hdrs = [
+        "TotalMassEnergyMomentum.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "AnalyticLevelSet",
+    srcs = [
+        "AnalyticLevelSet.cc",
+    ],
+    hdrs = [
+        "AnalyticLevelSet.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//math:geometric_transform",
+    ],
+)
+
+drake_cc_library(
+    name = "SpatialVelocityTimeDependent",
+    srcs = [
+        "SpatialVelocityTimeDependent.cc",
+    ],
+    hdrs = [
+        "SpatialVelocityTimeDependent.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//multibody/fem:matrix_utilities",
+        "//multibody/math:spatial_algebra",
+    ],
+)
+
+drake_cc_library(
+    name = "ElastoPlasticModel",
+    srcs = [
+        "ElastoPlasticModel.cc",
+    ],
+    hdrs = [
+        "ElastoPlasticModel.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//multibody/fem:matrix_utilities",
+    ],
+)
+
+
+
+
+
+
+
+
+drake_cc_library(
+    name = "CollisionObject",
+    srcs = [
+        "CollisionObject.cc",
+    ],
+    hdrs = [
+        "CollisionObject.h",
+    ],
+    deps = [
+        ":AnalyticLevelSet",
+        ":SpatialVelocityTimeDependent",
+        "//common:essential",
+        "//math:geometric_transform",
+        "//multibody/fem:matrix_utilities",
+        "//multibody/math:spatial_algebra",
+    ],
+)
+
+
+
+drake_cc_library(
+    name = "KinematicCollisionObjects",
+    srcs = [
+        "KinematicCollisionObjects.cc",
+    ],
+    hdrs = [
+        "KinematicCollisionObjects.h",
+    ],
+    deps = [
+        ":CollisionObject",
+        "//common:essential",
+    ],
+)
+
+
+
+drake_cc_library(
+    name = "CorotatedElasticModel",
+    srcs = [
+        "CorotatedElasticModel.cc",
+    ],
+    hdrs = [
+        "CorotatedElasticModel.h",
+    ],
+    deps = [
+        ":ElastoPlasticModel",
+        "//common:essential",
+        "//multibody/fem:matrix_utilities",
+    ],
+)
 
 
 
@@ -29,20 +196,84 @@ drake_cc_library(
     ],
 )
 
+
 drake_cc_library(
-    name = "visualize_grid",
+    name = "GravitationalForce",
     srcs = [
-        "visualize_grid.cc",
+        "GravitationalForce.cc",
     ],
     hdrs = [
-        "visualize_grid.h",
+        "GravitationalForce.h",
     ],
     deps = [
-        "//common:essential",
         ":Grid",
+        "//common:essential",
     ],
 )
 
+
+drake_cc_library(
+    name = "Particles",
+    srcs = [
+        "Particles.cc",
+    ],
+    hdrs = [
+        "Particles.h",
+    ],
+    deps = [
+        ":ElastoPlasticModel",
+        ":MathUtils",
+        ":TotalMassEnergyMomentum",
+        "//common:essential",
+    ],
+)
+
+
+
+
+drake_cc_library(
+    name = "MPMDriver",
+    srcs = [
+        "MPMDriver.cc",
+    ],
+    hdrs = [
+        "MPMDriver.h",
+    ],
+    deps = [
+        ":AnalyticLevelSet",
+        ":ElastoPlasticModel",
+        ":GravitationalForce",
+        ":MPMParameters",
+#         ":MPMRunTimeStatistics",
+#         ":MPMTransfer",
+        ":Particles",
+#         ":SparseGrid",
+        ":Grid",
+        ":particles_to_bgeo",
+        ":poisson_disk_sampling",
+        "//common:essential",
+        "//math:geometric_transform",
+        "//multibody/math:spatial_algebra",
+    ],
+)
+'''
+drake_cc_library(
+    name = "SparseGrid",
+    srcs = [
+        "SparseGrid.cc",
+    ],
+    hdrs = [
+        "SparseGrid.h",
+    ],
+    deps = [
+        ":KinematicCollisionObjects",
+        ":Particles",
+        ":Utils",
+        "//common:essential",
+        "//geometry/proximity:posed_half_space",
+    ],
+)
+'''
 drake_cc_binary(
     name = "helloworld",
     srcs = [
@@ -50,12 +281,27 @@ drake_cc_binary(
     ],
     deps = [
         ":Grid",
-        ":visualize_grid",
         "//common:essential",
-       
+        ":CorotatedElasticModel",
+        ":TotalMassEnergyMomentum",
+        ":Particles",
+        ":MPMParameters",
     ],
 )
-
+drake_cc_binary(
+    name = "ball",
+    srcs = [
+        "examples/ball/main.cpp",
+    ],
+    deps = [
+        ":CorotatedElasticModel",
+        ":MPMDriver",
+#        ":SpatialVelocityTimeDependent",
+        "//common:essential",
+        "//math:geometric_transform",
+        "@partio",
+    ],
+)
 
 
 

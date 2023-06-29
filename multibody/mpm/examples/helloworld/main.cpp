@@ -13,7 +13,10 @@
 // #include "drake/common/temp_directory.h"
 // #include "drake/math/roll_pitch_yaw.h"
 #include "drake/multibody/mpm/Grid.h"
-#include "drake/multibody/mpm/visualize_grid.h"
+#include "drake/multibody/mpm/CorotatedElasticModel.h"
+#include "drake/multibody/mpm/TotalMassEnergyMomentum.h"
+#include "drake/multibody/mpm/Particles.h"
+#include "drake/multibody/mpm/MPMParameters.h"
 
 namespace drake {
 namespace multibody {

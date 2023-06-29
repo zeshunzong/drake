@@ -99,6 +99,7 @@ load("@drake//tools/workspace/x11:repository.bzl", "x11_repository")
 load("@drake//tools/workspace/xmlrunner_py:repository.bzl", "xmlrunner_py_repository")  # noqa
 load("@drake//tools/workspace/yaml_cpp_internal:repository.bzl", "yaml_cpp_internal_repository")  # noqa
 load("@drake//tools/workspace/zlib:repository.bzl", "zlib_repository")
+load("@drake//tools/workspace/partio:repository.bzl", "partio_repository")
 
 def add_default_repositories(excludes = [], mirrors = DEFAULT_MIRRORS):
     """Declares workspace repositories for all externals needed by drake (other
@@ -310,6 +311,8 @@ def add_default_repositories(excludes = [], mirrors = DEFAULT_MIRRORS):
         yaml_cpp_internal_repository(name = "yaml_cpp_internal", mirrors = mirrors)  # noqa
     if "zlib" not in excludes:
         zlib_repository(name = "zlib")
+    if "partio" not in excludes:
+        partio_repository(name = "partio", mirrors = mirrors)
 
 def add_default_toolchains(excludes = []):
     """Register toolchains for each language (e.g., "py") not explicitly
