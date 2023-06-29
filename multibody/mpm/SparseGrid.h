@@ -6,10 +6,12 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/mpm/KinematicCollisionObjects.h"
 #include "drake/multibody/mpm/Particles.h"
+#include "drake/multibody/mpm/Utils.h"
 
 namespace drake {
 namespace multibody {

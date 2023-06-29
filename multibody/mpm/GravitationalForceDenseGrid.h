@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "drake/common/eigen_types.h"
-#include "drake/multibody/mpm/SparseGrid.h"
+#include "drake/multibody/mpm/Grid.h"
 
 namespace drake {
 namespace multibody {
@@ -19,7 +19,7 @@ class GravitationalForce {
     // Apply the gravitational forces to grid points. (Equivalently, apply
     // gravitational acceleration to the velocity)
     // v_new = v_prev + dt*gravitational_acceleration
-    void ApplyGravitationalForces(double dt, SparseGrid* grid) const;
+    void ApplyGravitationalForces(double dt, Grid* grid) const;
 
  private:
     Vector3<double> gravitational_acceleration_;

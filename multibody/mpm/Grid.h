@@ -7,8 +7,9 @@
 #include <string>
 #include <iostream>
 
-
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/mpm/KinematicCollisionObjects.h"
+#include "drake/multibody/mpm/TotalMassEnergyMomentum.h"
 
 namespace drake {
 namespace multibody {
@@ -75,7 +76,21 @@ class Grid {
     void set_mass(int idx_flat, double mass);
     void set_force(int idx_flat, const Vector3<double>& force);
 
-    
+    // Accumulate the state at (i, j, k) with the given value
+    void AccumulateVelocity(int i, int j, int k,
+                                            const Vector3<double>& velocity);
+    void AccumulateMass(int i, int j, int k, double mass);
+    void AccumulateForce(int i, int j, int k, const Vector3<double>& force);
+    void AccumulateVelocity(const Vector3<int>& index_3d,
+                                            const Vector3<double>& velocity);
+    void AccumulateMass(const Vector3<int>& index_3d, double mass);
+    void AccumulateForce(const Vector3<int>& index_3d,
+                         const Vector3<double>& force);
+
+    // Rescale the velocities_ vector by the mass_, used in P2G where we
+    // temporarily store momentum mv into velocities
+    void RescaleVelocities();
+
     // Set masses, velocities and forces to be 0
     void ResetStates();
 
@@ -92,38 +107,22 @@ class Grid {
     bool in_index_range(int i, int j, int k) const;
     bool in_index_range(const Vector3<int>& index_3d) const;
 
+    // Assume the explicit grid force at step n f^n is calculated and stored in
+    // the member variable, we update the velocity with the formula
+    // v^{n+1} = v^n + dt*f^n/m^n
+    void UpdateVelocity(double dt);
+
+    // Enforce wall boundary conditions using the given kinematic collision
+    // objects. The normal of the given collision object is the outward pointing
+    // normal from the interior of the object to the exterior of the object. We
+    // strongly impose this Dirichlet boundary conditions.
+    void EnforceBoundaryCondition(const KinematicCollisionObjects& objects);
+
+    // Return the sum of mass, momentum and angular momentum of all grid points
+    TotalMassEnergyMomentum GetTotalMassAndMomentum() const;
+
     void writeGrid2obj(const std::string& filename);
     void writeGridVelocity2obj(const std::string& filename);
-
-    // // Assume the explicit grid force at step n f^n is calculated and stored in
-    // // the member variable, we update the velocity with the formula
-    // // v^{n+1} = v^n + dt*f^n/m^n
-    // void UpdateVelocity(double dt);
-
-    // // Enforce wall boundary conditions using the given kinematic collision
-    // // objects. The normal of the given collision object is the outward pointing
-    // // normal from the interior of the object to the exterior of the object. We
-    // // strongly impose this Dirichlet boundary conditions.
-    // void EnforceBoundaryCondition(const KinematicCollisionObjects& objects);
-
-    // // Return the sum of mass, momentum and angular momentum of all grid points
-    // TotalMassAndMomentum GetTotalMassAndMomentum() const;
-
-    // // Accumulate the state at (i, j, k) with the given value
-    // void AccumulateVelocity(int i, int j, int k,
-    //                                         const Vector3<double>& velocity);
-    // void AccumulateMass(int i, int j, int k, double mass);
-    // void AccumulateForce(int i, int j, int k, const Vector3<double>& force);
-    // void AccumulateVelocity(const Vector3<int>& index_3d,
-    //                                         const Vector3<double>& velocity);
-    // void AccumulateMass(const Vector3<int>& index_3d, double mass);
-    // void AccumulateForce(const Vector3<int>& index_3d,
-    //                      const Vector3<double>& force);
-
-    // Rescale the velocities_ vector by the mass_, used in P2G where we
-    // temporarily store momentum mv into velocities
-    // void RescaleVelocities();
-
 
  private:
     int num_gridpt_;

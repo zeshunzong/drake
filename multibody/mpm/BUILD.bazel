@@ -36,6 +36,29 @@ drake_cc_library(
 )
 
 drake_cc_library(
+    name = "BSpline",
+    srcs = [
+        "BSpline.cc",
+    ],
+    hdrs = [
+        "BSpline.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "MPMRunTimeStatistics",
+    hdrs = [
+        "MPMRunTimeStatistics.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
     name = "MPMParameters",
     hdrs = [
         "MPMParameters.h",
@@ -193,6 +216,8 @@ drake_cc_library(
     deps = [
         "//common:essential",
         "//geometry/proximity:posed_half_space",
+        ":KinematicCollisionObjects",
+        ":TotalMassEnergyMomentum",
     ],
 )
 
@@ -206,7 +231,7 @@ drake_cc_library(
         "GravitationalForce.h",
     ],
     deps = [
-        ":Grid",
+        ":SparseGrid",
         "//common:essential",
     ],
 )
@@ -228,35 +253,6 @@ drake_cc_library(
     ],
 )
 
-
-
-
-drake_cc_library(
-    name = "MPMDriver",
-    srcs = [
-        "MPMDriver.cc",
-    ],
-    hdrs = [
-        "MPMDriver.h",
-    ],
-    deps = [
-        ":AnalyticLevelSet",
-        ":ElastoPlasticModel",
-        ":GravitationalForce",
-        ":MPMParameters",
-#         ":MPMRunTimeStatistics",
-#         ":MPMTransfer",
-        ":Particles",
-#         ":SparseGrid",
-        ":Grid",
-        ":particles_to_bgeo",
-        ":poisson_disk_sampling",
-        "//common:essential",
-        "//math:geometric_transform",
-        "//multibody/math:spatial_algebra",
-    ],
-)
-
 drake_cc_library(
     name = "SparseGrid",
     srcs = [
@@ -273,6 +269,49 @@ drake_cc_library(
         "//geometry/proximity:posed_half_space",
     ],
 )
+
+drake_cc_library(
+    name = "MPMTransfer",
+    srcs = [
+        "MPMTransfer.cc",
+    ],
+    hdrs = [
+        "MPMTransfer.h",
+    ],
+    deps = [
+        ":BSpline",
+        ":Particles",
+        ":SparseGrid",
+        "//common:essential",
+    ],
+)
+
+
+drake_cc_library(
+    name = "MPMDriver",
+    srcs = [
+        "MPMDriver.cc",
+    ],
+    hdrs = [
+        "MPMDriver.h",
+    ],
+    deps = [
+        ":AnalyticLevelSet",
+        ":ElastoPlasticModel",
+        ":GravitationalForce",
+        ":MPMParameters",
+        ":MPMRunTimeStatistics",
+        ":MPMTransfer",
+        ":Particles",
+        ":SparseGrid",
+        ":particles_to_bgeo",
+        ":poisson_disk_sampling",
+        "//common:essential",
+        "//math:geometric_transform",
+        "//multibody/math:spatial_algebra",
+    ],
+)
+
 
 drake_cc_binary(
     name = "helloworld",

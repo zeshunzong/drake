@@ -97,7 +97,7 @@ void SparseGrid::UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_i
     num_active_gridpts_ = 0;
     active_gridpts_.clear();
     index_map_.clear();
-
+    std::cout << "should resume from here " << std::endl; getchar();
     // Determine the set of active grids points by iterating through all
     // particles
     for (int p = 0; p < particles.get_num_particles(); ++p) {
@@ -106,8 +106,8 @@ void SparseGrid::UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_i
         for (int b = -1; b <= 1; ++b) {
         for (int a = -1; a <= 1; ++a) {
             Vector3<int> gridpt = {batch_idx_3D(0)+a, batch_idx_3D(1)+b,
-                                   batch_idx_3D(2)+c};
-            if (index_map_.count(gridpt) == 0) {
+                                   batch_idx_3D(2)+c}; // get all 27 neighboring grid nodes to particle p
+            if (index_map_.count(gridpt) == 0) { // if this node is not active, mark as active here
                 active_gridpts_[num_active_gridpts_++] = gridpt;
                 index_map_[gridpt] = 1;
             }

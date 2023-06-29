@@ -5,7 +5,6 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <utility>
@@ -17,10 +16,10 @@
 #include "drake/multibody/mpm/ElastoPlasticModel.h"
 #include "drake/multibody/mpm/GravitationalForce.h"
 #include "drake/multibody/mpm/MPMParameters.h"
-// #include "drake/multibody/fem/mpm-dev/MPMRunTimeStatistics.h"
-// #include "drake/multibody/mpm/MPMTransfer.h"
+#include "drake/multibody/mpm/MPMRunTimeStatistics.h"
+#include "drake/multibody/mpm/MPMTransfer.h"
 #include "drake/multibody/mpm/Particles.h"
-#include "drake/multibody/mpm/Grid.h"
+#include "drake/multibody/mpm/SparseGrid.h"
 #include "drake/multibody/mpm/particles_to_bgeo.h"
 #include "drake/multibody/mpm/poisson_disk_sampling.h"
 #include "drake/multibody/math/spatial_algebra.h"
@@ -51,7 +50,7 @@ class MPMDriver {
     explicit MPMDriver(MPMParameters param);
 
     // Initialize the collision objects in the domain
-    // void InitializeKinematicCollisionObjects(KinematicCollisionObjects objects);
+    void InitializeKinematicCollisionObjects(KinematicCollisionObjects objects);
 
     // Initialize particles' positions with Poisson disk sampling. The object's
     // level set in the physical frame is the given level set in the reference
@@ -64,38 +63,39 @@ class MPMDriver {
                              MaterialParameters param);
 
     // Symplectic Euler time stepping till endtime with dt
-    // void DoTimeStepping();
+    void DoTimeStepping();
+
+    // For every write_interval, write particles' information to
+    // output_directory/case_name($step).bgeo
     void WriteParticlesToBgeo(int step);
 
  private:
     friend class MPMDriverTest;
 
     // Update time step size
-    // void UpdateTimeStep(double* dt);
+    void UpdateTimeStep(double* dt);
 
     // Advance MPM simulation by a single time step. Assuming both grid and
     // particles' state are at time n, a single time step involves a P2G
     // transfer, grid velocities update, a G2P transfer, and particles'
     // velocities update.
-    // void AdvanceOneTimeStep(double dt, double t);
+    void AdvanceOneTimeStep(double dt, double t);
 
-    // For every write_interval, write particles' information to
-    // output_directory/case_name($step).bgeo
     
 
-    // void DumpStatistics(double t, double dt, std::ofstream& output_statistics) const;
+    void DumpStatistics(double t, double dt, std::ofstream& output_statistics) const;
 
-    // // Print the run time statistics to the standard IO
-    // void PrintRunTimeStatistics() const;
+    // Print the run time statistics to the standard IO
+    void PrintRunTimeStatistics() const;
 
     MPMParameters param_;
-    // MPMRunTimeStatistics run_time_statistics_{};
+    MPMRunTimeStatistics run_time_statistics_{};
     Particles particles_;
-    Grid grid_;
-    // MPMTransfer mpm_transfer_;
+    SparseGrid grid_;
+    MPMTransfer mpm_transfer_;
     GravitationalForce gravitational_force_;
-    // KinematicCollisionObjects collision_objects_;
-
+    KinematicCollisionObjects collision_objects_;
+    // TODO(yiminlin.tri): refactor
     double dilatational_wavespd_;
     double sum_boundary_impulse_n_;
     double sum_boundary_impulse_t_;

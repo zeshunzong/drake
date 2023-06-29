@@ -48,7 +48,7 @@ int DoMain() {
     };
 
     MPMParameters param {p_param, s_param, io_param};
-    auto driver = std::make_unique<MPMDriver>(std::move(param));
+    auto driver = std::make_unique<MPMDriver>(std::move(param)); // sparseGrid also initialized here
 
     // KinematicCollisionObjects objects = KinematicCollisionObjects();
 
@@ -73,8 +73,7 @@ int DoMain() {
     // driver->InitializeKinematicCollisionObjects(std::move(objects));
     driver->InitializeParticles(level_set_sphere, pose_sphere,
                                 std::move(m_param_sphere));
-    driver->WriteParticlesToBgeo(0);
-    // driver->DoTimeStepping();
+    driver->DoTimeStepping();
 
     return 0;
 }
