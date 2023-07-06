@@ -36,138 +36,26 @@ int do_main() {
   // For every two items we add to the initial array, decrement start_x by one
   // to keep things centered.
   // Use ++x as the x-position of new items.
-  const double start_x = -8;
+  const double start_x = -1;
   double x = start_x;
 
-  Vector3d sphere_home{++x, 0, 0};
-  meshcat->SetObject("sphere", Sphere(0.25), Rgba(1.0, 0, 0, 1));
-  meshcat->SetTransform("sphere", RigidTransformd(sphere_home));
-
-  meshcat->SetObject("cylinder", Cylinder(0.25, 0.5), Rgba(0.0, 1.0, 0, 1));
-  meshcat->SetTransform("cylinder", RigidTransformd(Vector3d{++x, 0, 0}));
-
-  meshcat->SetObject("ellipsoid", Ellipsoid(0.25, 0.25, 0.5),
-                     Rgba(1.0, 0, 1, 0.5));
-  meshcat->SetTransform("ellipsoid", RigidTransformd(Vector3d{++x, 0, 0}));
-
-  Vector3d box_home{++x, 0, 0};
-  meshcat->SetObject("box", Box(0.25, 0.25, 0.5), Rgba(0, 0, 1, 1));
-  meshcat->SetTransform("box", RigidTransformd(box_home));
-
-  meshcat->SetObject("capsule", Capsule(0.25, 0.5), Rgba(0, 1, 1, 1));
-  meshcat->SetTransform("capsule", RigidTransformd(Vector3d{++x, 0, 0}));
-
-  // Note that height (in z) is the first argument.
-  meshcat->SetObject("cone", MeshcatCone(0.5, 0.25, 0.5), Rgba(1, 0, 0, 1));
-  meshcat->SetTransform("cone", RigidTransformd(Vector3d{++x, 0, 0}));
-
-  // The green color of this cube comes from the texture map.
-  meshcat->SetObject(
-      "obj", Mesh(FindResourceOrThrow(
-                      "drake/geometry/render/test/meshes/box.obj"),
-                  0.25));
-  meshcat->SetTransform("obj", RigidTransformd(Vector3d{++x, 0, 0}));
-
-  auto mustard_obj =
-      FindRunfile("drake_models/ycb/meshes/006_mustard_bottle_textured.obj")
-          .abspath;
-  meshcat->SetObject("mustard", Mesh(mustard_obj, 3.0));
-  meshcat->SetTransform("mustard", RigidTransformd(Vector3d{++x, 0, 0}));
 
   {
-    const int kPoints = 100000;
+    const int kPoints = 100;
     perception::PointCloud cloud(
         kPoints, perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
     Eigen::Matrix3Xf m = Eigen::Matrix3Xf::Random(3, kPoints);
-    cloud.mutable_xyzs() = Eigen::DiagonalMatrix<float, 3>{0.25, 0.25, 0.5} * m;
-    cloud.mutable_rgbs() = (255.0 * (m.array() + 1.0) / 2.0).cast<uint8_t>();
+    // std::cout << m.size() << std::endl; getchar();
+    cloud.mutable_xyzs() = Eigen::DiagonalMatrix<float, 3>{0.05, 0.05, 0.1} * m;
+    cloud.mutable_rgbs() = (255.0 * (m.array() + 1.0) / 2.0).cast<uint8_t>(); // if do not do this, color is black
+
+    // up to here we get a pointCloud with n points
+
     meshcat->SetObject("point_cloud", cloud, 0.01);
     meshcat->SetTransform("point_cloud", RigidTransformd(Vector3d{++x, 0, 0}));
   }
 
-  {
-    Eigen::Matrix3Xd vertices(3, 200);
-    Eigen::RowVectorXd t = Eigen::RowVectorXd::LinSpaced(200, 0, 10 * M_PI);
-    vertices << 0.25 * t.array().sin(), 0.25 * t.array().cos(), t / (10 * M_PI);
-    meshcat->SetLine("line", vertices, 3.0, Rgba(0, 0, 1, 1));
-    meshcat->SetTransform("line", RigidTransformd(Vector3d{++x, 0, -0.5}));
-  }
 
-  {
-    Eigen::Matrix3Xd start(3, 4), end(3, 4);
-    // clang-format off
-    start << -0.1, -0.1,  0.1,  0.1,
-             -0.1,  0.1, -0.1,  0.1,
-                0,    0,    0,    0;
-    // clang-format on
-    end = start;
-    end.row(2) = Eigen::RowVector4d::Ones();
-    meshcat->SetLineSegments("line_segments", start, end, 5.0,
-                             Rgba(0, 1, 0, 1));
-    meshcat->SetTransform("line_segments",
-                          RigidTransformd(Vector3d{++x, 0, -0.5}));
-  }
-
-  // The TriangleSurfaceMesh variant of SetObject calls SetTriangleMesh(), so
-  // visually inspecting the results of TriangleSurfaceMesh is sufficient here.
-  {
-    const int face_data[2][3] = {{0, 1, 2}, {2, 3, 0}};
-    std::vector<SurfaceTriangle> faces;
-    for (int f = 0; f < 2; ++f) faces.emplace_back(face_data[f]);
-    const Vector3d vertex_data[4] = {
-        {0, 0, 0}, {0.5, 0, 0}, {0.5, 0.5, 0}, {0, 0.5, 0.5}};
-    std::vector<Vector3d> vertices;
-    for (int v = 0; v < 4; ++v) vertices.emplace_back(vertex_data[v]);
-    TriangleSurfaceMesh<double> surface_mesh(
-        std::move(faces), std::move(vertices));
-    meshcat->SetObject("triangle_mesh", surface_mesh, Rgba(0.9, 0, 0.9, 1.0));
-    meshcat->SetTransform("triangle_mesh",
-                          RigidTransformd(Vector3d{++x, -0.25, 0}));
-
-    meshcat->SetObject("triangle_mesh_wireframe", surface_mesh,
-                       Rgba(0.9, 0, 0.9, 1.0), true, 5.0);
-    meshcat->SetTransform("triangle_mesh_wireframe",
-                          RigidTransformd(Vector3d{++x, -0.25, 0}));
-  }
-
-  // SetTriangleColorMesh.
-  {
-    // clang-format off
-    Eigen::Matrix3Xd vertices(3, 4);
-    vertices <<
-      0, 0.5, 0.5, 0,
-      0, 0,   0.5, 0.5,
-      0, 0,   0,   0.5;
-    Eigen::Matrix3Xi faces(3, 2);
-    faces <<
-      0, 2,
-      1, 3,
-      2, 0;
-    Eigen::Matrix3Xd colors(3, 4);
-    colors <<
-      1, 0, 0, 1,
-      0, 1, 0, 1,
-      0, 0, 1, 0;
-    // clang-format on
-    meshcat->SetTriangleColorMesh("triangle_color_mesh", vertices, faces,
-                                  colors);
-    meshcat->SetTransform("triangle_color_mesh",
-                          RigidTransformd(Vector3d{++x, -0.25, 0}));
-  }
-
-  // PlotSurface.
-  {
-    constexpr int nx = 15, ny = 11;
-    Eigen::MatrixXd X =
-        Eigen::RowVectorXd::LinSpaced(nx, 0, 1).replicate<ny, 1>();
-    Eigen::MatrixXd Y = Eigen::VectorXd::LinSpaced(ny, 0, 1).replicate<1, nx>();
-    // z = y*sin(5*x)
-    Eigen::MatrixXd Z = (Y.array() * (5 * X.array()).sin()).matrix();
-
-    meshcat->PlotSurface("plot_surface", X, Y, Z, Rgba(0, 0, 0.9, 1.0), true);
-    meshcat->SetTransform("plot_surface",
-                          RigidTransformd(Vector3d{++x, -0.25, 0}));
-  }
 
   std::cout << R"""(
 Open up your browser to the URL above.
@@ -193,78 +81,8 @@ Open up your browser to the URL above.
   std::cout << "[Press RETURN to continue]." << std::endl;
   std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-  std::cout << "Calling meshcat.Flush(), which will block until all clients "
-               "have received all the data)...";
-  meshcat->Flush();
-  std::cout << "Done." << std::endl;
 
-  std::cout << "Animations:\n";
-  MeshcatAnimation animation;
-  std::cout << "- the red sphere should move up and down in z.\n";
-  animation.SetTransform(0, "sphere", RigidTransformd(sphere_home));
-  animation.SetTransform(20, "sphere", RigidTransformd(sphere_home +
-                                                       Vector3d::UnitZ()));
-  animation.SetTransform(40, "sphere", RigidTransformd(sphere_home));
-
-  std::cout << "- the blue box should spin clockwise about the +z axis.\n";
-  animation.SetTransform(0, "box",
-                         RigidTransformd(RotationMatrixd::MakeZRotation(0),
-                                         box_home));
-  animation.SetTransform(20, "box",
-                         RigidTransformd(RotationMatrixd::MakeZRotation(M_PI),
-                                         box_home));
-  animation.SetTransform(
-      40, "box", RigidTransformd(RotationMatrixd::MakeZRotation(2 * M_PI),
-                                 box_home));
-  animation.set_repetitions(4);
-
-  std::cout << "- the green cylinder should appear and disappear.\n";
-  animation.SetProperty(0, "cylinder", "visible", true);
-  animation.SetProperty(20, "cylinder", "visible", false);
-  animation.SetProperty(40, "cylinder", "visible", true);
-  animation.set_repetitions(4);
-
-  std::cout
-      << "- the pink ellipsoid should get less and then more transparent.\n";
-  animation.SetProperty(0, "ellipsoid/<object>", "material.opacity", 1.0);
-  animation.SetProperty(20, "ellipsoid/<object>", "material.opacity", 0.0);
-  animation.SetProperty(40, "ellipsoid/<object>", "material.opacity", 1.0);
-  animation.set_repetitions(4);
-
-  meshcat->SetAnimation(animation);
-
-  std::cout << "You can review/replay the animation from the controls menu.\n";
-  std::cout << "[Press RETURN to continue]." << std::endl;
-  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-  meshcat->Set2dRenderMode(math::RigidTransform(Vector3d{0, -3, 0}), -4,
-                           4, -2, 2);
-
-  std::cout << "- The scene should have switched to 2D rendering mode.\n";
-  std::cout << "[Press RETURN to continue]." << std::endl;
-  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-  meshcat->Set2dRenderMode(
-      math::RigidTransform(math::RotationMatrixd::MakeZRotation(-M_PI / 2.0),
-                           sphere_home),
-      -2, 2, -2, 2);
-
-  std::cout << "- Now 2D rendering along the +x axis (red sphere in front).\n";
-  std::cout << "[Press RETURN to continue]." << std::endl;
-  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-  std::cout << "- The scene should have switched back to 3D.\n";
-  meshcat->ResetRenderMode();
-
-  std::cout << "[Press RETURN to continue]." << std::endl;
-  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-  // Turn off the background (it will appear white).
-  meshcat->SetProperty("/Background", "visible", false);
-
-  meshcat->Delete("box");
-  meshcat->SetProperty("/Lights/AmbientLight/<object>", "intensity", 0.1);
-
+ 
   std::cout
       << "- The blue box should have disappeared\n"
       << "- The lights should have dimmed.\n"

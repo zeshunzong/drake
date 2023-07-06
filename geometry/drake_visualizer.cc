@@ -615,6 +615,8 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
       query_object, params_, EvalDeformableMeshData(context),
       ExtractDoubleOrThrow(context.get_time()), lcm_);
 
+  // ADD a call to MPM one here 
+
   return EventStatus::Succeeded();
 }
 
@@ -778,6 +780,38 @@ void DrakeVisualizer<T>::SendDeformableGeometriesMessage(
   std::string channel = MakeLcmChannelNameForRole("DRAKE_VIEWER_DEFORMABLE",
                                                   params);
   lcm::Publish(lcm, channel, message, time);
+}
+
+template <typename T>
+void DrakeVisualizer<T>::SendMPMGeometriesMessage(
+    const QueryObject<T>& query_object, const DrakeVisualizerParams& params,
+    const vector<internal::DeformableMeshData>& deformable_data, double time,
+    lcm::DrakeLcmInterface* lcm) {
+  lcmt_viewer_link_data message{};
+  // message.name = "deformable_geometries";
+  // message.robot_num = 0;  // robot_num = 0 corresponds to world frame.
+  // message.num_geom = deformable_data.size();
+  // message.geom.resize(message.num_geom);
+  // for (int i = 0; i < message.num_geom; ++i) {
+  //   const internal::DeformableMeshData& data = deformable_data[i];
+  //   const GeometryId g_id = data.geometry_id;
+  //   const VectorX<T>& vertex_positions =
+  //       query_object.GetConfigurationsInWorld(g_id);
+  //   if (vertex_positions.size() <= data.volume_vertex_count) {
+  //     throw std::logic_error(fmt::format(
+  //         "For mesh named '{}', The number of given vertex positions "
+  //         "({}) is smaller than the "
+  //         "minimum expected number of positions ({}).",
+  //         data.name, vertex_positions.size(), data.volume_vertex_count));
+  //   }
+  //   // TODO(xuchenhan-tri): We should use the color from the property of the
+  //   // geometry when available.
+  //   message.geom[i] =
+  //       MakeDeformableSurfaceMesh(vertex_positions, data, params.default_color);
+  // }
+  // std::string channel = MakeLcmChannelNameForRole("DRAKE_VIEWER_DEFORMABLE",
+  //                                                 params);
+  // lcm::Publish(lcm, channel, message, time);
 }
 
 template <typename T>
