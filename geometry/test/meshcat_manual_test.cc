@@ -45,7 +45,6 @@ int do_main() {
     perception::PointCloud cloud(
         kPoints, perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
     Eigen::Matrix3Xf m = Eigen::Matrix3Xf::Random(3, kPoints);
-    // std::cout << m.size() << std::endl; getchar();
     cloud.mutable_xyzs() = Eigen::DiagonalMatrix<float, 3>{0.05, 0.05, 0.1} * m;
     cloud.mutable_rgbs() = (255.0 * (m.array() + 1.0) / 2.0).cast<uint8_t>(); // if do not do this, color is black
 

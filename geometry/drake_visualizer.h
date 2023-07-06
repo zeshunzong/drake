@@ -17,6 +17,12 @@
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/framework/output_port.h"
 
+//newly added
+#include "drake/perception/point_cloud.h"
+#include "drake/lcmt_point_cloud.hpp"
+#include <iostream>
+#include "drake/perception/point_cloud_to_lcm.h"
+
 namespace drake {
 namespace geometry {
 // Forward declare a tester class used as a friend of DrakeVisualizer.
@@ -274,6 +280,17 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
       const QueryObject<T>& query_object, const DrakeVisualizerParams& params,
       const std::vector<internal::DeformableMeshData>& deformable_data,
       double time, lcm::DrakeLcmInterface* lcm);
+
+  /* Dispatches a message for mpm, as point cloud. */
+  static void SendMPMGeometriesMessage(
+      const QueryObject<T>& query_object, const DrakeVisualizerParams& params,
+      const std::vector<internal::DeformableMeshData>& deformable_data,
+      double time, lcm::DrakeLcmInterface* lcm);
+  /* Helper function to translate PointCloud to lcm message*/
+  static lcmt_point_cloud ConvertPointCloudToMessage(
+    const perception::PointCloud& cloud,
+    const double time = 1.0,
+    const std::string& frame_name = "world");
 
   /* Identifies all of the frames with dynamic data and stores them (with
    additional data) in the given vector `frame_data`.

@@ -615,7 +615,10 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
       query_object, params_, EvalDeformableMeshData(context),
       ExtractDoubleOrThrow(context.get_time()), lcm_);
 
-  // ADD a call to MPM one here 
+  // // ADD a call to MPM one here 
+  SendMPMGeometriesMessage(
+      query_object, params_, EvalDeformableMeshData(context),
+      ExtractDoubleOrThrow(context.get_time()), lcm_);
 
   return EventStatus::Succeeded();
 }
@@ -787,32 +790,44 @@ void DrakeVisualizer<T>::SendMPMGeometriesMessage(
     const QueryObject<T>& query_object, const DrakeVisualizerParams& params,
     const vector<internal::DeformableMeshData>& deformable_data, double time,
     lcm::DrakeLcmInterface* lcm) {
-  lcmt_viewer_link_data message{};
-  // message.name = "deformable_geometries";
-  // message.robot_num = 0;  // robot_num = 0 corresponds to world frame.
-  // message.num_geom = deformable_data.size();
-  // message.geom.resize(message.num_geom);
-  // for (int i = 0; i < message.num_geom; ++i) {
-  //   const internal::DeformableMeshData& data = deformable_data[i];
-  //   const GeometryId g_id = data.geometry_id;
-  //   const VectorX<T>& vertex_positions =
-  //       query_object.GetConfigurationsInWorld(g_id);
-  //   if (vertex_positions.size() <= data.volume_vertex_count) {
-  //     throw std::logic_error(fmt::format(
-  //         "For mesh named '{}', The number of given vertex positions "
-  //         "({}) is smaller than the "
-  //         "minimum expected number of positions ({}).",
-  //         data.name, vertex_positions.size(), data.volume_vertex_count));
-  //   }
-  //   // TODO(xuchenhan-tri): We should use the color from the property of the
-  //   // geometry when available.
-  //   message.geom[i] =
-  //       MakeDeformableSurfaceMesh(vertex_positions, data, params.default_color);
-  // }
-  // std::string channel = MakeLcmChannelNameForRole("DRAKE_VIEWER_DEFORMABLE",
-  //                                                 params);
-  // lcm::Publish(lcm, channel, message, time);
+  
+  // to be deleted, just to avoid bugs
+  const internal::DeformableMeshData& data = deformable_data[0];
+  const GeometryId g_id = data.geometry_id;
+  const VectorX<T>& vertex_positions = query_object.GetConfigurationsInWorld(g_id);
+  if (vertex_positions[0] > 100000){
+    std::cout << vertex_positions[0] << std::endl;
+  }
+  
+  const int kPoints = 100;
+  perception::PointCloud cloud(
+  kPoints, perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
+  Eigen::Matrix3Xf m = Eigen::Matrix3Xf::Random(3, kPoints);
+  cloud.mutable_xyzs() = Eigen::DiagonalMatrix<float, 3>{0.05, 0.05, 0.1} * m;
+  // cloud.mutable_rgbs() = (255.0 * (m.array() + 1.0) / 2.0).cast<uint8_t>(); // if do not do this, color is black
+  lcmt_point_cloud message = ConvertPointCloudToMessage(cloud);
+  /* Note: the channel name must be "DRAKE_POINT_CLOUD.**" otherwise it would not be 
+  recognized by meldis. This is due to a special setting of handle in meldis. Here 
+  we just keep meldis unchanged, and set our channel name accordingly.*/
+  std::string channel = MakeLcmChannelNameForRole("DRAKE_POINT_CLOUD",
+                                                  params);
+  lcm::Publish(lcm, channel, message, time);
 }
+
+template <typename T>
+lcmt_point_cloud DrakeVisualizer<T>::ConvertPointCloudToMessage(
+    const perception::PointCloud& cloud,
+    const double time,
+    const std::string& frame_name) {
+  const perception::PointCloudToLcm dut(frame_name);
+  auto context = dut.CreateDefaultContext();
+  context->SetTime(time);
+  dut.get_input_port().FixValue(context.get(), Value<perception::PointCloud>(cloud));
+  const lcmt_point_cloud output =
+      dut.get_output_port().Eval<lcmt_point_cloud>(*context);
+  return output;
+}
+
 
 template <typename T>
 void DrakeVisualizer<T>::CalcDynamicFrameData(

@@ -516,6 +516,7 @@ class Meldis:
         self._subscribe(channel="DRAKE_VIEWER_DEFORMABLE",
                         message_type=lcmt_viewer_link_data,
                         handler=default_viewer.on_viewer_draw_deformable)
+        
         self._poll(handler=default_viewer.on_poll)
 
         illustration_viewer = _ViewerApplet(meshcat=self.meshcat,
@@ -551,7 +552,7 @@ class Meldis:
         self._subscribe_multichannel(regex="DRAKE_POINT_CLOUD.*",
                                      message_type=lcmt_point_cloud,
                                      handler=point_cloud.on_point_cloud)
-
+        
         # Bookkeeping for automatic shutdown.
         self._last_poll = None
         self._last_active = None
