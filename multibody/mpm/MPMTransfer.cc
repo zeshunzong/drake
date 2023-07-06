@@ -22,8 +22,12 @@ void MPMTransfer::SetUpTransfer(SparseGrid* grid,
     }
 
     // TODO(yiminlin.tri): expensive... To optimize
+    // TODO(simon): batch_indices has the same size as particles, can only use batch_indices but not particles
+    // simon: what it does is loop over all particles (equivalently batch for each particle, mark the 27 adjacent grid nodes as active, and sort grid nodes)
     grid->UpdateActiveGridPoints(batch_indices, *particles);
-    SortParticles(batch_indices, *grid, particles);
+    
+    SortParticles(batch_indices, *grid, particles); // sort particles based on sorted grid nodes above
+
     // TODO(yiminlin.tri): expensive... To optimize
     UpdateBasisAndGradientParticles(*grid, *particles);
     // TODO(yiminlin.tri): Dp_inv_ is hardcoded for quadratic B-Spline
@@ -226,8 +230,6 @@ void MPMTransfer::EvalBasisOnBatch(int p, const Vector3<double>& xp,
     int idx_local;
     Vector3<int> grid_index;
 
-    // TODO(yiminlin.tri): Could be nicer to refactor this a, b, c loop, with
-    //                     Vector<int>
     for (int c = -1; c <= 1; ++c) {
     for (int b = -1; b <= 1; ++b) {
     for (int a = -1; a <= 1; ++a) {
@@ -274,10 +276,6 @@ void MPMTransfer::AccumulateGridStatesOnBatch(int p, double m_p,
         state_i.mass += m_ip;
         // PIC update:
         // state_i.velocity += m_ip*v_p;
-        // TODO(yiminlin.tri): This also conserves angular momentum, but is
-        //                     using a incorrect linearization. May want to
-        //                     look at it further?
-        // state_i.velocity += m_ip*v_p+m_p*B_p*gradNi_p;
         // APIC update:
         state_i.velocity += m_ip*(v_p+C_p*(x_i-x_p));
         state_i.force += -reference_volume_p*tau_p*gradNi_p;
@@ -327,7 +325,7 @@ void MPMTransfer::UpdateParticleStates(const std::array<BatchState, 27>&
     Matrix3<double> Bp_new = Matrix3<double>::Zero();
     Matrix3<double> grad_vp_new = Matrix3<double>::Zero();
 
-    // For each grid points affecting the current particle
+    // For each grid node affecting the current particle
     for (int c = -1; c <= 1; ++c) {
     for (int b = -1; b <= 1; ++b) {
     for (int a = -1; a <= 1; ++a) {

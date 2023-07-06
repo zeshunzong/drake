@@ -56,8 +56,7 @@ class SparseGrid {
     // already sorted without any duplicates.
     void UpdateActiveGridPoints(const std::vector<Vector3<int>>& active_gridpts);
 
-    // Update active_gridpts_ with the given input. Assume the input is
-    // already sorted without any duplicates.
+    // loop over all particles to mark active grid nodes, also sort them
     void UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_indices,
                                 const Particles& particles);
 
