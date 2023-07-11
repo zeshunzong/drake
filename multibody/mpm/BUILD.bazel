@@ -5,12 +5,25 @@ load(
     "drake_cc_binary",
     "drake_cc_googletest",
     "drake_cc_library",
+    "drake_cc_package_library",
 )
 load(
     "@drake//tools/vector_gen:vector_gen.bzl",
     "drake_cc_vector_gen_library",
 )
 load("//tools/lint:lint.bzl", "add_lint_tests")
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+drake_cc_package_library(
+    name = "mpm",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":mpm_model", 
+    ],
+)
 
 drake_cc_library(
     name = "Utils",
@@ -309,6 +322,55 @@ drake_cc_library(
         "//common:essential",
         "//math:geometric_transform",
         "//multibody/math:spatial_algebra",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_state_system",
+    srcs = [
+        "mpm_state_system.cc",
+    ],
+    hdrs = [
+        "mpm_state_system.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//systems/framework:leaf_system",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_state",
+    srcs = [
+        "mpm_state.cc",
+    ],
+    hdrs = [
+        "mpm_state.h",
+    ],
+    deps = [
+        ":mpm_state_system",
+        "//common:essential",
+        "//systems/framework:context",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_model",
+    srcs = [
+        "mpm_model.cc",
+        # "fem_model_impl.cc",
+    ],
+    hdrs = [
+        "mpm_model.h",
+        # "fem_model_impl.h",
+    ],
+    deps = [
+        # ":dirichlet_boundary_condition",
+        # ":fem_element",
+        ":mpm_state",
+        # ":petsc_symmetric_block_sparse_matrix",
+        "//common:essential",
+        # "//multibody/contact_solvers:block_sparse_lower_triangular_or_symmetric_matrix",  # noqa
     ],
 )
 

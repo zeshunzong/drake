@@ -9,6 +9,7 @@
 #include "drake/common/identifier.h"
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/fem/fem_model.h"
+#include "drake/multibody/mpm/mpm_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/physical_model.h"
 
@@ -67,6 +68,11 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    @throws std::exception if Finalize() has been called on the multibody plant
    owning this deformable model. */
   DeformableBodyId RegisterDeformableBody(
+      std::unique_ptr<geometry::GeometryInstance> geometry_instance,
+      const fem::DeformableBodyConfig<T>& config, double resolution_hint);
+
+  // ZESHUN: trial only, not technically set data with this function
+  DeformableBodyId RegisterMpmBody(
       std::unique_ptr<geometry::GeometryInstance> geometry_instance,
       const fem::DeformableBodyConfig<T>& config, double resolution_hint);
 
@@ -168,6 +174,13 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
                                   const geometry::VolumeMesh<double>& mesh,
                                   const fem::DeformableBodyConfig<T>& config);
 
+ /* Builds a MPM model for the body with `id`, basically call the MPMModel's builder
+ and add the newly built mpm_model to class attribute */
+  void BuildMpmModel(DeformableBodyId id,
+                                  const geometry::VolumeMesh<double>& mesh,
+                                  const fem::DeformableBodyConfig<T>& config,
+                                  const VectorX<T> reference_position);
+
   template <template <class, int> class Model>
   void BuildLinearVolumetricModelHelper(
       DeformableBodyId id, const geometry::VolumeMesh<double>& mesh,
@@ -200,6 +213,9 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   std::vector<DeformableBodyId> body_ids_;
   std::unordered_map<DeformableBodyId, DeformableBodyIndex> body_id_to_index_;
   systems::OutputPortIndex vertex_positions_port_index_;
+
+    // for mpm only, assume only one mpm body
+  std::unique_ptr<mpm::MpmModel<T>> mpm_model_;
 };
 
 }  // namespace multibody

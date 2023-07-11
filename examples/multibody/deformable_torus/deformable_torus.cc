@@ -206,6 +206,7 @@ int do_main() {
    capability and to make the torus suitable for grasping by the gripper). */
   const double scale = 0.65;
   auto torus_mesh = std::make_unique<Mesh>(torus_vtk, scale);
+  auto torus_mesh2 = std::make_unique<Mesh>(torus_vtk, scale);
   /* Minor diameter of the torus inferred from the vtk file. */
   const double kL = 0.09 * scale;
   /* Set the initial pose of the torus such that its bottom face is touching the
@@ -213,7 +214,8 @@ int do_main() {
   const RigidTransformd X_WB(Vector3<double>(0.0, 0.0, kL / 2.0));
   auto torus_instance = std::make_unique<GeometryInstance>(
       X_WB, std::move(torus_mesh), "deformable_torus");
-
+  auto torus_instance2 = std::make_unique<GeometryInstance>(
+      X_WB, std::move(torus_mesh2), "deformable_torus");
   /* Minimumly required proximity properties for deformable bodies: A valid
    Coulomb friction coefficient. */
   ProximityProperties deformable_proximity_props;
@@ -229,10 +231,13 @@ int do_main() {
   const double unused_resolution_hint = 1.0;
   owned_deformable_model->RegisterDeformableBody(
       std::move(torus_instance), deformable_config, unused_resolution_hint);
+      std::cout << "finish fem" << std::endl;getchar();   
+  owned_deformable_model->RegisterMpmBody(
+      std::move(torus_instance2), deformable_config, unused_resolution_hint); 
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
   plant.AddPhysicalModel(std::move(owned_deformable_model));
-
+  std::cout<< "finish add physical model" << std::endl;
   /* Get joints so that we can set constraints and initial conditions. */
   PrismaticJoint<double>& left_slider =
       plant.GetMutableJointByName<PrismaticJoint>("left_slider");
@@ -246,7 +251,7 @@ int do_main() {
 
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
-
+  std::cout << "plant finalized" << std::endl;
   /* It's essential to connect the vertex position port in DeformableModel to
    the source configuration port in SceneGraph when deformable bodies are
    present in the plant. */
