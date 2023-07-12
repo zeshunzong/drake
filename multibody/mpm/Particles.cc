@@ -161,7 +161,7 @@ void Particles::Reorder(const std::vector<size_t>& new_order) {
                         elastic_deformation_gradients_sorted(num_particles_);
     std::vector<Matrix3<double>> kirchhoff_stresses_sorted(num_particles_);
     std::vector<Matrix3<double>> B_matrices_sorted(num_particles_);
-    std::vector<std::unique_ptr<ElastoPlasticModel>>
+    std::vector<copyable_unique_ptr<ElastoPlasticModel>>
                                  elastoplastic_models_sorted(num_particles_);
     for (int p = 0; p < num_particles_; ++p) {
         p_new = new_order[p];

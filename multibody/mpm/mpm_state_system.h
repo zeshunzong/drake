@@ -1,6 +1,8 @@
 #pragma once
 
 #include "drake/systems/framework/leaf_system.h"
+#include "drake/multibody/mpm/Particles.h"
+
 
 namespace drake {
 namespace multibody {
@@ -19,7 +21,8 @@ class MpmStateSystem : public systems::LeafSystem<T> {
    @pre model_q, model_v, model_a all have the same size.
    @pre model_q's size is a multiple of 3. */
   MpmStateSystem(const VectorX<T>& model_q, const VectorX<T>& model_v,
-                 const VectorX<T>& model_a);
+                 const VectorX<T>& model_a,
+                 const Particles& particles);
 
   /* Promotes DeclareCacheEntry so that MpmStateSystem can declare cache
   entries publicly. */
@@ -34,9 +37,14 @@ class MpmStateSystem : public systems::LeafSystem<T> {
   systems::DiscreteStateIndex mpm_acceleration_index() const {
     return a_index_;
   }
+  systems::AbstractStateIndex particles_container_index() const {
+    return particles_container_index_;
+  }
 
   /* Returns the number of degrees of freedom in the system. */
   int num_dofs() const { return num_dofs_; }
+
+  
 
  private:
   systems::DiscreteStateIndex q_index_;
@@ -44,6 +52,9 @@ class MpmStateSystem : public systems::LeafSystem<T> {
   systems::DiscreteStateIndex v_index_;
   systems::DiscreteStateIndex a_index_;
   int num_dofs_{0};
+
+  int num_particles_{0};
+  systems::AbstractStateIndex particles_container_index_;
 };
 
 }  // namespace internal

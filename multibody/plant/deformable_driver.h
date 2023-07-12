@@ -170,6 +170,13 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     std::vector<systems::CacheIndex> fem_states;
     std::vector<systems::CacheIndex> free_motion_fem_states;
     std::vector<systems::CacheIndex> next_fem_states;
+
+    // we assume there is only one MPM model, so no need for a vector
+    systems::CacheIndex mpm_state;
+    systems::CacheIndex free_motion_mpm_state;
+    systems::CacheIndex next_mpm_state;
+
+
     std::vector<systems::CacheIndex> fem_solver_scratches;
     systems::CacheIndex deformable_contact;
     std::vector<systems::CacheIndex> dof_permutations;
@@ -195,6 +202,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   const fem::FemState<T>& EvalFemState(const systems::Context<T>& context,
                                        DeformableBodyIndex index) const;
 
+  const mpm::MpmState<T>& EvalMpmState(const systems::Context<T>& context) const;
+
+  void CalcMpmState(const systems::Context<T>& context, mpm::MpmState<T>* mpm_state) const;
+                                     
+
   /* Given the state of the deformable body with `index` in the given `context`,
    computes its "free motion" state (the state the body would have at the next
    time step in the absence of contact or constraints).
@@ -207,6 +219,18 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   /* Eval version of CalcFreeMotionFemState(). */
   const fem::FemState<T>& EvalFreeMotionFemState(
       const systems::Context<T>& context, DeformableBodyIndex index) const;
+
+  /* Given the state of the deformable body with `index` in the given `context`,
+   computes its "free motion" state (the state the body would have at the next
+   time step in the absence of contact or constraints).
+   @pre fem_state_star != nullptr and is compatible with the state of the
+   deformable body with the given `index`. */
+  void CalcFreeMotionMpmState(const systems::Context<T>& context,
+                              mpm::MpmState<T>* mpm_state_star) const;
+
+  /* Eval version of CalcFreeMotionFemState(). */
+  const mpm::MpmState<T>& EvalFreeMotionMpmState(
+      const systems::Context<T>& context) const;
 
   /* Given the state of the deformable body with `index` in the given `context`,
    computes the state of the deformable body at the next time step.
@@ -224,7 +248,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   /* Eval version of CalcNextFemState(). */
   const fem::FemState<T>& EvalNextFemState(const systems::Context<T>& context,
                                            DeformableBodyIndex index) const;
-
+  /* Eval version of CalcNextMpmState(). */
+  const mpm::MpmState<T>& EvalNextMpmState(const systems::Context<T>& context) const;
+    void CalcNextMpmState(const systems::Context<T>& context,
+                            mpm::MpmState<T>* next_mpm_state) const;
   /* Computes the contact information for all registered deformable bodies
    @pre The geometry query input port of the MultibodyPlant that owns the
         manager associated with this DeformableDriver is connected.

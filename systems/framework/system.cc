@@ -6,7 +6,7 @@
 #include <set>
 #include <string_view>
 #include <vector>
-
+#include <iostream>
 #include <fmt/format.h>
 
 #include "drake/common/unused.h"

@@ -10,9 +10,7 @@
 #include "drake/common/default_scalars.h"
 #include "drake/common/eigen_types.h"
 // #include "drake/multibody/contact_solvers/block_sparse_lower_triangular_or_symmetric_matrix.h"
-// #include "drake/multibody/fem/dirichlet_boundary_condition.h"
 #include "drake/multibody/mpm/mpm_state.h"
-// #include "drake/multibody/fem/petsc_symmetric_block_sparse_matrix.h"
 
 namespace drake {
 namespace multibody {
@@ -32,7 +30,7 @@ class MpmModel {
     virtual ~Builder() = default;
 
 
-    void Build(VectorX<T> reference_positions);
+    void Build(const Particles& particles);
 
    
     /** Throws an exception if Build() has been called on this %Builder. */
@@ -46,12 +44,8 @@ class MpmModel {
       DRAKE_DEMAND(model_ != nullptr);
     }
 
-    void DoBuild(const VectorX<T> reference_positions){
-      std::cout << "temporary setting reference solution of MPMModel in builder" << std::endl;
-      model_->reference_positions_.conservativeResize(reference_positions.size());
-      for (int i=0; i < reference_positions.size(); ++i) {
-        model_->reference_positions_[0] = reference_positions[i];
-      }
+    void DoBuild(){
+      // std::cout << "temporary setting reference solution of MPMModel in builder" << std::endl;
     }
 
    private:
@@ -125,12 +119,12 @@ class MpmModel {
   /** Updates the system that manages the states and the cache entries of this
    FEM model. Must be called before calling MakeFemState() after the FEM model
    changes (e.g. adding new elements). */
-  void UpdateMpmStateSystem();
+  void UpdateMpmStateSystem(const Particles& particles);
 
 //   /** Derived classes should override this method to declare cache entries in
 //    the given `fem_state_system`. */
-//   virtual void DeclareCacheEntries(
-//       internal::FemStateSystem<T>* mpm_state_system) = 0;
+  void DeclareCacheEntries(
+      internal::MpmStateSystem<T>* mpm_state_system);
 
   /** Returns the FemStateSystem that manages the states and cache entries in
    this %MpmModel. */

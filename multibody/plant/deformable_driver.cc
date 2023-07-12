@@ -13,6 +13,8 @@
 #include "drake/multibody/fem/dirichlet_boundary_condition.h"
 #include "drake/multibody/fem/fem_model.h"
 #include "drake/multibody/fem/fem_solver.h"
+
+#include "drake/multibody/mpm/mpm_model.h"
 #include "drake/multibody/fem/velocity_newmark_scheme.h"
 #include "drake/multibody/plant/contact_properties.h"
 #include "drake/systems/framework/context.h"
@@ -28,6 +30,8 @@ using drake::multibody::contact_solvers::internal::MatrixBlock;
 using drake::multibody::contact_solvers::internal::PartialPermutation;
 using drake::multibody::fem::FemModel;
 using drake::multibody::fem::FemState;
+using drake::multibody::mpm::MpmState;
+using drake::multibody::mpm::MpmModel;
 using drake::multibody::fem::internal::DirichletBoundaryCondition;
 using drake::multibody::fem::internal::FemSolver;
 using drake::multibody::fem::internal::FemSolverScratchData;
@@ -96,6 +100,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
   cache_indexes_.participating_free_motion_velocities =
       participating_free_motion_velocities_cache_entry.cache_index();
 
+  // loop over all fem bodies
   for (DeformableBodyIndex i(0); i < deformable_model_->num_bodies(); ++i) {
     const DeformableBodyId id = deformable_model_->GetBodyId(i);
     const fem::FemModel<T>& fem_model = deformable_model_->GetFemModel(id);
@@ -132,10 +137,12 @@ void DeformableDriver<T>::DeclareCacheEntries(
         systems::ValueProducer(
             *model_state,
             std::function<void(const systems::Context<T>&, fem::FemState<T>*)>{
-                [this, i](const systems::Context<T>& context,
-                          fem::FemState<T>* next_fem_state) {
+                [this, i](const systems::Context<T>& context,fem::FemState<T>* next_fem_state) 
+                          {
                   this->CalcNextFemState(context, i, next_fem_state);
-                }}),
+                }
+                }
+                ),
         {systems::SystemBase::all_sources_ticket()});
     cache_indexes_.next_fem_states.emplace_back(
         next_fem_state_cache_entry.cache_index());
@@ -216,7 +223,57 @@ void DeformableDriver<T>::DeclareCacheEntries(
         {deformable_contact_cache_entry.ticket()});
     cache_indexes_.vertex_permutations.emplace(
         g_id, vertex_permutation_cache_entry.cache_index());
+  } // finish all fem bodies
+
+
+
+
+  // cache mpm, if there exists one
+  if (deformable_model_->ExistsMpmModel()){
+    const mpm::MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
+    std::unique_ptr<mpm::MpmState<T>> model_state = mpm_model.MakeMpmState();
+    //---------------------------- cache current state--------------------
+    const auto& mpm_state_cache_entry = manager->DeclareCacheEntry(
+        fmt::format("MPM state"),
+        systems::ValueProducer(
+            *model_state,
+            std::function<void(const Context<T>&, mpm::MpmState<T>*)>{
+                [this](const Context<T>& context, mpm::MpmState<T>* state) {
+                  this->CalcMpmState(context, state);
+                }}),
+        {}); // TODO: add prereq dependency
+    cache_indexes_.mpm_state = mpm_state_cache_entry.cache_index();
+
+    /* Cache entry for free motion MPM state. */
+    const auto& free_motion_mpm_state_cache_entry = manager->DeclareCacheEntry(
+        fmt::format("free motion MPM state"),
+        systems::ValueProducer(
+            *model_state,
+            std::function<void(const systems::Context<T>&, mpm::MpmState<T>*)>{
+                [this](const systems::Context<T>& context,
+                          mpm::MpmState<T>* free_motion_state) {
+                  this->CalcFreeMotionMpmState(context, free_motion_state);
+                }}),
+        {}); // TODO: add prereq dependency
+    cache_indexes_.free_motion_mpm_state = free_motion_mpm_state_cache_entry.cache_index();
+
+
+    /* Cache entry for MPM state at next time step. */
+    const auto& next_mpm_state_cache_entry = manager->DeclareCacheEntry(
+        fmt::format("MPM state at next time step"),
+        systems::ValueProducer(
+            *model_state,
+            std::function<void(const systems::Context<T>&, mpm::MpmState<T>*)>{
+                [this](const systems::Context<T>& context,
+                          mpm::MpmState<T>* next_mpm_state) {
+                  this->CalcNextMpmState(context, next_mpm_state);
+                }}),
+        {systems::SystemBase::all_sources_ticket()});
+    cache_indexes_.next_mpm_state = next_mpm_state_cache_entry.cache_index();
+
   }
+
+
 }
 
 template <typename T>
@@ -434,17 +491,27 @@ void DeformableDriver<T>::CalcDiscreteStates(
     const systems::Context<T>& context,
     systems::DiscreteValues<T>* next_states) const {
   const int num_bodies = deformable_model_->num_bodies();
-  for (DeformableBodyIndex index(0); index < num_bodies; ++index) {
-    const FemState<T>& next_fem_state = EvalNextFemState(context, index);
-    const int num_dofs = next_fem_state.num_dofs();
-    // Update the discrete values.
-    VectorX<T> discrete_value(num_dofs * 3);
-    discrete_value.head(num_dofs) = next_fem_state.GetPositions();
-    discrete_value.segment(num_dofs, num_dofs) = next_fem_state.GetVelocities();
-    discrete_value.tail(num_dofs) = next_fem_state.GetAccelerations();
-    const DeformableBodyId id = deformable_model_->GetBodyId(index);
-    next_states->set_value(deformable_model_->GetDiscreteStateIndex(id),
-                           discrete_value);
+  if (num_bodies > 0){
+    std::cout << "there are FEM bodies to be computed" << std::endl; getchar();
+    for (DeformableBodyIndex index(0); index < num_bodies; ++index) {
+        const FemState<T>& next_fem_state = EvalNextFemState(context, index);
+        const int num_dofs = next_fem_state.num_dofs();
+        // Update the discrete values.
+        VectorX<T> discrete_value(num_dofs * 3);
+        discrete_value.head(num_dofs) = next_fem_state.GetPositions();
+        discrete_value.segment(num_dofs, num_dofs) = next_fem_state.GetVelocities();
+        discrete_value.tail(num_dofs) = next_fem_state.GetAccelerations();
+        const DeformableBodyId id = deformable_model_->GetBodyId(index);
+        next_states->set_value(deformable_model_->GetDiscreteStateIndex(id),
+                            discrete_value);
+    }
+  }
+  if (deformable_model_->ExistsMpmModel()) {
+    std::cout << "there exists an MPM to be computed" << std::endl; getchar();
+
+    const MpmState<T>& next_mpm_state = EvalNextMpmState(context);
+
+
   }
 }
 
@@ -516,11 +583,37 @@ void DeformableDriver<T>::CalcFemState(const Context<T>& context,
 }
 
 template <typename T>
+void DeformableDriver<T>::CalcMpmState(const Context<T>& context,
+                                       MpmState<T>* mpm_state) const {
+//   const DeformableBodyId id = deformable_model_->GetBodyId(index);
+//   const systems::BasicVector<T>& discrete_state =
+//       context.get_discrete_state().get_vector(
+//           deformable_model_->GetDiscreteStateIndex(id));
+//   const VectorX<T>& discrete_value = discrete_state.value();
+//   DRAKE_DEMAND(discrete_value.size() % 3 == 0);
+//   const int num_dofs = discrete_value.size() / 3;
+//   const auto& q = discrete_value.head(num_dofs);
+//   const auto& qdot = discrete_value.segment(num_dofs, num_dofs);
+//   const auto& qddot = discrete_value.tail(num_dofs);
+//   fem_state->SetPositions(q);
+//   fem_state->SetVelocities(qdot);
+//   fem_state->SetAccelerations(qddot);
+}
+
+template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalFemState(
     const Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
       .get_cache_entry(cache_indexes_.fem_states.at(index))
       .template Eval<FemState<T>>(context);
+}
+
+template <typename T>
+const MpmState<T>& DeformableDriver<T>::EvalMpmState(
+    const Context<T>& context) const {
+  return manager_->plant()
+      .get_cache_entry(cache_indexes_.mpm_state)
+      .template Eval<MpmState<T>>(context);
 }
 
 template <typename T>
@@ -542,11 +635,30 @@ void DeformableDriver<T>::CalcFreeMotionFemState(
 }
 
 template <typename T>
+void DeformableDriver<T>::CalcFreeMotionMpmState(
+    const systems::Context<T>& context,MpmState<T>* mpm_state_star) const {
+  const MpmState<T>& mpm_state = EvalMpmState(context);
+
+  const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
+
+  // apply a solver to updata mpm_state_star here!!!!
+  
+}
+
+template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalFreeMotionFemState(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
       .get_cache_entry(cache_indexes_.free_motion_fem_states.at(index))
       .template Eval<FemState<T>>(context);
+}
+
+template <typename T>
+const MpmState<T>& DeformableDriver<T>::EvalFreeMotionMpmState(
+    const systems::Context<T>& context) const {
+  return manager_->plant()
+      .get_cache_entry(cache_indexes_.free_motion_mpm_state)
+      .template Eval<MpmState<T>>(context);
 }
 
 template <typename T>
@@ -611,12 +723,32 @@ void DeformableDriver<T>::CalcNextFemState(const systems::Context<T>& context,
   }
 }
 
+
+template <typename T>
+void DeformableDriver<T>::CalcNextMpmState(const systems::Context<T>& context,
+                                           MpmState<T>* next_mpm_state) const {
+  
+  
+    const MpmState<T>& free_motion_state = EvalFreeMotionMpmState(context);
+    next_mpm_state->SetPositions(free_motion_state.GetPositions());
+    next_mpm_state->SetVelocities(free_motion_state.GetVelocities());
+    next_mpm_state->SetAccelerations(free_motion_state.GetAccelerations());
+}
+
 template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalNextFemState(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
       .get_cache_entry(cache_indexes_.next_fem_states.at(index))
       .template Eval<FemState<T>>(context);
+}
+
+template <typename T>
+const MpmState<T>& DeformableDriver<T>::EvalNextMpmState(
+    const systems::Context<T>& context) const {
+  return manager_->plant()
+      .get_cache_entry(cache_indexes_.next_mpm_state)
+      .template Eval<MpmState<T>>(context);
 }
 
 template <typename T>

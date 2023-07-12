@@ -5,10 +5,9 @@ namespace multibody {
 namespace mpm {
 
 template <typename T>
-void MpmModel<T>::Builder::Build(VectorX<T> reference_positions) {
+void MpmModel<T>::Builder::Build(const Particles& particles) {
   ThrowIfBuilt();
-  DoBuild(reference_positions);
-  model_->UpdateMpmStateSystem();
+  model_->UpdateMpmStateSystem(particles);
   built_ = true;
 }
 
@@ -31,7 +30,7 @@ std::unique_ptr<MpmState<T>> MpmModel<T>::MakeMpmState() const {
 template <typename T>
 MpmModel<T>::MpmModel()
     : mpm_state_system_(std::make_unique<internal::MpmStateSystem<T>>(
-          VectorX<T>(0), VectorX<T>(0), VectorX<T>(0))) {}
+          VectorX<T>(0), VectorX<T>(0), VectorX<T>(0), Particles())) {}
 
 template <typename T>
 void MpmModel<T>::ThrowIfModelStateIncompatible(
@@ -43,13 +42,13 @@ void MpmModel<T>::ThrowIfModelStateIncompatible(
 }
 
 template <typename T>
-void MpmModel<T>::UpdateMpmStateSystem() {
+void MpmModel<T>::UpdateMpmStateSystem(const Particles& particles) {
   VectorX<T> model_positions = GetReferencePositions();
   VectorX<T> model_velocities = VectorX<T>::Zero(model_positions.size());
   VectorX<T> model_accelerations = VectorX<T>::Zero(model_positions.size());
   mpm_state_system_ = std::make_unique<internal::MpmStateSystem<T>>(
-      model_positions, model_velocities, model_accelerations);
-  //declareCacheEntries(mpm_state_system_.get());
+      model_positions, model_velocities, model_accelerations, particles);
+  DeclareCacheEntries(mpm_state_system_.get());
 }
 
 }  // namespace mpm

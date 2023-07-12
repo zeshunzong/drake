@@ -69,23 +69,14 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
     const fem::DeformableBodyConfig<T>& config, double resolution_hint) {
   this->ThrowIfSystemResourcesDeclared(__func__);
   std::cout << "Temporary:Inputs to RegisterMpmBody are not used." << std::endl; getchar();
-  /* Register the geometry with SceneGraph. */
-  SceneGraph<T>& scene_graph = this->mutable_scene_graph(plant_);
-  SourceId source_id = plant_->get_source_id().value();
-  /* All deformable bodies are registered with the world frame at the moment. */
-  const FrameId world_frame_id = scene_graph.world_frame_id();
-  GeometryId geometry_id = scene_graph.RegisterDeformableGeometry(
-      source_id, world_frame_id, std::move(geometry_instance), resolution_hint);
+  // /* Register the geometry with SceneGraph. */
+  // SceneGraph<T>& scene_graph = this->mutable_scene_graph(plant_);
+  // SourceId source_id = plant_->get_source_id().value();
+  // // /* All deformable bodies are registered with the world frame at the moment. */
+  // const FrameId world_frame_id = scene_graph.world_frame_id();
+  // GeometryId geometry_id = scene_graph.RegisterDeformableGeometry(
+  //     source_id, world_frame_id, std::move(geometry_instance), resolution_hint);
 
-  /* Record the reference positions. */
-  const geometry::SceneGraphInspector<T>& inspector =
-      scene_graph.model_inspector();
-  const geometry::VolumeMesh<double>* mesh_G =
-      inspector.GetReferenceMesh(geometry_id);
-  DRAKE_DEMAND(mesh_G != nullptr);
-  const math::RigidTransform<T>& X_WG = inspector.GetPoseInFrame(geometry_id);
-  geometry::VolumeMesh<double> mesh_W = *mesh_G;
-  mesh_W.TransformVertices(X_WG);
   // toy example: two points
   VectorX<T> reference_position(3 * 2);
   reference_position[0] = 0.0; reference_position[1] = 0.0; reference_position[2] = 0.0; 
@@ -93,13 +84,13 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
 
   const DeformableBodyId body_id = DeformableBodyId::get_new_id();
   std::cout << "body id " << body_id << std::endl;getchar();
-  // /* Build FEM model for the deformable body. */
-  // BuildLinearVolumetricModel(body_id, mesh_W, config);
-  BuildMpmModel(body_id, mesh_W, config, reference_position);
+ 
+  mpm::Particles particles;
+  BuildMpmModel(body_id, config, particles);
   /* Do the book-keeping. */
-  body_id_to_geometry_id_.emplace(body_id, geometry_id);
-  geometry_id_to_body_id_.emplace(geometry_id, body_id);
-  body_ids_.emplace_back(body_id);
+  // body_id_to_geometry_id_.emplace(body_id, geometry_id);
+  // geometry_id_to_body_id_.emplace(geometry_id, body_id);
+  // body_ids_.emplace_back(body_id);
   return body_id;
 }
 
@@ -153,6 +144,14 @@ const fem::FemModel<T>& DeformableModel<T>::GetFemModel(
 }
 
 template <typename T>
+const mpm::MpmModel<T>& DeformableModel<T>::GetMpmModel() const {
+  if (mpm_model_== nullptr){
+    throw std::logic_error("GetMpmModel(): No MPM Model registered");
+  }
+  return *mpm_model_;
+}
+
+template <typename T>
 const VectorX<T>& DeformableModel<T>::GetReferencePositions(
     DeformableBodyId id) const {
   ThrowUnlessRegistered(__func__, id);
@@ -195,19 +194,15 @@ DeformableBodyId DeformableModel<T>::GetBodyId(
 
 template <typename T>
 void DeformableModel<T>::BuildMpmModel(
-    DeformableBodyId id, const geometry::VolumeMesh<double>& mesh,
+    DeformableBodyId id,
     const fem::DeformableBodyConfig<T>& config,
-    const VectorX<T> reference_position) {
-  if (mpm_model_!= nullptr) {
+    const mpm::Particles& particles) {
+  if (ExistsMpmModel()) {
     throw std::logic_error("we only allow one mpm model");
   }
-
   mpm_model_ = std::make_unique<mpm::MpmModel<T>>();
-
   typename mpm::MpmModel<T>::Builder builder(mpm_model_.get());
- 
-  builder.Build(reference_position);    
-   
+  builder.Build(particles);    
   std::cout << "finish build mpm model" << std::endl;
 }
 

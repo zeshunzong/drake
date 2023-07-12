@@ -258,10 +258,10 @@ int do_main() {
   builder.Connect(
       deformable_model->vertex_positions_port(),
       scene_graph.get_source_configuration_port(plant.get_source_id().value()));
-
+  std::cout << "builder connected " << std::endl; getchar();
   /* Add a visualizer that emits LCM messages for visualization. */
   geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph);
-
+  std::cout << "visualizer added" << std::endl; getchar();
   /* Set the width between the fingers for open and closed states as well as the
    height to which the gripper lifts the deformable torus. */
   const double open_width = kL * 1.5;
@@ -282,10 +282,13 @@ int do_main() {
       diagram->GetMutableSubsystemContext(plant, diagram_context.get());
   left_slider.set_translation(&plant_context, -open_width / 2.0);
   right_slider.set_translation(&plant_context, open_width / 2.0);
+  std::cout << "finish gripper" << std::endl; getchar();
 
   /* Build the simulator and run! */
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
+  std::cout << "simulator created" << std::endl; getchar();
   simulator.Initialize();
+  std::cout << "simulator initialized" << std::endl; getchar();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
   simulator.AdvanceTo(FLAGS_simulation_time);
 

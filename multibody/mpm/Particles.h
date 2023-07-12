@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 
+#include "drake/common/copyable_unique_ptr.h"
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/mpm/ElastoPlasticModel.h"
 #include "drake/multibody/mpm/MathUtils.h"
@@ -16,8 +17,11 @@ namespace mpm {
 // A particles class holding vectors of particles' state
 class Particles {
  public:
+    DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(Particles);
     Particles();
     explicit Particles(int num_particles);
+
+    int testtt = 999;
 
     int get_num_particles() const;
     // Note that we didn't overload get_position: get_positions for getting
@@ -113,7 +117,7 @@ class Particles {
     std::vector<Matrix3<double>> kirchhoff_stresses_{};
     // The affine matrix B_p in APIC
     std::vector<Matrix3<double>> B_matrices_{};
-    std::vector<std::unique_ptr<ElastoPlasticModel>> elastoplastic_models_{};
+    std::vector<copyable_unique_ptr<ElastoPlasticModel>> elastoplastic_models_{};
 };  // class Particles
 
 }  // namespace mpm

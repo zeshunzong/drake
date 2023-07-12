@@ -263,6 +263,7 @@ drake_cc_library(
         ":MathUtils",
         ":TotalMassEnergyMomentum",
         "//common:essential",
+        "//common:copyable_unique_ptr",
     ],
 )
 
@@ -336,6 +337,7 @@ drake_cc_library(
     deps = [
         "//common:essential",
         "//systems/framework:leaf_system",
+        ":Particles",
     ],
 )
 

@@ -76,6 +76,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       std::unique_ptr<geometry::GeometryInstance> geometry_instance,
       const fem::DeformableBodyConfig<T>& config, double resolution_hint);
 
+  bool ExistsMpmModel() const {
+    return (mpm_model_!= nullptr);
+  }
+
   // TODO(xuchenhan-tri): Consider pulling PosedHalfSpace out of internal
   // namespace and use it here.
   /** Sets wall boundary conditions for the body with the given `id`. All
@@ -108,6 +112,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    @throws exception if no deformable body with `id` is registered with `this`
    %DeformableModel. */
   const fem::FemModel<T>& GetFemModel(DeformableBodyId id) const;
+
+  /** Returns the very MPM 
+   @throws exception if no mpm mpdel  */
+  const mpm::MpmModel<T>& GetMpmModel() const;
 
   // TODO(xuchenhan-tri): The use of T over double is not well-reasoned.
   //  Consider whether T is really necessary when we support autodiff in
@@ -177,9 +185,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
  /* Builds a MPM model for the body with `id`, basically call the MPMModel's builder
  and add the newly built mpm_model to class attribute */
   void BuildMpmModel(DeformableBodyId id,
-                                  const geometry::VolumeMesh<double>& mesh,
                                   const fem::DeformableBodyConfig<T>& config,
-                                  const VectorX<T> reference_position);
+                                  const mpm::Particles& particles);
 
   template <template <class, int> class Model>
   void BuildLinearVolumetricModelHelper(

@@ -8,7 +8,8 @@ namespace internal {
 template <typename T>
 MpmStateSystem<T>::MpmStateSystem(const VectorX<T>& model_q,
                                   const VectorX<T>& model_v,
-                                  const VectorX<T>& model_a) {
+                                  const VectorX<T>& model_a,
+                                  const Particles& particles) {
   num_dofs_ = model_q.size();
   DRAKE_THROW_UNLESS(model_q.size() == model_v.size());
   DRAKE_THROW_UNLESS(model_q.size() == model_a.size());
@@ -17,6 +18,9 @@ MpmStateSystem<T>::MpmStateSystem(const VectorX<T>& model_q,
   q0_index_ = this->DeclareDiscreteState(model_q);
   v_index_ = this->DeclareDiscreteState(model_v);
   a_index_ = this->DeclareDiscreteState(model_a);
+
+  num_particles_ = particles.get_num_particles();
+  particles_container_index_ = this->DeclareAbstractState(Value<Particles>(particles));
 }
 
 }  // namespace internal
