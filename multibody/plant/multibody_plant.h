@@ -4826,6 +4826,19 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
       const systems::Context<T>& context0,
       systems::DiscreteValues<T>* updates) const;
 
+
+
+  systems::EventStatus CalcDiscreteStepUpdateAbstractState(
+      const systems::Context<T>& context0,
+      systems::State<T>* update) const {
+        this->ValidateContext(context0);
+        if (discrete_update_manager_) {
+          discrete_update_manager_->CalcAbstractValues(context0, update);
+        } else {
+          throw;
+        }
+  }
+
   // Computes the array of indices of velocities that are not locked in the
   // current configuration. The resulting index values in @p
   // unlocked_velocity_indices will be in ascending order, in the range [0,

@@ -15,6 +15,8 @@
 #include "drake/multibody/fem/fem_solver.h"
 
 #include "drake/multibody/mpm/mpm_model.h"
+#include "drake/multibody/mpm/mpm_solver.h"
+#include "drake/multibody/mpm/Particles.h"
 #include "drake/multibody/fem/velocity_newmark_scheme.h"
 #include "drake/multibody/plant/contact_properties.h"
 #include "drake/systems/framework/context.h"
@@ -32,6 +34,8 @@ using drake::multibody::fem::FemModel;
 using drake::multibody::fem::FemState;
 using drake::multibody::mpm::MpmState;
 using drake::multibody::mpm::MpmModel;
+using drake::multibody::mpm::Particles;
+using drake::multibody::mpm::internal::MpmSolver;
 using drake::multibody::fem::internal::DirichletBoundaryCondition;
 using drake::multibody::fem::internal::FemSolver;
 using drake::multibody::fem::internal::FemSolverScratchData;
@@ -241,7 +245,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
                 [this](const Context<T>& context, mpm::MpmState<T>* state) {
                   this->CalcMpmState(context, state);
                 }}),
-        {}); // TODO: add prereq dependency
+        {systems::SystemBase::all_sources_ticket()}); // TODO: add prereq dependency
     cache_indexes_.mpm_state = mpm_state_cache_entry.cache_index();
 
     /* Cache entry for free motion MPM state. */
@@ -254,7 +258,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
                           mpm::MpmState<T>* free_motion_state) {
                   this->CalcFreeMotionMpmState(context, free_motion_state);
                 }}),
-        {}); // TODO: add prereq dependency
+        {systems::SystemBase::all_sources_ticket()}); // TODO: add prereq dependency
     cache_indexes_.free_motion_mpm_state = free_motion_mpm_state_cache_entry.cache_index();
 
 
@@ -506,12 +510,22 @@ void DeformableDriver<T>::CalcDiscreteStates(
                             discrete_value);
     }
   }
+  
+}
+
+template <typename T>
+void DeformableDriver<T>::CalcAbstractStates(
+    const systems::Context<T>& context,
+    systems::State<T>* update) const {
+  
   if (deformable_model_->ExistsMpmModel()) {
     std::cout << "there exists an MPM to be computed" << std::endl; getchar();
 
     const MpmState<T>& next_mpm_state = EvalNextMpmState(context);
-
-
+    std::cout << "abstract index" << deformable_model_->GetParticlesAbstractIndex()  << " index " << std::endl; getchar();
+    Particles& mutable_p = update->template get_mutable_abstract_state<Particles>(deformable_model_->GetParticlesAbstractIndex());
+    mutable_p = next_mpm_state.GetParticles();
+    
   }
 }
 
@@ -641,8 +655,9 @@ void DeformableDriver<T>::CalcFreeMotionMpmState(
 
   const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
 
-  // apply a solver to updata mpm_state_star here!!!!
-  
+  const MpmSolver<T> solver(&mpm_model);
+  solver.AdvanceOneTimeStep(mpm_state, mpm_state_star);
+
 }
 
 template <typename T>
@@ -730,9 +745,10 @@ void DeformableDriver<T>::CalcNextMpmState(const systems::Context<T>& context,
   
   
     const MpmState<T>& free_motion_state = EvalFreeMotionMpmState(context);
-    next_mpm_state->SetPositions(free_motion_state.GetPositions());
-    next_mpm_state->SetVelocities(free_motion_state.GetVelocities());
-    next_mpm_state->SetAccelerations(free_motion_state.GetAccelerations());
+    next_mpm_state->SetParticles(free_motion_state.GetParticles());
+    next_mpm_state->print_info();
+  
+    getchar();
 }
 
 template <typename T>

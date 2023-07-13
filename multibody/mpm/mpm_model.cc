@@ -48,7 +48,7 @@ void MpmModel<T>::UpdateMpmStateSystem(const Particles& particles) {
   VectorX<T> model_accelerations = VectorX<T>::Zero(model_positions.size());
   mpm_state_system_ = std::make_unique<internal::MpmStateSystem<T>>(
       model_positions, model_velocities, model_accelerations, particles);
-  DeclareCacheEntries(mpm_state_system_.get());
+  // DeclareCacheEntries(mpm_state_system_.get());
 }
 
 }  // namespace mpm

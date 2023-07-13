@@ -45,6 +45,12 @@ class Particles {
     // v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p),
     const std::vector<Matrix3<double>>& get_B_matrices() const;
 
+    void advect_x_coord(){
+      for (int ind = 0; ind < num_particles_; ++ind){
+         positions_[ind][0] = positions_[ind][0] + 0.1;
+      }
+    }
+
     // TODO(yiminlin.tri): To this point, the encapsulation seems useless here,
     // Maybe directly make Particles as a struct and remove setters and getters?
     // TODO(yiminlin.tri): ideally thfem

@@ -1,5 +1,5 @@
 #include "drake/multibody/mpm/mpm_state_system.h"
-
+#include <iostream>
 namespace drake {
 namespace multibody {
 namespace mpm {
@@ -21,6 +21,7 @@ MpmStateSystem<T>::MpmStateSystem(const VectorX<T>& model_q,
 
   num_particles_ = particles.get_num_particles();
   particles_container_index_ = this->DeclareAbstractState(Value<Particles>(particles));
+  std::cout << "in declare abstract state for mpm state system, index is " << particles_container_index_ << std::endl; getchar();
 }
 
 }  // namespace internal

@@ -57,6 +57,13 @@ systems::DiscreteStateIndex PhysicalModel<T>::DeclareDiscreteState(
       plant, model_value);
 }
 
+// template <typename T>
+// systems::AbstractStateIndex PhysicalModel<T>::DeclareAbstractState(
+//     MultibodyPlant<T>* plant, const AbstractValue& model_value) {
+//   return internal::MultibodyPlantModelAttorney<T>::DeclareAbstractState(
+//       plant, model_value);
+// }
+
 template <typename T>
 systems::LeafOutputPort<T>& PhysicalModel<T>::DeclareAbstractOutputPort(
     MultibodyPlant<T>* plant, std::string name,

@@ -108,6 +108,19 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    model. */
   systems::DiscreteStateIndex GetDiscreteStateIndex(DeformableBodyId id) const;
 
+
+  /** Returns the abstract state index of the only mpm body
+   @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
+   or if mpm_model has not been registered
+   model. */
+  systems::AbstractStateIndex GetParticlesAbstractIndex() const{
+      this->ThrowIfSystemResourcesNotDeclared(__func__);
+      if (!ExistsMpmModel()) {
+        throw std::logic_error("No MPM Model registered");
+      }
+      return mpm_model_->particles_container_index_;
+  }
+
   /** Returns the FemModel for the body with `id`.
    @throws exception if no deformable body with `id` is registered with `this`
    %DeformableModel. */

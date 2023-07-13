@@ -152,6 +152,12 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void CalcDiscreteStates(const systems::Context<T>& context,
                           systems::DiscreteValues<T>* next_states) const;
 
+  /* Evaluates FemState at the next time step for each deformable body and
+   copies the them into the corresponding DiscreteValues.
+   @pre next_states != nullptr. */
+  void CalcAbstractStates(const systems::Context<T>& context,
+                          systems::State<T>* update) const;
+
   /* Evaluates the multiplexer for participating velocities for all bodies.
    @pre result != nullptr. */
   const Multiplexer<T>& EvalParticipatingVelocityMultiplexer(

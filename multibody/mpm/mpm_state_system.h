@@ -44,6 +44,8 @@ class MpmStateSystem : public systems::LeafSystem<T> {
   /* Returns the number of degrees of freedom in the system. */
   int num_dofs() const { return num_dofs_; }
 
+
+  
   
 
  private:

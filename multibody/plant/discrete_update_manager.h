@@ -139,6 +139,20 @@ class DiscreteUpdateManager : public ScalarConvertibleComponent<T> {
     DoCalcDiscreteValues(context, updates);
   }
 
+  // --------------------------------------------newly added for mpm ------------------------
+  /* MultibodyPlant invokes this method to perform the abstract variables
+   update in discrete timestep. */
+  void CalcAbstractValues(const systems::Context<T>& context,
+                          systems::State<T>* update) const {
+    // The discrete sampling of input ports needs to be the first step of a
+    // discrete update.
+    // SampleDiscreteInputPortForces(context);
+    DRAKE_DEMAND(update != nullptr);
+    DoCalcAbstractValues(context, update);
+  }
+  // --------------------------------------------newly added for mpm ------------------------
+
+
   /* MultibodyPlant invokes this method to report contact results. */
   void CalcContactResults(const systems::Context<T>& context,
                           ContactResults<T>* contact_results) const {
@@ -275,6 +289,14 @@ class DiscreteUpdateManager : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context,
       systems::DiscreteValues<T>* updates) const = 0;
 
+
+  // -------------------------------------------------newly added for MPM-------------------------
+  virtual void DoCalcAbstractValues(
+      const systems::Context<T>& context,
+      systems::State<T>* update) const = 0;
+  // -------------------------------------------------newly added for MPM-------------------------
+
+  
   virtual void DoCalcContactResults(
       const systems::Context<T>& context,
       ContactResults<T>* contact_results) const = 0;

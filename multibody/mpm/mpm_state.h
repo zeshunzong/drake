@@ -8,6 +8,8 @@
 #include "drake/multibody/mpm/mpm_state_system.h"
 #include "drake/systems/framework/context.h"
 
+#include <iostream>
+
 namespace drake {
 namespace multibody {
 namespace mpm {
@@ -79,6 +81,43 @@ class MpmState {
     return get_context()
         .get_discrete_state(system_->mpm_position_index())
         .size();
+  }
+
+  int num_particles() const {
+    return get_context().template get_abstract_state<Particles>(system_->particles_container_index()).get_num_particles();
+  }
+
+  /** sanity check */
+  int get_testtt() const {
+     return get_context().template get_abstract_state<Particles>(system_->particles_container_index()).testtt;
+  }
+
+  /** sanity check */
+  void set_testtt() {
+    Particles new_p;
+    new_p.testtt = 10000;
+
+    get_mutable_context(). template SetAbstractState<Particles>(system_->particles_container_index(), new_p);
+    std::cout << "finish set test" << std::endl; getchar();
+  }
+
+  const Particles& GetParticles() const {
+    return get_context().template get_abstract_state<Particles>(system_->particles_container_index());
+  }
+
+  void SetParticles(const Particles new_p) {
+    get_mutable_context(). template SetAbstractState<Particles>(system_->particles_container_index(), new_p);
+  }
+
+  void print_info() const {
+    int num2print = 10;
+    if (num2print > num_particles()){
+      num2print = num_particles();
+    }
+    const Particles& particles = GetParticles();
+    for (int ind = 0; ind < num2print; ++ind){
+      std::cout << "Particle " << ind << " x position: " << particles.get_position(ind)[0] << std::endl;
+    }
   }
 
   /** Returns the number of nodes in the MPM model. */

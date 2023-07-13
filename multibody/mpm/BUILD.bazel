@@ -22,6 +22,7 @@ drake_cc_package_library(
     visibility = ["//visibility:public"],
     deps = [
         ":mpm_model", 
+        ":mpm_solver",
     ],
 )
 
@@ -268,6 +269,22 @@ drake_cc_library(
 )
 
 drake_cc_library(
+    name = "mpm_solver",
+    srcs = [
+        "mpm_solver.cc",
+    ],
+    hdrs = [
+        "mpm_solver.h",
+    ],
+    deps = [
+        ":mpm_model",
+        "//multibody/fem:discrete_time_integrator",
+        "//common:essential",
+       
+    ],
+)
+
+drake_cc_library(
     name = "SparseGrid",
     srcs = [
         "SparseGrid.cc",
@@ -360,19 +377,13 @@ drake_cc_library(
     name = "mpm_model",
     srcs = [
         "mpm_model.cc",
-        # "fem_model_impl.cc",
     ],
     hdrs = [
         "mpm_model.h",
-        # "fem_model_impl.h",
     ],
     deps = [
-        # ":dirichlet_boundary_condition",
-        # ":fem_element",
         ":mpm_state",
-        # ":petsc_symmetric_block_sparse_matrix",
         "//common:essential",
-        # "//multibody/contact_solvers:block_sparse_lower_triangular_or_symmetric_matrix",  # noqa
     ],
 )
 

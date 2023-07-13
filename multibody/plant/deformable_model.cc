@@ -78,14 +78,12 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
   //     source_id, world_frame_id, std::move(geometry_instance), resolution_hint);
 
   // toy example: two points
-  VectorX<T> reference_position(3 * 2);
-  reference_position[0] = 0.0; reference_position[1] = 0.0; reference_position[2] = 0.0; 
-  reference_position[3] = 1.0; reference_position[4] = 1.0; reference_position[5] = 1.0; 
+
 
   const DeformableBodyId body_id = DeformableBodyId::get_new_id();
   std::cout << "body id " << body_id << std::endl;getchar();
  
-  mpm::Particles particles;
+  mpm::Particles particles(1);
   BuildMpmModel(body_id, config, particles);
   /* Do the book-keeping. */
   // body_id_to_geometry_id_.emplace(body_id, geometry_id);
@@ -202,8 +200,9 @@ void DeformableModel<T>::BuildMpmModel(
   }
   mpm_model_ = std::make_unique<mpm::MpmModel<T>>();
   typename mpm::MpmModel<T>::Builder builder(mpm_model_.get());
-  builder.Build(particles);    
+  // builder.Build(particles);    
   std::cout << "finish build mpm model" << std::endl;
+
 }
 
 template <typename T>
@@ -311,6 +310,14 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     DeformableBodyId id = body_ids_[i];
     body_id_to_index_[id] = i;
   }
+
+
+  mpm::Particles particles(1);
+  mpm_model_->particles_container_index_ = this->DeclareAbstractState(Value<mpm::Particles>(particles));
+  
+
+
+
 }
 
 template <typename T>

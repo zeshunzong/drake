@@ -132,6 +132,8 @@ class MpmModel {
     return *mpm_state_system_;
   }
 
+  systems::AbstractStateIndex particles_container_index_;
+
  private:
   /* The system that manages the states and cache entries of this MPM model.
    */
@@ -142,6 +144,7 @@ class MpmModel {
   std::unique_ptr<internal::MpmStateSystem<T>> mpm_state_system_;
   Vector3<T> gravity_{0, 0, -9.81};
   VectorX<T> reference_positions_{};
+  
 //   /* The Dirichlet boundary condition that the model is subject to. */
 //   internal::DirichletBoundaryCondition<T> dirichlet_bc_;
 };

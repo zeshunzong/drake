@@ -174,6 +174,20 @@ class CompliantContactManager final
       contact_solvers::internal::ContactSolverResults<T>*) const final;
   void DoCalcDiscreteValues(const systems::Context<T>&,
                             systems::DiscreteValues<T>*) const final;
+
+  // -------------------------------------------------newly added for MPM-------------------------
+  void DoCalcAbstractValues(const systems::Context<T>& context,
+                                systems::State<T>* update) const final {
+    //     // Get next FEM state
+    //   Particles& mutable_p = update->get_mutable_abstract_state(particles_index);
+    //   mutable_p = get_next_mpm_state(context0);
+        if constexpr (std::is_same_v<T, double>) {
+            if (deformable_driver_ != nullptr) {
+                deformable_driver_->CalcAbstractStates(context, update);
+            }
+        }                             
+    }
+
   void DoCalcAccelerationKinematicsCache(
       const systems::Context<T>&,
       multibody::internal::AccelerationKinematicsCache<T>*) const final;

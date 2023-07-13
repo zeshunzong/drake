@@ -2569,9 +2569,18 @@ void MultibodyPlant<T>::DeclareStateCacheAndPorts() {
     this->DeclarePeriodicDiscreteUpdateEvent(
         time_step_, 0.0, &MultibodyPlant<T>::CalcDiscreteStep);
 
+
+    // ------------------------------------------ newly added for MPM update ---------------------//
+    this->DeclarePeriodicUnrestrictedUpdateEvent(
+        time_step_, 0.0, &MultibodyPlant<T>::CalcDiscreteStepUpdateAbstractState);
+    // ------------------------------------------ newly added for MPM update ---------------------//
+
+
     // Also permit triggering a step via a Forced update.
     this->DeclareForcedDiscreteUpdateEvent(
         &MultibodyPlant<T>::CalcDiscreteStep);
+
+    
   }
 
   DeclareCacheEntries();

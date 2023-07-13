@@ -28,7 +28,6 @@ Simulator<T>::Simulator(const System<T>* system,
       context_(std::move(context)) {
   // TODO(dale.mcconachie) move this default to SimulatorConfig
   constexpr double kDefaultInitialStepSizeTarget = 1e-4;
-
   // Create a context if necessary.
   if (!context_) context_ = system_.CreateDefaultContext();
 
@@ -74,6 +73,7 @@ SimulatorStatus Simulator<T>::Initialize(const InitializeParams& params) {
 
   // Restore default values.
   ResetStatistics();
+  
 
   // Process all the initialization events.
   merged_events_ = system_.AllocateCompositeEventCollection();
@@ -112,7 +112,6 @@ SimulatorStatus Simulator<T>::Initialize(const InitializeParams& params) {
   } else {
     time_or_witness_triggered_ = kNothingTriggered;
   }
-
   // Allocate the witness function collection.
   witnessed_events_ = system_.AllocateCompositeEventCollection();
   // Do any publishes last. Merge the initialization events with per-step
@@ -123,19 +122,14 @@ SimulatorStatus Simulator<T>::Initialize(const InitializeParams& params) {
   merged_events_->AddToEnd(*per_step_events_);
   if (time_or_witness_triggered_ & kTimeTriggered)
     merged_events_->AddToEnd(*timed_events_);
-
-  std::cout << "simulator 129" << std::endl; getchar();
   HandlePublish(merged_events_->get_publish_events());
-  std::cout << "simulator 130" << std::endl; getchar();
   // TODO(siyuan): transfer publish entirely to individual systems.
   // Do a force-publish before the simulation starts.
   if (publish_at_initialization_) {
     system_.ForcedPublish(*context_);
     ++num_publishes_;
   }
-  std::cout << "simulator 137" << std::endl; getchar();
   CallMonitorUpdateStatusAndMaybeThrow(&status);
-  std::cout << "simulator 139" << std::endl; getchar();
   // Initialize runtime variables.
   initialization_done_ = true;
   last_known_simtime_ = ExtractDoubleOrThrow(context_->get_time());
@@ -181,10 +175,8 @@ template <typename T>
 void Simulator<T>::HandlePublish(
     const EventCollection<PublishEvent<T>>& events) {
   if (events.HasEvents()) {
-    std::cout << num_publishes_ << std::endl; getchar();
     system_.Publish(*context_, events);
     ++num_publishes_;
-    
   }
 }
 
