@@ -3,6 +3,7 @@
 #include <memory>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/default_scalars.h"
 #include "drake/common/drake_copyable.h"
@@ -178,15 +179,14 @@ class CompliantContactManager final
   // -------------------------------------------------newly added for MPM-------------------------
   void DoCalcAbstractValues(const systems::Context<T>& context,
                                 systems::State<T>* update) const final {
-    //     // Get next FEM state
-    //   Particles& mutable_p = update->get_mutable_abstract_state(particles_index);
-    //   mutable_p = get_next_mpm_state(context0);
+        std::cout << "compliant contact manager calc abstract value is called" << std::endl;getchar();
         if constexpr (std::is_same_v<T, double>) {
             if (deformable_driver_ != nullptr) {
                 deformable_driver_->CalcAbstractStates(context, update);
             }
         }                             
     }
+// -------------------------------------------------newly added for MPM-------------------------
 
   void DoCalcAccelerationKinematicsCache(
       const systems::Context<T>&,

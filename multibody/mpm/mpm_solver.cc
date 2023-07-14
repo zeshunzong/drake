@@ -26,21 +26,9 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
 
   const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
 
-  
-
   Particles p_new(1);
   p_new.set_positions(positions_prev);
-
-  
   p_new.advect_x_coord();
-
-  // const std::vector<Vector3<double>>& positions_new = p_new.get_positions();
-  // std::cout << "print old positions in mpm solver" << std::endl;
-  // std::cout << positions_prev[0][0]<< " , " << positions_prev[0][1]<< "," <<positions_prev[0][2] << std::endl;
-  // std::cout << "print new positions in mpm solver" << std::endl;
-  // std::cout << positions_new[0][0]<< " , " << positions_new[0][1]<< "," <<positions_new[0][2] << std::endl;
-  // getchar();
-  // to be fixed
 
   next_state->SetParticles(p_new);
   return 2;

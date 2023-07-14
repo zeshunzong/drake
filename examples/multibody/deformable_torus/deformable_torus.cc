@@ -260,7 +260,9 @@ int do_main() {
       scene_graph.get_source_configuration_port(plant.get_source_id().value()));
   std::cout << "builder connected " << std::endl; getchar();
   /* Add a visualizer that emits LCM messages for visualization. */
-  geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph);
+  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph);
+  builder.Connect(deformable_model->mpm_particle_positions_port2(), visualizer.mpm_data_input_port());
+
   std::cout << "visualizer added" << std::endl; getchar();
   /* Set the width between the fingers for open and closed states as well as the
    height to which the gripper lifts the deformable torus. */

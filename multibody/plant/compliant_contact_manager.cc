@@ -701,6 +701,7 @@ template <typename T>
 void CompliantContactManager<T>::DoCalcDiscreteValues(
     const drake::systems::Context<T>& context,
     drake::systems::DiscreteValues<T>* updates) const {
+      std::cout << "compliant contact manager calc discrete value is called" << std::endl;getchar();
   const ContactSolverResults<T>& results =
       this->EvalContactSolverResults(context);
 

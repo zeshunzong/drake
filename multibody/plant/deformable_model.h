@@ -12,6 +12,7 @@
 #include "drake/multibody/mpm/mpm_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/physical_model.h"
+#include "drake/systems/framework/basic_vector.h"
 
 namespace drake {
 namespace multibody {
@@ -21,6 +22,7 @@ namespace multibody {
 using DeformableBodyId = Identifier<class DeformableBodyTag>;
 /** Internally indexes deformable bodies, only used after Finalize(). */
 using DeformableBodyIndex = TypeSafeIndex<class DeformableBodyTag>;
+
 
 /** DeformableModel implements the interface in PhysicalModel and provides the
  functionalities to specify deformable bodies. Unlike rigid bodies, the shape of
@@ -75,6 +77,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   DeformableBodyId RegisterMpmBody(
       std::unique_ptr<geometry::GeometryInstance> geometry_instance,
       const fem::DeformableBodyConfig<T>& config, double resolution_hint);
+
+  systems::AbstractStateIndex particles_container_index() const {
+    return particles_container_index_;
+  }
 
   bool ExistsMpmModel() const {
     return (mpm_model_!= nullptr);
@@ -175,6 +181,28 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     return plant_->get_output_port(vertex_positions_port_index_);
   }
 
+  /** Returns the output port of the mpm particle positions for the mpm body
+   @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
+  */
+  const systems::OutputPort<T>& mpm_particle_positions_port() const {
+    this->ThrowIfSystemResourcesNotDeclared(__func__);
+    if (mpm_model_== nullptr){
+      throw std::logic_error("vertex_positions_port(): No MPM Model registered");
+    }
+    return plant_->get_output_port(mpm_particle_positions_port_index_);
+  }
+
+  /** Returns the output port of the mpm particle positions for the mpm body
+   @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
+  */
+  const systems::OutputPort<T>& mpm_particle_positions_port2() const {
+    this->ThrowIfSystemResourcesNotDeclared(__func__);
+    if (mpm_model_== nullptr){
+      throw std::logic_error("vertex_positions_port(): No MPM Model registered");
+    }
+    return plant_->get_output_port(mpm_particle_positions_port_index2_);
+  }
+
  private:
   PhysicalModelPointerVariant<T> DoToPhysicalModelPointerVariant()
       const final {
@@ -210,6 +238,11 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    value which is guaranteed to be of type GeometryConfigurationVector. */
   void CopyVertexPositions(const systems::Context<T>& context,
                            AbstractValue* output) const;
+  void CopyMpmPositions2(const systems::Context<T>& context,
+                           AbstractValue* output) const;
+
+  void CopyMpmPositions(const systems::Context<T>& context,
+                           drake::systems::BasicVector<T>* output) const;
 
   /* Helper to throw a useful message if a deformable body with the given `id`
    doesn't exist. */
@@ -233,9 +266,13 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   std::vector<DeformableBodyId> body_ids_;
   std::unordered_map<DeformableBodyId, DeformableBodyIndex> body_id_to_index_;
   systems::OutputPortIndex vertex_positions_port_index_;
+  systems::OutputPortIndex mpm_particle_positions_port_index_;
+  systems::OutputPortIndex mpm_particle_positions_port_index2_;
 
     // for mpm only, assume only one mpm body
   std::unique_ptr<mpm::MpmModel<T>> mpm_model_;
+  systems::AbstractStateIndex particles_container_index_;
+
 };
 
 }  // namespace multibody

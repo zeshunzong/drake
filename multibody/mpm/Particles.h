@@ -3,6 +3,7 @@
 #include <memory>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/copyable_unique_ptr.h"
 #include "drake/common/eigen_types.h"
@@ -48,6 +49,14 @@ class Particles {
     void advect_x_coord(){
       for (int ind = 0; ind < num_particles_; ++ind){
          positions_[ind][0] = positions_[ind][0] + 0.1;
+      }
+    }
+
+    void print_info() const {
+      for (int ind = 0; ind < num_particles_; ++ind){
+         if (ind < 10){
+            std::cout << "particle " << ind << " position " << positions_[ind][0] << std::endl;
+         }
       }
     }
 

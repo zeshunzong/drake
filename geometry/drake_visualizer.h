@@ -187,6 +187,13 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
     return this->get_input_port(query_object_input_port_);
   }
 
+  // -------------------------------newly added for MPM-------------------------
+  const systems::InputPort<T>& mpm_data_input_port() const {
+    return this->get_input_port(mpm_data_input_port_);
+  }
+
+  // -------------------------------newly added for MPM-------------------------
+
   /** @name Utility functions for instantiating and connecting a visualizer
 
    These methods provide a convenient mechanism for adding a DrakeVisualizer
@@ -355,6 +362,8 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
 
   /* The index of this System's QueryObject-valued input port.  */
   int query_object_input_port_{};
+
+  int mpm_data_input_port_{};
 
   /* The LCM interface: the owned (if such exists) and the active interface
    (whether owned or not). The active interface is mutable because we non-const

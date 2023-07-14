@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/default_scalars.h"
 #include "drake/common/nice_type_name.h"
@@ -4834,9 +4835,11 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
         this->ValidateContext(context0);
         if (discrete_update_manager_) {
           discrete_update_manager_->CalcAbstractValues(context0, update);
+          
         } else {
           throw;
         }
+      return systems::EventStatus::Succeeded();
   }
 
   // Computes the array of indices of velocities that are not locked in the

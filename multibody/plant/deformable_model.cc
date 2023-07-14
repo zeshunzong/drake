@@ -12,6 +12,7 @@
 #include "drake/multibody/fem/simplex_gaussian_quadrature.h"
 #include "drake/multibody/fem/volumetric_model.h"
 
+
 namespace drake {
 namespace multibody {
 
@@ -23,6 +24,12 @@ using geometry::SourceId;
 
 using fem::DeformableBodyConfig;
 using fem::MaterialModel;
+
+// using drake::multibody::fem::FemModel;
+// using drake::multibody::fem::FemState;
+// using drake::multibody::mpm::MpmState;
+// using drake::multibody::mpm::MpmModel;
+
 
 template <typename T>
 DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
@@ -69,26 +76,17 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
     const fem::DeformableBodyConfig<T>& config, double resolution_hint) {
   this->ThrowIfSystemResourcesDeclared(__func__);
   std::cout << "Temporary:Inputs to RegisterMpmBody are not used." << std::endl; getchar();
-  // /* Register the geometry with SceneGraph. */
-  // SceneGraph<T>& scene_graph = this->mutable_scene_graph(plant_);
-  // SourceId source_id = plant_->get_source_id().value();
-  // // /* All deformable bodies are registered with the world frame at the moment. */
-  // const FrameId world_frame_id = scene_graph.world_frame_id();
-  // GeometryId geometry_id = scene_graph.RegisterDeformableGeometry(
-  //     source_id, world_frame_id, std::move(geometry_instance), resolution_hint);
-
-  // toy example: two points
-
 
   const DeformableBodyId body_id = DeformableBodyId::get_new_id();
   std::cout << "body id " << body_id << std::endl;getchar();
  
+  if (ExistsMpmModel()) {
+    throw std::logic_error("we only allow one mpm model");
+  }
+
   mpm::Particles particles(1);
-  BuildMpmModel(body_id, config, particles);
-  /* Do the book-keeping. */
-  // body_id_to_geometry_id_.emplace(body_id, geometry_id);
-  // geometry_id_to_body_id_.emplace(geometry_id, body_id);
-  // body_ids_.emplace_back(body_id);
+  mpm_model_ = std::make_unique<mpm::MpmModel<T>>(); // should add physical parameters to mpm_model_
+  std::cout << "finish RegisterMpmBody" << std::endl;
   return body_id;
 }
 
@@ -195,13 +193,6 @@ void DeformableModel<T>::BuildMpmModel(
     DeformableBodyId id,
     const fem::DeformableBodyConfig<T>& config,
     const mpm::Particles& particles) {
-  if (ExistsMpmModel()) {
-    throw std::logic_error("we only allow one mpm model");
-  }
-  mpm_model_ = std::make_unique<mpm::MpmModel<T>>();
-  typename mpm::MpmModel<T>::Builder builder(mpm_model_.get());
-  // builder.Build(particles);    
-  std::cout << "finish build mpm model" << std::endl;
 
 }
 
@@ -274,6 +265,7 @@ void DeformableModel<T>::BuildLinearVolumetricModelHelper(
 
 template <typename T>
 void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
+  std::cout << "calling do declare system resources" << std::endl;
   /* Ensure that the owning plant is the one declaring system resources. */
   DRAKE_DEMAND(plant == plant_);
   /* Declare discrete states. */
@@ -305,17 +297,46 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
               {systems::System<double>::xd_ticket()})
           .get_index();
 
+
+  // mpm_particle_positions_port_index_ =
+  //     this->DeclareVectorOutputPort(
+  //             plant, "particles",
+  //             drake::systems::BasicVector<T>(3*mpm_model_->num_particles_),
+  //             [this](const systems::Context<T>& context,
+  //                    drake::systems::BasicVector<T>* output) {
+  //               this->CopyMpmPositions(context, output);
+  //             },
+  //             {systems::System<double>::xd_ticket()})
+  //         .get_index();
+
+  mpm_particle_positions_port_index2_ =
+      this->DeclareAbstractOutputPort(
+              plant, "mpm",
+              []() {
+                return AbstractValue::Make<
+                    std::vector<Vector3<double>>>();
+              },
+              [this](const systems::Context<T>& context,
+                     AbstractValue* output) {
+                this->CopyMpmPositions2(context, output);
+              },
+              {systems::System<double>::xd_ticket()})
+          .get_index();
+
   std::sort(body_ids_.begin(), body_ids_.end());
   for (DeformableBodyIndex i(0); i < static_cast<int>(body_ids_.size()); ++i) {
     DeformableBodyId id = body_ids_[i];
     body_id_to_index_[id] = i;
   }
 
-
+  // ---------------------------- add mpm_state to plant's context --------------
   mpm::Particles particles(1);
-  mpm_model_->particles_container_index_ = this->DeclareAbstractState(Value<mpm::Particles>(particles));
-  
-
+  mpm::MpmState<T> mpm_state(particles);
+  mpm_model_->num_particles_ = particles.get_num_particles();
+  mpm_model_->particles_container_index_ = this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state));
+  particles_container_index_ = mpm_model_->particles_container_index_;
+  std::cout <<"the mpmstate stored in MBP context has index " << particles_container_index_ << std::endl; getchar();
+  // ---------------------------- add mpm_state to plant's context --------------
 
 
 }
@@ -334,6 +355,44 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
         context.get_discrete_state(discrete_state_index).value().head(num_dofs);
     output_value.set_value(geometry_id, std::move(vertex_positions));
   }
+}
+
+template <typename T>
+void DeformableModel<T>::CopyMpmPositions2(const systems::Context<T>& context,
+                                             AbstractValue* output) const {
+  auto& output_value =
+      output->get_mutable_value<std::vector<Vector3<double>>>();
+
+
+  const mpm::MpmState<T>& current_state = context.template get_abstract_state<mpm::MpmState<T>>(particles_container_index_);
+  const std::vector<Vector3<double>>& particle_positions = current_state.GetParticles().get_positions();
+
+  output_value = particle_positions;
+  // output_value.clear();
+  // for (const auto& [body_id, geometry_id] : body_id_to_geometry_id_) {
+  //   const auto& fem_model = GetFemModel(body_id);
+  //   const int num_dofs = fem_model.num_dofs();
+  //   const auto& discrete_state_index = GetDiscreteStateIndex(body_id);
+  //   VectorX<T> vertex_positions =
+  //       context.get_discrete_state(discrete_state_index).value().head(num_dofs);
+  //   output_value.set_value(geometry_id, std::move(vertex_positions));
+  // }
+}
+
+template <typename T>
+void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
+                                             drake::systems::BasicVector<T>* output) const {
+  
+  const mpm::MpmState<T>& current_state = context.template get_abstract_state<mpm::MpmState<T>>(particles_container_index_);
+  const std::vector<Vector3<double>>& particle_positions = current_state.GetParticles().get_positions();
+  VectorX<T> particle_positions_vector(mpm_model_->num_particles_ * 3);
+  for (int i = 0; i < mpm_model_->num_particles_; i++) {
+    particle_positions_vector(i*3+0) = particle_positions[i](0);
+    particle_positions_vector(i*3+1) = particle_positions[i](1);
+    particle_positions_vector(i*3+2) = particle_positions[i](2);
+  }
+  output->set_value(particle_positions_vector);
+
 }
 
 template <typename T>

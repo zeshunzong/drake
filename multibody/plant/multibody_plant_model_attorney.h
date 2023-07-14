@@ -45,7 +45,7 @@ class MultibodyPlantModelAttorney {
   }
 
 
-  static systems::DiscreteStateIndex DeclareAbstractState(
+  static systems::AbstractStateIndex DeclareAbstractState(
       MultibodyPlant<T>* plant, const AbstractValue& model_value) {
     DRAKE_DEMAND(plant != nullptr);
     return plant->DeclareAbstractState(model_value);

@@ -572,6 +572,12 @@ DrakeVisualizer<T>::DrakeVisualizer(lcm::DrakeLcmInterface* lcm,
       this->DeclareAbstractInputPort("query_object", Value<QueryObject<T>>())
           .get_index();
 
+  // -------------------------------newly added for MPM-------------------------
+  mpm_data_input_port_ = 
+      this->DeclareAbstractInputPort("mpm", Value<std::vector<Vector3<double>>>())
+          .get_index();
+  // -------------------------------newly added for MPM-------------------------
+
   // These cache entries depend on *nothing*.
   frame_data_cache_index_ =
       this->DeclareCacheEntry("dynamic_frames",
@@ -593,6 +599,11 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
   const GeometryVersion& current_version =
       query_object.inspector().geometry_version();
 
+  const systems::InputPort<T>& mpm_intput_port = this->get_input_port(mpm_data_input_port_); 
+  // const auto& data = mpm_intput_port.Eval(context);
+
+  // const VectorX<T>& applied_generalized_force =
+  //       applied_generalized_force_input.Eval(context);
   bool send_load_message = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
