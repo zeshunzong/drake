@@ -181,16 +181,16 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     return plant_->get_output_port(vertex_positions_port_index_);
   }
 
-  /** Returns the output port of the mpm particle positions for the mpm body
-   @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
-  */
-  const systems::OutputPort<T>& mpm_particle_positions_port() const {
-    this->ThrowIfSystemResourcesNotDeclared(__func__);
-    if (mpm_model_== nullptr){
-      throw std::logic_error("vertex_positions_port(): No MPM Model registered");
-    }
-    return plant_->get_output_port(mpm_particle_positions_port_index_);
-  }
+  // /** Returns the output port of the mpm particle positions for the mpm body
+  //  @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
+  // */
+  // const systems::OutputPort<T>& mpm_particle_positions_port() const {
+  //   this->ThrowIfSystemResourcesNotDeclared(__func__);
+  //   if (mpm_model_== nullptr){
+  //     throw std::logic_error("vertex_positions_port(): No MPM Model registered");
+  //   }
+  //   return plant_->get_output_port(mpm_particle_positions_port_index_);
+  // }
 
   /** Returns the output port of the mpm particle positions for the mpm body
    @throws std::exception if MultibodyPlant::Finalize() has not been called yet.

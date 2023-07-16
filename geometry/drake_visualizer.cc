@@ -573,6 +573,7 @@ DrakeVisualizer<T>::DrakeVisualizer(lcm::DrakeLcmInterface* lcm,
           .get_index();
 
   // -------------------------------newly added for MPM-------------------------
+  std::cout << "set mpm data input port" << std::endl;getchar();
   mpm_data_input_port_ = 
       this->DeclareAbstractInputPort("mpm", Value<std::vector<Vector3<double>>>())
           .get_index();
@@ -600,8 +601,13 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
       query_object.inspector().geometry_version();
 
   const systems::InputPort<T>& mpm_intput_port = this->get_input_port(mpm_data_input_port_); 
-  // const auto& data = mpm_intput_port.Eval(context);
-
+  std::cout << "get input port" << std::endl; getchar();
+  //std::cout << mpm_intput_port.Eval<>(context) << std::endl;getchar();
+  const std::vector<Vector3<double>>& data = mpm_intput_port.template Eval<std::vector<Vector3<double>>>(context);
+  std::cout << "get input port finish" << std::endl; getchar();
+  std::cout << "length of std vector " << data.size() << std::endl;
+  std::cout << data[0](0) << " " << data[0](1) << " "<< data[0](2) << std::endl;
+  //const Eigen::Matrix<double, -1, 1>& data = mpm_intput_port.Eval(context);
   // const VectorX<T>& applied_generalized_force =
   //       applied_generalized_force_input.Eval(context);
   bool send_load_message = false;
