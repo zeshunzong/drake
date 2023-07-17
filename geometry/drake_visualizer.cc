@@ -573,10 +573,10 @@ DrakeVisualizer<T>::DrakeVisualizer(lcm::DrakeLcmInterface* lcm,
           .get_index();
 
   // -------------------------------newly added for MPM-------------------------
-  std::cout << "set mpm data input port" << std::endl;getchar();
   mpm_data_input_port_ = 
       this->DeclareAbstractInputPort("mpm", Value<std::vector<Vector3<double>>>())
           .get_index();
+
   // -------------------------------newly added for MPM-------------------------
 
   // These cache entries depend on *nothing*.
@@ -600,16 +600,8 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
   const GeometryVersion& current_version =
       query_object.inspector().geometry_version();
 
-  const systems::InputPort<T>& mpm_intput_port = this->get_input_port(mpm_data_input_port_); 
-  std::cout << "get input port" << std::endl; getchar();
-  //std::cout << mpm_intput_port.Eval<>(context) << std::endl;getchar();
-  const std::vector<Vector3<double>>& data = mpm_intput_port.template Eval<std::vector<Vector3<double>>>(context);
-  std::cout << "get input port finish" << std::endl; getchar();
-  std::cout << "length of std vector " << data.size() << std::endl;
-  std::cout << data[0](0) << " " << data[0](1) << " "<< data[0](2) << std::endl;
-  //const Eigen::Matrix<double, -1, 1>& data = mpm_intput_port.Eval(context);
-  // const VectorX<T>& applied_generalized_force =
-  //       applied_generalized_force_input.Eval(context);
+  
+
   bool send_load_message = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -633,10 +625,12 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
       ExtractDoubleOrThrow(context.get_time()), lcm_);
 
   // // ADD a call to MPM one here 
+  const systems::InputPort<T>& mpm_intput_port = this->get_input_port(mpm_data_input_port_); 
+  const std::vector<Vector3<double>>& mpm_data = mpm_intput_port.template Eval<std::vector<Vector3<double>>>(context);
   SendMPMGeometriesMessage(
-      query_object, params_, EvalDeformableMeshData(context),
+      mpm_data, params_,
       ExtractDoubleOrThrow(context.get_time()), lcm_);
-
+  
   return EventStatus::Succeeded();
 }
 
@@ -802,25 +796,25 @@ void DrakeVisualizer<T>::SendDeformableGeometriesMessage(
   lcm::Publish(lcm, channel, message, time);
 }
 
+
 template <typename T>
-void DrakeVisualizer<T>::SendMPMGeometriesMessage(
-    const QueryObject<T>& query_object, const DrakeVisualizerParams& params,
-    const vector<internal::DeformableMeshData>& deformable_data, double time,
-    lcm::DrakeLcmInterface* lcm) {
+void DrakeVisualizer<T>::SendMPMGeometriesMessage(const std::vector<Vector3<double>>& mpm_data, const DrakeVisualizerParams& params, 
+  double time, lcm::DrakeLcmInterface* lcm) {
   
-  // to be deleted, just to avoid bugs
-  const internal::DeformableMeshData& data = deformable_data[0];
-  const GeometryId g_id = data.geometry_id;
-  const VectorX<T>& vertex_positions = query_object.GetConfigurationsInWorld(g_id);
-  if (vertex_positions[0] > 100000){
-    std::cout << vertex_positions[0] << std::endl;
+  const size_t kPoints = mpm_data.size();
+  if (kPoints==0){
+    std::cout << "no mpm to display" << std::endl; return;
   }
-  
-  const int kPoints = 100;
   perception::PointCloud cloud(
   kPoints, perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
-  Eigen::Matrix3Xf m = Eigen::Matrix3Xf::Random(3, kPoints);
-  cloud.mutable_xyzs() = Eigen::DiagonalMatrix<float, 3>{0.05, 0.05, 0.1} * m;
+  Eigen::Matrix3Xf m = Eigen::Matrix3Xf::Zero(3, kPoints);
+
+  for (size_t ind = 0; ind < kPoints; ind++) {
+    m.col(ind) = mpm_data[ind].cast <float> ();
+  }
+  // std::cout << "matrix is " << m << std::endl;
+  cloud.mutable_xyzs() = m;
+
   // cloud.mutable_rgbs() = (255.0 * (m.array() + 1.0) / 2.0).cast<uint8_t>(); // if do not do this, color is black
   lcmt_point_cloud message = ConvertPointCloudToMessage(cloud);
   /* Note: the channel name must be "DRAKE_POINT_CLOUD.**" otherwise it would not be 

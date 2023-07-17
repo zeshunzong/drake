@@ -84,7 +84,7 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
     throw std::logic_error("we only allow one mpm model");
   }
 
-  mpm::Particles particles(1);
+  mpm::Particles particles(10);
   mpm_model_ = std::make_unique<mpm::MpmModel<T>>(); // should add physical parameters to mpm_model_
   std::cout << "finish RegisterMpmBody" << std::endl;
   return body_id;
@@ -298,45 +298,42 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
           .get_index();
 
 
-  // mpm_particle_positions_port_index_ =
-  //     this->DeclareVectorOutputPort(
-  //             plant, "particles",
-  //             drake::systems::BasicVector<T>(3*mpm_model_->num_particles_),
-  //             [this](const systems::Context<T>& context,
-  //                    drake::systems::BasicVector<T>* output) {
-  //               this->CopyMpmPositions(context, output);
-  //             },
-  //             {systems::System<double>::xd_ticket()})
-  //         .get_index();
+  // output port for visualization
+    mpm_particle_positions_port_index_ =
+        this->DeclareAbstractOutputPort(
+                plant, "mpm",
+                []() {
+                  return AbstractValue::Make<
+                      std::vector<Vector3<double>>>();
+                },
+                [this](const systems::Context<T>& context,
+                      AbstractValue* output) {
+                  this->CopyMpmPositions(context, output);
+                },
+                {systems::System<double>::xd_ticket()})
+            .get_index();
+  // all mpm related
+  if (ExistsMpmModel()) {
+    // ---------------------------- add mpm_state to plant's context --------------
+    mpm::Particles particles(1);
+    mpm::MpmState<T> mpm_state(particles);
+    mpm_model_->num_particles_ = particles.get_num_particles();
+    mpm_model_->particles_container_index_ = this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state));
+    particles_container_index_ = mpm_model_->particles_container_index_;
+    std::cout <<"the mpmstate stored in MBP context has index " << particles_container_index_ << std::endl; getchar();
+    // ---------------------------- add mpm_state to plant's context --------------
 
-  mpm_particle_positions_port_index2_ =
-      this->DeclareAbstractOutputPort(
-              plant, "mpm",
-              []() {
-                return AbstractValue::Make<
-                    std::vector<Vector3<double>>>();
-              },
-              [this](const systems::Context<T>& context,
-                     AbstractValue* output) {
-                this->CopyMpmPositions2(context, output);
-              },
-              {systems::System<double>::xd_ticket()})
-          .get_index();
-
+    
+    // all mpm related
+  } else {
+    std::cout << "does not add mpm " << std::endl; getchar();
+  }
+  
   std::sort(body_ids_.begin(), body_ids_.end());
   for (DeformableBodyIndex i(0); i < static_cast<int>(body_ids_.size()); ++i) {
     DeformableBodyId id = body_ids_[i];
     body_id_to_index_[id] = i;
   }
-
-  // ---------------------------- add mpm_state to plant's context --------------
-  mpm::Particles particles(1);
-  mpm::MpmState<T> mpm_state(particles);
-  mpm_model_->num_particles_ = particles.get_num_particles();
-  mpm_model_->particles_container_index_ = this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state));
-  particles_container_index_ = mpm_model_->particles_container_index_;
-  std::cout <<"the mpmstate stored in MBP context has index " << particles_container_index_ << std::endl; getchar();
-  // ---------------------------- add mpm_state to plant's context --------------
 
 
 }
@@ -358,42 +355,21 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
 }
 
 template <typename T>
-void DeformableModel<T>::CopyMpmPositions2(const systems::Context<T>& context,
-                                             AbstractValue* output) const {
-  auto& output_value =
-      output->get_mutable_value<std::vector<Vector3<double>>>();
-
-
-  const mpm::MpmState<T>& current_state = context.template get_abstract_state<mpm::MpmState<T>>(particles_container_index_);
-  const std::vector<Vector3<double>>& particle_positions = current_state.GetParticles().get_positions();
-
-  output_value = particle_positions;
-  // output_value.clear();
-  // for (const auto& [body_id, geometry_id] : body_id_to_geometry_id_) {
-  //   const auto& fem_model = GetFemModel(body_id);
-  //   const int num_dofs = fem_model.num_dofs();
-  //   const auto& discrete_state_index = GetDiscreteStateIndex(body_id);
-  //   VectorX<T> vertex_positions =
-  //       context.get_discrete_state(discrete_state_index).value().head(num_dofs);
-  //   output_value.set_value(geometry_id, std::move(vertex_positions));
-  // }
-}
-
-template <typename T>
 void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
-                                             drake::systems::BasicVector<T>* output) const {
-  
-  const mpm::MpmState<T>& current_state = context.template get_abstract_state<mpm::MpmState<T>>(particles_container_index_);
-  const std::vector<Vector3<double>>& particle_positions = current_state.GetParticles().get_positions();
-  VectorX<T> particle_positions_vector(mpm_model_->num_particles_ * 3);
-  for (int i = 0; i < mpm_model_->num_particles_; i++) {
-    particle_positions_vector(i*3+0) = particle_positions[i](0);
-    particle_positions_vector(i*3+1) = particle_positions[i](1);
-    particle_positions_vector(i*3+2) = particle_positions[i](2);
+                                             AbstractValue* output) const {
+  auto& output_value = output->get_mutable_value<std::vector<Vector3<double>>>();
+  if (ExistsMpmModel()) {
+    const mpm::MpmState<T>& current_state = context.template get_abstract_state<mpm::MpmState<T>>(particles_container_index_);
+    const std::vector<Vector3<double>>& particle_positions = current_state.GetParticles().get_positions();
+    output_value = particle_positions;
+  } else {
+    const std::vector<Vector3<double>>& particle_positions{}; // empty, port will still be connected anyways
+    output_value = particle_positions;
   }
-  output->set_value(particle_positions_vector);
-
+  
+  
 }
+
 
 template <typename T>
 void DeformableModel<T>::ThrowUnlessRegistered(const char* source_method,

@@ -181,26 +181,16 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     return plant_->get_output_port(vertex_positions_port_index_);
   }
 
-  // /** Returns the output port of the mpm particle positions for the mpm body
-  //  @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
-  // */
-  // const systems::OutputPort<T>& mpm_particle_positions_port() const {
-  //   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  //   if (mpm_model_== nullptr){
-  //     throw std::logic_error("vertex_positions_port(): No MPM Model registered");
-  //   }
-  //   return plant_->get_output_port(mpm_particle_positions_port_index_);
-  // }
 
   /** Returns the output port of the mpm particle positions for the mpm body
    @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
   */
-  const systems::OutputPort<T>& mpm_particle_positions_port2() const {
+  const systems::OutputPort<T>& mpm_particle_positions_port() const {
     this->ThrowIfSystemResourcesNotDeclared(__func__);
     if (mpm_model_== nullptr){
       throw std::logic_error("vertex_positions_port(): No MPM Model registered");
     }
-    return plant_->get_output_port(mpm_particle_positions_port_index2_);
+    return plant_->get_output_port(mpm_particle_positions_port_index_);
   }
 
  private:
@@ -238,11 +228,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    value which is guaranteed to be of type GeometryConfigurationVector. */
   void CopyVertexPositions(const systems::Context<T>& context,
                            AbstractValue* output) const;
-  void CopyMpmPositions2(const systems::Context<T>& context,
-                           AbstractValue* output) const;
-
   void CopyMpmPositions(const systems::Context<T>& context,
-                           drake::systems::BasicVector<T>* output) const;
+                           AbstractValue* output) const;
 
   /* Helper to throw a useful message if a deformable body with the given `id`
    doesn't exist. */
@@ -267,7 +254,6 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   std::unordered_map<DeformableBodyId, DeformableBodyIndex> body_id_to_index_;
   systems::OutputPortIndex vertex_positions_port_index_;
   systems::OutputPortIndex mpm_particle_positions_port_index_;
-  systems::OutputPortIndex mpm_particle_positions_port_index2_;
 
     // for mpm only, assume only one mpm body
   std::unique_ptr<mpm::MpmModel<T>> mpm_model_;

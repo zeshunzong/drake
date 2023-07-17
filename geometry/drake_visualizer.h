@@ -192,6 +192,8 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
     return this->get_input_port(mpm_data_input_port_);
   }
 
+
+
   // -------------------------------newly added for MPM-------------------------
 
   /** @name Utility functions for instantiating and connecting a visualizer
@@ -293,6 +295,11 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
       const QueryObject<T>& query_object, const DrakeVisualizerParams& params,
       const std::vector<internal::DeformableMeshData>& deformable_data,
       double time, lcm::DrakeLcmInterface* lcm);
+
+    /* Dispatches a message for mpm, as point cloud. */
+  static void SendMPMGeometriesMessage(const std::vector<Vector3<double>>& mpm_data, const DrakeVisualizerParams& params,
+      double time, lcm::DrakeLcmInterface* lcm);
+
   /* Helper function to translate PointCloud to lcm message*/
   static lcmt_point_cloud ConvertPointCloudToMessage(
     const perception::PointCloud& cloud,

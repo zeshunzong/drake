@@ -231,9 +231,10 @@ int do_main() {
   const double unused_resolution_hint = 1.0;
   owned_deformable_model->RegisterDeformableBody(
       std::move(torus_instance), deformable_config, unused_resolution_hint);
-      std::cout << "finish fem" << std::endl;getchar();   
+
   owned_deformable_model->RegisterMpmBody(
       std::move(torus_instance2), deformable_config, unused_resolution_hint); 
+
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
   plant.AddPhysicalModel(std::move(owned_deformable_model));
@@ -261,7 +262,9 @@ int do_main() {
   std::cout << "builder connected " << std::endl; getchar();
   /* Add a visualizer that emits LCM messages for visualization. */
   auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph);
-  builder.Connect(deformable_model->mpm_particle_positions_port2(), visualizer.mpm_data_input_port());
+
+  // connect mpm to output port
+  builder.Connect(deformable_model->mpm_particle_positions_port(), visualizer.mpm_data_input_port());
 
   std::cout << "visualizer added" << std::endl; getchar();
   /* Set the width between the fingers for open and closed states as well as the
