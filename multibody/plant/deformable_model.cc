@@ -77,16 +77,15 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
   this->ThrowIfSystemResourcesDeclared(__func__);
   std::cout << "Temporary:Inputs to RegisterMpmBody are not used." << std::endl; getchar();
 
-  const DeformableBodyId body_id = DeformableBodyId::get_new_id();
-  std::cout << "body id " << body_id << std::endl;getchar();
- 
+  
   if (ExistsMpmModel()) {
     throw std::logic_error("we only allow one mpm model");
   }
 
   mpm::Particles particles(10);
   mpm_model_ = std::make_unique<mpm::MpmModel<T>>(); // should add physical parameters to mpm_model_
-  std::cout << "finish RegisterMpmBody" << std::endl;
+
+  const DeformableBodyId body_id = DeformableBodyId::get_new_id();
   return body_id;
 }
 
@@ -369,6 +368,107 @@ void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
   
   
 }
+
+  // MODIFY particles in place!!
+    // Initialize particles' positions with Poisson disk sampling. The object's
+  // level set in the physical frame is the given level set in the reference
+  // frame transformed by pose. We assume every particles have equal reference
+  // volumes, then we can initialize particles' masses with the given constant
+  // density, Finally, we initialize the velocities of particles with the
+  // constant given velocity.
+  template <typename T>
+  void DeformableModel<T>::InitializeParticles(systems::Context<T>& context, const mpm::AnalyticLevelSet& level_set,
+                            const math::RigidTransform<double>& pose,
+                            mpm::MpmModel<T>::MaterialParameters m_param,
+                            mpm::Particles& particles){
+
+      DRAKE_DEMAND(m_param.density > 0.0);
+      DRAKE_DEMAND(m_param.min_num_particles_per_cell >= 1);                        
+
+      double grid_h = 0.01;
+      const std::array<Vector3<double>, 2> bounding_box =
+                                    level_set.get_bounding_box();
+
+      // Distances between generated particles are at at least sample_r apart, and
+    // there are at least min_num_particles_per_cell particles per cell. r =
+    // argmax(⌊h/r⌋)^3 >= min_num_particles_per_cell, in other words, if we pick
+    // particles located at the grid with grid size r, there are at least
+    // min_num_particles_per_cell particles in a cell with size h.
+    double sample_r =
+            grid_h/(std::cbrt(m_param.min_num_particles_per_cell)+1);
+    multibody::SpatialVelocity<double> init_v = m_param.initial_velocity;
+    std::array<double, 3> xmin = {bounding_box[0][0], bounding_box[0][1],
+                                  bounding_box[0][2]};
+    std::array<double, 3> xmax = {bounding_box[1][0], bounding_box[1][1],
+                                  bounding_box[1][2]};
+    // Generate sample particles in the reference frame (centered at the origin
+    // with canonical basis e_i)
+    std::vector<Vector3<double>> particles_sample_positions =
+        thinks::PoissonDiskSampling<double, 3, Vector3<double>>(sample_r,
+                                                                xmin, xmax);
+
+    // Pick out sampled particles that are in the object
+    int num_samples = particles_sample_positions.size();
+    std::vector<Vector3<double>> particles_positions, particles_velocities;
+    for (int p = 0; p < num_samples; ++p) {
+        // Denote the particle by P, the object by B, the frame centered at the
+        // origin of the object by Bo, and the frame of the particle by Bp.
+
+        // The pose and spatial velocity of the object in the world frame
+        const math::RigidTransform<double>& X_WB       = pose;
+        const multibody::SpatialVelocity<double>& V_WB = init_v;
+
+        // Rotation matrix from the object to the world
+        const math::RotationMatrix<double>& Rot_WB     = X_WB.rotation();
+
+        // Sample particles and get the position of the particle with respect to
+        // the object in the object's frame
+        const Vector3<double>& p_BoBp_B = particles_sample_positions[p];
+
+        // Express the relative position of the particle with respect to the
+        // object in the world frame
+        const Vector3<double>& p_BoBp_W = Rot_WB*p_BoBp_B;
+
+        // Compute the spatial velocity of the particle
+        SpatialVelocity<double> V_WBp   = V_WB.Shift(p_BoBp_W);
+
+        // If the particle is in the level set
+        if (level_set.InInterior(p_BoBp_B)) {
+            // TODO(yiminlin.tri): Initialize the affine matrix C_p using
+            //                     V_WBp.rotational() ?
+            particles_velocities.emplace_back(V_WBp.translational());
+            // Place the particle's position in world frame
+            particles_positions.emplace_back(X_WB*p_BoBp_B);
+        }
+    }
+
+    int num_particles = particles_positions.size();
+    // We assume every particle have the same volume and mass
+    double reference_volume_p = level_set.get_volume()/num_particles;
+    double init_m = m_param.density*reference_volume_p;
+
+    // Add particles
+    for (int p = 0; p < num_particles; ++p) {
+        const Vector3<double>& xp = particles_positions[p];
+        const Vector3<double>& vp = particles_velocities[p];
+        Matrix3<double> elastic_deformation_grad_p
+                                                = Matrix3<double>::Identity();
+        Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
+        Matrix3<double> B_p                = Matrix3<double>::Zero();
+        std::unique_ptr<mpm::ElastoPlasticModel> elastoplastic_model_p
+                                        = m_param.elastoplastic_model->Clone();
+        particles.AddParticle(xp, vp, init_m, reference_volume_p,
+                               elastic_deformation_grad_p,
+                               kirchhoff_stress_p,
+                               B_p, std::move(elastoplastic_model_p));
+    }
+
+    // Update dilatational wave speed
+    // double lambda = m_param.elastoplastic_model->get_lambda();
+    // double mu     = m_param.elastoplastic_model->get_mu();
+    // dilatational_wavespd_ = std::max(dilatational_wavespd_,
+    //                                  std::sqrt((lambda+2*mu)/m_param.density));                              
+  }
 
 
 template <typename T>

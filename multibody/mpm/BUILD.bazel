@@ -384,6 +384,10 @@ drake_cc_library(
     deps = [
         ":mpm_state",
         "//common:essential",
+        "//multibody/math:spatial_algebra",
+        ":ElastoPlasticModel",
+        ":AnalyticLevelSet",
+        ":poisson_disk_sampling",
     ],
 )
 

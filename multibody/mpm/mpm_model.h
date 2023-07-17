@@ -11,6 +11,12 @@
 #include "drake/common/eigen_types.h"
 // #include "drake/multibody/contact_solvers/block_sparse_lower_triangular_or_symmetric_matrix.h"
 #include "drake/multibody/mpm/mpm_state.h"
+#include "drake/multibody/mpm/ElastoPlasticModel.h"
+#include "drake/multibody/math/spatial_algebra.h"
+#include "drake/multibody/mpm/AnalyticLevelSet.h"
+#include "drake/multibody/mpm/ElastoPlasticModel.h"
+
+
 
 namespace drake {
 namespace multibody {
@@ -19,6 +25,25 @@ namespace mpm {
 template <typename T>
 class MpmModel {
  public:
+
+
+  struct MaterialParameters {
+        // Elastoplastic model of the object
+        std::unique_ptr<ElastoPlasticModel> elastoplastic_model;
+        // @pre density is positive
+        // Density and the initial velocity of the object, we assume the object
+        // has uniform density and velocity.
+        double density;
+        // V_WB, The object B's spatial velocity measured and expressed in the
+        // world frame W.
+        multibody::SpatialVelocity<double> initial_velocity;
+        // User defined parameter to control the minimum number of particles per
+        // grid cell.
+        int min_num_particles_per_cell;
+    };
+
+
+
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MpmModel);
 
   
@@ -39,31 +64,6 @@ class MpmModel {
 
   /** Returns the gravity vector for all elements in this model. */
   const Vector3<T>& gravity_vector() const { return gravity_; }
-
-//   /** Applies boundary condition set for this %MpmModel to the input `state`.
-//    No-op if no boundary condition is set.
-//    @pre fem_state != nullptr.
-//    @throws std::exception if the FEM state is incompatible with this model. */
-//   void ApplyBoundaryCondition(FemState<T>* fem_state) const;
-
-//   // TODO(xuchenhan-tri): Internal object in public signature in non-internal
-//   //  class.
-//   /** Sets the Dirichlet boundary condition that this model is subject to. */
-//   void SetDirichletBoundaryCondition(
-//       internal::DirichletBoundaryCondition<T> dirichlet_bc) {
-//     dirichlet_bc_ = std::move(dirichlet_bc);
-//   }
-
-//   /** Returns the Dirichlet boundary condition that this model is subject to. */
-//   const internal::DirichletBoundaryCondition<T>& dirichlet_boundary_condition()
-//       const {
-//     return dirichlet_bc_;
-//   }
-
-  /** (Internal use only) Throws std::exception to report a mismatch between
-  the FEM model and state that were passed to API method `func`. */
-  void ThrowIfModelStateIncompatible(const char* func,
-                                     const MpmState<T>& mpm_state) const;
 
 
   /** Constructs an empty MPM model. */

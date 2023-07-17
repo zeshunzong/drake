@@ -13,6 +13,7 @@
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/physical_model.h"
 #include "drake/systems/framework/basic_vector.h"
+#include "drake/multibody/mpm/poisson_disk_sampling.h"
 
 namespace drake {
 namespace multibody {
@@ -230,6 +231,18 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
                            AbstractValue* output) const;
   void CopyMpmPositions(const systems::Context<T>& context,
                            AbstractValue* output) const;
+
+
+    // Initialize particles' positions with Poisson disk sampling. The object's
+  // level set in the physical frame is the given level set in the reference
+  // frame transformed by pose. We assume every particles have equal reference
+  // volumes, then we can initialize particles' masses with the given constant
+  // density, Finally, we initialize the velocities of particles with the
+  // constant given velocity.
+  void InitializeParticles(systems::Context<T>& context, const mpm::AnalyticLevelSet& level_set,
+                            const math::RigidTransform<double>& pose,
+                            mpm::MpmModel<T>::MaterialParameters m_param,
+                            mpm::Particles& particles);                         
 
   /* Helper to throw a useful message if a deformable body with the given `id`
    doesn't exist. */

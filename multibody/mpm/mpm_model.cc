@@ -17,23 +17,6 @@ std::unique_ptr<MpmState<T>> MpmModel<T>::MakeMpmState() const {
 }
 
 
-
-// template <typename T>
-// MpmModel<T>::MpmModel()
-//     : mpm_state_system_(std::make_unique<internal::MpmStateSystem<T>>(
-//           VectorX<T>(0), VectorX<T>(0), VectorX<T>(0), Particles())) {}
-
-template <typename T>
-void MpmModel<T>::ThrowIfModelStateIncompatible(
-    const char* func, const MpmState<T>& mpm_state) const {
-  // if (!mpm_state.is_created_from_system(*mpm_state_system_)) {
-  //   throw std::logic_error(std::string(func) +
-  //                          "(): The FEM model and state are not compatible.");
-  // }
-}
-
-
-
 }  // namespace mpm
 }  // namespace multibody
 }  // namespace drake
