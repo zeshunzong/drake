@@ -1,4 +1,4 @@
-#include "drake/multibody/fem/mpm-dev/StvkHenckyWithVonMisesModel.h"
+#include "drake/multibody/mpm/StvkHenckyWithVonMisesModel.h"
 
 namespace drake {
 namespace multibody {

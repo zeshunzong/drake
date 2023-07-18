@@ -424,7 +424,20 @@ drake_cc_binary(
         "@partio",
     ],
 )
-
+drake_cc_binary(
+    name = "ball_on_floor",
+    srcs = [
+        "examples/ball_on_floor/main.cpp",
+    ],
+    deps = [
+        ":CorotatedElasticModel",
+        ":MPMDriver",
+#        ":SpatialVelocityTimeDependent",
+        "//common:essential",
+        "//math:geometric_transform",
+        "@partio",
+    ],
+)
 
 
 add_lint_tests()

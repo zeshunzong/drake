@@ -4,7 +4,7 @@
 
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/fem/matrix_utilities.h"
-#include "drake/multibody/fem/mpm-dev/ElastoPlasticModel.h"
+#include "drake/multibody/mpm/ElastoPlasticModel.h"
 
 namespace drake {
 namespace multibody {
