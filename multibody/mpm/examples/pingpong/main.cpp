@@ -46,7 +46,7 @@ int DoMain() {
 
     MPMParameters::IOParameters io_param {
         "mpm-test",                            // case name
-        "/home/zeshunzong/Documents/drake/multibody/mpm/examples/ball_on_floor/outputs",       // output directory name
+        "/home/zeshunzong/Documents/drake/multibody/mpm/examples/pingpong/outputs",       // output directory name
         0.04,                                  // Interval of outputting
     };
 

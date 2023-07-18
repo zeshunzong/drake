@@ -16,7 +16,7 @@
 #include "drake/multibody/mpm/AnalyticLevelSet.h"
 #include "drake/multibody/mpm/CorotatedElasticModel.h"
 #include "drake/multibody/math/spatial_velocity.h"
-
+#include "drake/multibody/mpm/KinematicCollisionObjects.h"
 
 namespace drake {
 namespace multibody {

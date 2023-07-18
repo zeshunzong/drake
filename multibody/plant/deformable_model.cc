@@ -339,30 +339,48 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
   // all mpm related
   if (ExistsMpmModel()) {
 
+    // multibody::SpatialVelocity<double> velocity_sphere;
+    // velocity_sphere.translational() = Vector3<double>{0.1, 0.1, 0.1};
+    // velocity_sphere.rotational() = Vector3<double>{M_PI/2, M_PI/2, M_PI/2};
+
+    // mpm::SphereLevelSet level_set_sphere = mpm::SphereLevelSet(0.2);
+    // Vector3<double> translation_sphere = {0.0, 0.0, 0.0};
+    // math::RigidTransform<double> pose_sphere =
+    //                         math::RigidTransform<double>(translation_sphere);
+
+    // double E = 5e4;
+    // double nu = 0.4;
+    // std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
+    //         = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
+    // typename mpm::MpmModel<T>::MaterialParameters m_param_sphere{
+    //                                             std::move(elastoplastic_model),
+    //                                             1000,
+    //                                             velocity_sphere,
+    //                                             1
+    //                                             };
+
     multibody::SpatialVelocity<double> velocity_sphere;
-    velocity_sphere.translational() = Vector3<double>{0.1, 0.1, 0.1};
-    velocity_sphere.rotational() = Vector3<double>{M_PI/2, M_PI/2, M_PI/2};
+    velocity_sphere.translational() = Vector3<double>{5.0, 0.0, 0.0};
+    velocity_sphere.rotational() = Vector3<double>{0.0, 0.0, 0.0};
 
-    mpm::SphereLevelSet level_set_sphere = mpm::SphereLevelSet(0.2);
-    Vector3<double> translation_sphere = {0.0, 0.0, 0.0};
-    math::RigidTransform<double> pose_sphere =
-                            math::RigidTransform<double>(translation_sphere);
-
-    double E = 5e4;
+    double E = 8e4;
     double nu = 0.4;
     std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
             = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
     typename mpm::MpmModel<T>::MaterialParameters m_param_sphere{
                                                 std::move(elastoplastic_model),
-                                                1000,
+                                                500,
                                                 velocity_sphere,
                                                 1
                                                 };
 
+    mpm::KinematicCollisionObjects objects = mpm::KinematicCollisionObjects();
+
+
     mpm::Particles particles(0);
 
-    InitializeParticles(level_set_sphere, pose_sphere, 
-                        std::move(m_param_sphere), mpm_model_->grid_h(), particles);
+    // InitializeParticles(level_set_sphere, pose_sphere, 
+    //                     std::move(m_param_sphere), mpm_model_->grid_h(), particles);
     // InitializeParticles(level_set_sphere, pose_sphere, 
     //                     *(mpm_model_->material_params()), mpm_model_->grid_h(), particles);
 
