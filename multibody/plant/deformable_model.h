@@ -239,9 +239,9 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   // volumes, then we can initialize particles' masses with the given constant
   // density, Finally, we initialize the velocities of particles with the
   // constant given velocity.
-  void InitializeParticles(systems::Context<T>& context, const mpm::AnalyticLevelSet& level_set,
+  void InitializeParticles(const mpm::AnalyticLevelSet& level_set,
                             const math::RigidTransform<double>& pose,
-                            mpm::MpmModel<T>::MaterialParameters m_param,
+                            const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h,
                             mpm::Particles& particles);                         
 
   /* Helper to throw a useful message if a deformable body with the given `id`

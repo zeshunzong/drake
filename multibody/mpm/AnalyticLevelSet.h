@@ -17,6 +17,10 @@ namespace mpm {
 // reference configuration
 class AnalyticLevelSet {
  public:
+
+    AnalyticLevelSet(){
+      
+    }
     AnalyticLevelSet(double volume,
                      const std::array<Vector3<double>, 2>& bounding_box);
 

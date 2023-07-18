@@ -179,12 +179,12 @@ class CompliantContactManager final
   // -------------------------------------------------newly added for MPM-------------------------
   void DoCalcAbstractValues(const systems::Context<T>& context,
                                 systems::State<T>* update) const final {
-        std::cout << "compliant contact manager calc abstract value is called" << std::endl;getchar();
         if constexpr (std::is_same_v<T, double>) {
             if (deformable_driver_ != nullptr) {
                 deformable_driver_->CalcAbstractStates(context, update);
             }
-        }                             
+        }
+        // getchar();                             
     }
 // -------------------------------------------------newly added for MPM-------------------------
 

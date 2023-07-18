@@ -5,7 +5,8 @@
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/fem/discrete_time_integrator.h"
 #include "drake/multibody/mpm/mpm_model.h"
-
+#include "drake/multibody/mpm/SparseGrid.h"
+#include "drake/multibody/mpm/MPMTransfer.h"
 namespace drake {
 namespace multibody {
 namespace mpm {
@@ -19,6 +20,8 @@ class MpmSolver {
 
  
   MpmSolver(const MpmModel<T>* model);
+
+  MpmSolver(const MpmModel<T>* model, double dt);
 
   int AdvanceOneTimeStep(const MpmState<T>& prev_state, MpmState<T>* next_state) const;
 
@@ -48,6 +51,14 @@ class MpmSolver {
   bool solver_converged(const T& residual_norm,
                         const T& initial_residual_norm) const;
 
+  // Run the simulation with timestep size dt till endtime
+      double endtime_; // not needed at this time
+      double dt_; 
+      // Grid parameters, as documented in SparseGrid Class
+      double grid_h_;
+      // CFL number
+      double CFL_; // not needed
+
  private:
 
   /* The FEM model being solved by `this` solver. */
@@ -59,6 +70,8 @@ class MpmSolver {
   /* Max number of Newton-Raphson iterations the solver takes before it gives
    up. */
   int kMaxIterations_{100};
+  mutable SparseGrid grid_;
+  mutable MPMTransfer mpm_transfer_;
 };
 
 }  // namespace internal

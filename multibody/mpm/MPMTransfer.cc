@@ -6,7 +6,7 @@ namespace mpm {
 
 void MPMTransfer::SetUpTransfer(SparseGrid* grid,
                                 Particles* particles) {
-    std::cout << "In setup transfer" << std::endl;
+
     int num_particles = particles->get_num_particles();
     std::vector<Vector3<int>> batch_indices(num_particles); // batch_indices is the 3Dindex of batch that each particle belongs to
     // Preallocate the indices of batches

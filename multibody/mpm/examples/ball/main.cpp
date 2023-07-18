@@ -36,7 +36,7 @@ int DoMain() {
 
     MPMParameters::SolverParameters s_param {
         2e-0,                                  // End time
-        5e-4,                                  // Time step size
+        4e-4,                                  // Time step size
         0.025,                                   // Grid size
         CFL,                                  // CFL
     };

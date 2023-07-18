@@ -21,7 +21,6 @@ MpmStateSystem<T>::MpmStateSystem(const VectorX<T>& model_q,
 
   num_particles_ = particles.get_num_particles();
   particles_container_index_ = this->DeclareAbstractState(Value<Particles>(particles));
-  std::cout << "in declare abstract state for mpm state system, index is " << particles_container_index_ << std::endl; getchar();
 }
 
 }  // namespace internal

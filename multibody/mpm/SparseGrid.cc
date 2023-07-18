@@ -1,11 +1,13 @@
 #include "drake/multibody/mpm/SparseGrid.h"
-
+#include <iostream>
 namespace drake {
 namespace multibody {
 namespace mpm {
 
 SparseGrid::SparseGrid(double h): num_active_gridpts_(0), h_(h),
-                                  active_gridpts_(0) {}
+                                  active_gridpts_(0) {
+    std::cout << "create grid with h = " << h << std::endl;
+                                  }
 
 void SparseGrid::reserve(double capacity) {
     index_map_.reserve(capacity);
@@ -97,7 +99,6 @@ void SparseGrid::UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_i
     num_active_gridpts_ = 0;
     active_gridpts_.clear();
     index_map_.clear();
-    std::cout << "should resume from here " << std::endl; getchar();
     // Determine the set of active grids points by iterating through all
     // particles
     for (int p = 0; p < particles.get_num_particles(); ++p) {

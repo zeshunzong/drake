@@ -280,6 +280,8 @@ drake_cc_library(
         ":mpm_model",
         "//multibody/fem:discrete_time_integrator",
         "//common:essential",
+        ":SparseGrid",
+        ":MPMTransfer",
        
     ],
 )
@@ -388,6 +390,8 @@ drake_cc_library(
         ":ElastoPlasticModel",
         ":AnalyticLevelSet",
         ":poisson_disk_sampling",
+        ":CorotatedElasticModel",
+        ":SpatialVelocityTimeDependent",
     ],
 )
 

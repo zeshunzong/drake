@@ -15,7 +15,7 @@
 #include "drake/multibody/fem/fem_solver.h"
 
 #include "drake/multibody/mpm/mpm_model.h"
-#include "drake/multibody/mpm/mpm_solver.h"
+
 #include "drake/multibody/mpm/Particles.h"
 #include "drake/multibody/fem/velocity_newmark_scheme.h"
 #include "drake/multibody/plant/contact_properties.h"
@@ -61,6 +61,11 @@ DeformableDriver<T>::DeformableDriver(
    midpoint rule, i.e., q = q₀ + δt/2 *(v₀ + v). */
   integrator_ = std::make_unique<fem::internal::VelocityNewmarkScheme<T>>(
       manager_->plant().time_step(), 1.0, 0.5);
+
+  const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
+  mpm_solver_ = std::make_unique<mpm::internal::MpmSolver<T>>(&mpm_model,
+      manager_->plant().time_step());
+
 }
 
 template <typename T>
@@ -498,7 +503,6 @@ void DeformableDriver<T>::CalcDiscreteStates(
     systems::DiscreteValues<T>* next_states) const {
   const int num_bodies = deformable_model_->num_bodies();
   if (num_bodies > 0){
-    std::cout << "there are FEM bodies to be computed" << std::endl; getchar();
     for (DeformableBodyIndex index(0); index < num_bodies; ++index) {
         const FemState<T>& next_fem_state = EvalNextFemState(context, index);
         const int num_dofs = next_fem_state.num_dofs();
@@ -521,10 +525,8 @@ void DeformableDriver<T>::CalcAbstractStates(
     systems::State<T>* update) const {
   
   if (deformable_model_->ExistsMpmModel()) {
-    std::cout << "there exists an MPM to be computed" << std::endl; getchar();
 
     const MpmState<T>& next_mpm_state = EvalNextMpmState(context);
-    std::cout << "abstract index" << deformable_model_->GetParticlesAbstractIndex()  << " index " << std::endl; getchar();
 
     // the two lines below together act as setting abstract state
     MpmState<T>& mutable_mpm_state = update->template get_mutable_abstract_state<MpmState<T>>(deformable_model_->GetParticlesAbstractIndex());
@@ -603,12 +605,11 @@ void DeformableDriver<T>::CalcFemState(const Context<T>& context,
 template <typename T>
 void DeformableDriver<T>::CalcMpmState(const Context<T>& context,
                                        MpmState<T>* mpm_state) const {
-    std::cout << "in CalcMpmState" << std::endl; getchar();
 
     const MpmState<T>& current_state = context.template get_abstract_state<MpmState<T>>(deformable_model_->particles_container_index());
     mpm_state->SetState(current_state);
-    mpm_state->print_info(); 
-    std::cout << "finish CalcMpmState" << std::endl; getchar();
+    // mpm_state->print_info(); 
+    std::cout << "finish CalcMpmState" << std::endl;
 
 }
 
@@ -649,14 +650,13 @@ void DeformableDriver<T>::CalcFreeMotionFemState(
 template <typename T>
 void DeformableDriver<T>::CalcFreeMotionMpmState(
     const systems::Context<T>& context,MpmState<T>* mpm_state_star) const {
-    std::cout << "in CalcFreeMotionMpmState" << std::endl; getchar();
 
   const MpmState<T>& mpm_state = EvalMpmState(context);
 
   const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
 
-  const MpmSolver<T> solver(&mpm_model);
-  solver.AdvanceOneTimeStep(mpm_state, mpm_state_star);
+  //const MpmSolver<T> solver(&mpm_model);
+  mpm_solver_->AdvanceOneTimeStep(mpm_state, mpm_state_star);
   std::cout << "finish CalcFreeMotionMpmState" << std::endl;
 
 }
@@ -744,14 +744,11 @@ template <typename T>
 void DeformableDriver<T>::CalcNextMpmState(const systems::Context<T>& context,
                                            MpmState<T>* next_mpm_state) const {
   
-    std::cout << "in CalcNextMpmState" << std::endl;                                        
     const MpmState<T>& free_motion_state = EvalFreeMotionMpmState(context);
 
-    
     next_mpm_state->SetParticles(free_motion_state.GetParticles());
-    next_mpm_state->print_info();
+    // next_mpm_state->print_info();
     std::cout << "finish CalcNextMpmState" << std::endl; 
-    getchar();
 }
 
 template <typename T>

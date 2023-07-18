@@ -13,6 +13,8 @@
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/discrete_update_manager.h"
 #include "drake/systems/framework/context.h"
+#include "drake/multibody/mpm/mpm_solver.h"
+
 
 namespace drake {
 namespace multibody {
@@ -343,6 +345,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   /* The integrator used to advance deformable body free motion states in
    time. */
   std::unique_ptr<fem::internal::DiscreteTimeIntegrator<T>> integrator_;
+
+  /* The integrator used to advance deformable body free motion states in
+   time. */
+  std::unique_ptr<mpm::internal::MpmSolver<T>> mpm_solver_;
+
 };
 
 }  // namespace internal

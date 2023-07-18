@@ -124,6 +124,7 @@ void MPMDriver::InitializeParticles(const AnalyticLevelSet& level_set,
     // min_num_particles_per_cell particles in a cell with size h.
     double sample_r =
             h/(std::cbrt(m_param.min_num_particles_per_cell)+1);
+    
     multibody::SpatialVelocity<double> init_v = m_param.initial_velocity;
     std::array<double, 3> xmin = {bounding_box[0][0], bounding_box[0][1],
                                   bounding_box[0][2]};
@@ -254,7 +255,8 @@ void MPMDriver::UpdateTimeStep(double* dt) {
                                       std::abs(dilatational_wavespd_+v(1)),
                                       std::abs(dilatational_wavespd_+v(2))}));
     }
-    *dt = param_.solver_param.CFL*dt_new;
+    // *dt = param_.solver_param.CFL*dt_new;
+    std::cout << &dt << std::endl;
 }
 
 void MPMDriver::AdvanceOneTimeStep(double dt, double t) {

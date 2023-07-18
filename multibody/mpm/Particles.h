@@ -47,14 +47,15 @@ class Particles {
     const std::vector<Matrix3<double>>& get_B_matrices() const;
 
     void advect_x_coord(){
+      std::cout << "in advect x coord " << num_particles_ << std::endl;
       for (int ind = 0; ind < num_particles_; ++ind){
-         positions_[ind][0] = positions_[ind][0] + 0.1;
+         positions_[ind][0] = positions_[ind][0] + 0.002;
       }
     }
 
     void print_info() const {
       for (int ind = 0; ind < num_particles_; ++ind){
-         if (ind < 10){
+         if (ind < 5){
             std::cout << "particle " << ind << " position " << positions_[ind][0] << std::endl;
          }
       }
