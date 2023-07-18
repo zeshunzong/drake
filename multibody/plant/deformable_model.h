@@ -194,6 +194,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     return plant_->get_output_port(mpm_particle_positions_port_index_);
   }
 
+  mpm::KinematicCollisionObjects collision_objects_{};
+
  private:
   PhysicalModelPointerVariant<T> DoToPhysicalModelPointerVariant()
       const final {

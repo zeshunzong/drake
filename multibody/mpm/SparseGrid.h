@@ -86,6 +86,19 @@ class SparseGrid {
     std::tuple<double, double, double, double> EnforceBoundaryCondition(
                                     const KinematicCollisionObjects& objects, double dt, double t);
 
+    void EnforceBoundaryCondition(const KinematicCollisionObjects& objects, double dt){
+      double sum_mass = 0.0;
+      for (int i = 0; i < num_active_gridpts_; ++i) {
+         double mi = masses_[i];
+         sum_mass += mi;
+         Vector3<double> prev_v = velocities_[i];
+         Vector3<double> xi = get_position(active_gridpts_[i]);
+         objects.ApplyBoundaryConditions(xi, &velocities_[i]);
+         Vector3<double> dv = velocities_[i] - prev_v;
+         
+      }
+    }
+
     // update_velocity takes in argument (position, time, *velocity) to
     // overwrite 'velocity' with the new velocity given position and time
     void OverwriteGridVelocity(std::function<void(Vector3<double>,double,

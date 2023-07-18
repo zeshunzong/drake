@@ -19,7 +19,7 @@
 
 DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 4e-4,
+DEFINE_double(time_step, 5e-4,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -174,21 +174,21 @@ int do_main() {
   // TODO(xuchenhan-tri): Consider using a schunk gripper from the manipulation
   // station instead.
   /* Set up a simple gripper. */
-  Parser parser(&plant);
-  parser.AddModelsFromUrl(
-      "package://drake/examples/multibody/deformable_torus/simple_gripper.sdf");
-  /* Add collision geometries. */
-  const RigidTransformd X_BG = RigidTransformd::Identity();
-  const Body<double>& left_finger = plant.GetBodyByName("left_finger");
-  const Body<double>& right_finger = plant.GetBodyByName("right_finger");
+//   Parser parser(&plant);
+//   parser.AddModelsFromUrl(
+//       "package://drake/examples/multibody/deformable_torus/simple_gripper.sdf");
+//   /* Add collision geometries. */
+//   const RigidTransformd X_BG = RigidTransformd::Identity();
+//   const Body<double>& left_finger = plant.GetBodyByName("left_finger");
+//   const Body<double>& right_finger = plant.GetBodyByName("right_finger");
   /* The size of the fingers is set to match the visual geometries in
    simple_gripper.sdf. */
-  plant.RegisterCollisionGeometry(left_finger, X_BG, Box(0.007, 0.081, 0.028),
-                                  "left_finger_collision",
-                                  rigid_proximity_props);
-  plant.RegisterCollisionGeometry(right_finger, X_BG, Box(0.007, 0.081, 0.028),
-                                  "left_finger_collision",
-                                  rigid_proximity_props);
+//   plant.RegisterCollisionGeometry(left_finger, X_BG, Box(0.007, 0.081, 0.028),
+//                                   "left_finger_collision",
+//                                   rigid_proximity_props);
+//   plant.RegisterCollisionGeometry(right_finger, X_BG, Box(0.007, 0.081, 0.028),
+//                                   "left_finger_collision",
+//                                   rigid_proximity_props);
 
   /* Set up a deformable torus. */
   auto owned_deformable_model =
@@ -211,7 +211,7 @@ int do_main() {
   const double kL = 0.09 * scale;
   /* Set the initial pose of the torus such that its bottom face is touching the
    ground. */
-  const RigidTransformd X_WB(Vector3<double>(0.0, 0.0, kL / 2.0));
+  const RigidTransformd X_WB(Vector3<double>(10.0, 0.0, kL / 2.0));
   auto torus_instance = std::make_unique<GeometryInstance>(
       X_WB, std::move(torus_mesh), "deformable_torus");
   auto torus_instance2 = std::make_unique<GeometryInstance>(
@@ -240,15 +240,15 @@ int do_main() {
   plant.AddPhysicalModel(std::move(owned_deformable_model));
   std::cout<< "finish add physical model" << std::endl;
   /* Get joints so that we can set constraints and initial conditions. */
-  PrismaticJoint<double>& left_slider =
-      plant.GetMutableJointByName<PrismaticJoint>("left_slider");
-  PrismaticJoint<double>& right_slider =
-      plant.GetMutableJointByName<PrismaticJoint>("right_slider");
-  /* Constrain the left and the right fingers such that qₗ = -qᵣ. */
-  plant.AddCouplerConstraint(left_slider, right_slider, -1.0);
-  /* Viscous damping for the finger joints, in N⋅s/m. */
-  left_slider.set_default_damping(50.0);
-  right_slider.set_default_damping(50.0);
+//   PrismaticJoint<double>& left_slider =
+//       plant.GetMutableJointByName<PrismaticJoint>("left_slider");
+//   PrismaticJoint<double>& right_slider =
+//       plant.GetMutableJointByName<PrismaticJoint>("right_slider");
+//   /* Constrain the left and the right fingers such that qₗ = -qᵣ. */
+//   plant.AddCouplerConstraint(left_slider, right_slider, -1.0);
+//   /* Viscous damping for the finger joints, in N⋅s/m. */
+//   left_slider.set_default_damping(50.0);
+//   right_slider.set_default_damping(50.0);
 
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
@@ -261,7 +261,9 @@ int do_main() {
       scene_graph.get_source_configuration_port(plant.get_source_id().value()));
   std::cout << "builder connected " << std::endl; getchar();
   /* Add a visualizer that emits LCM messages for visualization. */
-  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph);
+  geometry::DrakeVisualizerParams params;
+  params.publish_period = 1.0 / 64 / 5;
+  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph, nullptr, params);
 
   // connect mpm to output port
   builder.Connect(deformable_model->mpm_particle_positions_port(), visualizer.mpm_data_input_port());
@@ -275,19 +277,19 @@ int do_main() {
 
   const auto& control = *builder.AddSystem<GripperPositionControl>(
       open_width, closed_width, lifted_height);
-  builder.Connect(plant.get_state_output_port(), control.get_input_port());
-  builder.Connect(control.get_output_port(), plant.get_actuation_input_port());
+//   builder.Connect(plant.get_state_output_port(), control.get_input_port());
+//   builder.Connect(control.get_output_port(), plant.get_actuation_input_port());
 
   auto diagram = builder.Build();
   std::unique_ptr<Context<double>> diagram_context =
       diagram->CreateDefaultContext();
 
   /* Set initial conditions for the gripper. */
-  auto& plant_context =
-      diagram->GetMutableSubsystemContext(plant, diagram_context.get());
-  left_slider.set_translation(&plant_context, -open_width / 2.0);
-  right_slider.set_translation(&plant_context, open_width / 2.0);
-  std::cout << "finish gripper" << std::endl; getchar();
+//   auto& plant_context =
+//       diagram->GetMutableSubsystemContext(plant, diagram_context.get());
+//   left_slider.set_translation(&plant_context, -open_width / 2.0);
+//   right_slider.set_translation(&plant_context, open_width / 2.0);
+//   std::cout << "finish gripper" << std::endl; getchar();
 
   /* Build the simulator and run! */
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));

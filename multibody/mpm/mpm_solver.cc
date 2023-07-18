@@ -22,7 +22,29 @@ MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
     : model_(model), grid_(model->grid_h_),dt_(dt) {
   DRAKE_DEMAND(model_ != nullptr);
   std::cout << "construct solver with system dt="<< dt << std::endl; 
+
+  // ------------------------ add BC -----------------
+  // Initialize the left wall
+  multibody::SpatialVelocity<double> zero_velocity;
+  zero_velocity.SetZero();
+  std::unique_ptr<mpm::SpatialVelocityTimeDependent> left_hand_velocity_ptr =
+      std::make_unique<mpm::SpatialVelocityTimeDependent>(zero_velocity);
+  double left_hand_mu = 1.0;
+  Vector3<double> left_hand_xscale = {10.0, 10.0, 10.0};
+  std::unique_ptr<mpm::AnalyticLevelSet> left_hand_level_set =
+                          std::make_unique<mpm::BoxLevelSet>(left_hand_xscale);
+  Vector3<double> left_hand_translation = {0.0, 0.0, -10.0};
+  math::RigidTransform<double> left_hand_pose =
+                          math::RigidTransform<double>(left_hand_translation);
+  collision_objects_.AddCollisionObject(std::move(left_hand_level_set), std::move(left_hand_pose),
+                              std::move(left_hand_velocity_ptr), left_hand_mu);
+  // ------------------------ add BC -----------------
+  Vector3<double> gravity = {0.0, 0.0, -9.81};
+  gravitational_force_ = GravitationalForce(gravity);
+
 }
+
+
 
 template <typename T>
 int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
@@ -41,6 +63,10 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
 
   // gravity, collision, boundary to be added
   std::cout << "gravity, collision, boundary to be added" << std::endl;
+  gravitational_force_.ApplyGravitationalForces(dt_, &grid_);
+
+  collision_objects_.AdvanceOneTimeStep(dt_);
+  grid_.EnforceBoundaryCondition(collision_objects_, dt_);
 
   mpm_transfer_.TransferGridToParticles(grid_, dt_, &p_new);
   p_new.AdvectParticles(dt_);

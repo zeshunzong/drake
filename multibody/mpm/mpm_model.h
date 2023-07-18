@@ -17,6 +17,7 @@
 #include "drake/multibody/mpm/CorotatedElasticModel.h"
 #include "drake/multibody/math/spatial_velocity.h"
 #include "drake/multibody/mpm/KinematicCollisionObjects.h"
+#include "drake/multibody/mpm/StvkHenckyWithVonMisesModel.h"
 
 namespace drake {
 namespace multibody {

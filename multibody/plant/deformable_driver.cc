@@ -65,7 +65,7 @@ DeformableDriver<T>::DeformableDriver(
   const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
   mpm_solver_ = std::make_unique<mpm::internal::MpmSolver<T>>(&mpm_model,
       manager_->plant().time_step());
-
+ 
 }
 
 template <typename T>
@@ -75,42 +75,43 @@ template <typename T>
 void DeformableDriver<T>::DeclareCacheEntries(
     DiscreteUpdateManager<T>* manager) {
   DRAKE_DEMAND(manager_ == manager);
-  const auto& deformable_contact_cache_entry = manager->DeclareCacheEntry(
-      "deformable contact data",
-      systems::ValueProducer(this, &DeformableDriver<T>::CalcDeformableContact),
-      {systems::System<T>::configuration_ticket()});
-  cache_indexes_.deformable_contact =
-      deformable_contact_cache_entry.cache_index();
+  if (deformable_model_->num_bodies() > 0) {
+    const auto& deformable_contact_cache_entry = manager->DeclareCacheEntry(
+        "deformable contact data",
+        systems::ValueProducer(this, &DeformableDriver<T>::CalcDeformableContact),
+        {systems::System<T>::configuration_ticket()});
+    cache_indexes_.deformable_contact =
+        deformable_contact_cache_entry.cache_index();
 
-  const auto& participating_velocity_mux_cache_entry =
-      manager->DeclareCacheEntry(
-          "multiplexer for participating velocities",
-          systems::ValueProducer(
-              this, &DeformableDriver<T>::CalcParticipatingVelocityMultiplexer),
-          {deformable_contact_cache_entry.ticket()});
-  cache_indexes_.participating_velocity_mux =
-      participating_velocity_mux_cache_entry.cache_index();
+    const auto& participating_velocity_mux_cache_entry =
+        manager->DeclareCacheEntry(
+            "multiplexer for participating velocities",
+            systems::ValueProducer(
+                this, &DeformableDriver<T>::CalcParticipatingVelocityMultiplexer),
+            {deformable_contact_cache_entry.ticket()});
+    cache_indexes_.participating_velocity_mux =
+        participating_velocity_mux_cache_entry.cache_index();
 
-  const auto& participating_velocities_cache_entry = manager->DeclareCacheEntry(
-      "participating velocities for all bodies",
-      systems::ValueProducer(this,
-                             &DeformableDriver<T>::CalcParticipatingVelocities),
-      {deformable_contact_cache_entry.ticket(),
-       systems::System<T>::xd_ticket()});
-  cache_indexes_.participating_velocities =
-      participating_velocities_cache_entry.cache_index();
+    const auto& participating_velocities_cache_entry = manager->DeclareCacheEntry(
+        "participating velocities for all bodies",
+        systems::ValueProducer(this,
+                                &DeformableDriver<T>::CalcParticipatingVelocities),
+        {deformable_contact_cache_entry.ticket(),
+        systems::System<T>::xd_ticket()});
+    cache_indexes_.participating_velocities =
+        participating_velocities_cache_entry.cache_index();
 
-  const auto& participating_free_motion_velocities_cache_entry =
-      manager->DeclareCacheEntry(
-          fmt::format("participating free motion velocities for all bodies"),
-          systems::ValueProducer(
-              this,
-              &DeformableDriver<T>::CalcParticipatingFreeMotionVelocities),
-          {deformable_contact_cache_entry.ticket(),
-           systems::System<T>::xd_ticket()});
-  cache_indexes_.participating_free_motion_velocities =
-      participating_free_motion_velocities_cache_entry.cache_index();
-
+    const auto& participating_free_motion_velocities_cache_entry =
+        manager->DeclareCacheEntry(
+            fmt::format("participating free motion velocities for all bodies"),
+            systems::ValueProducer(
+                this,
+                &DeformableDriver<T>::CalcParticipatingFreeMotionVelocities),
+            {deformable_contact_cache_entry.ticket(),
+            systems::System<T>::xd_ticket()});
+    cache_indexes_.participating_free_motion_velocities =
+        participating_free_motion_velocities_cache_entry.cache_index();
+  
   // loop over all fem bodies
   for (DeformableBodyIndex i(0); i < deformable_model_->num_bodies(); ++i) {
     const DeformableBodyId id = deformable_model_->GetBodyId(i);
@@ -237,7 +238,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
   } // finish all fem bodies
 
 
-
+  }
 
   // cache mpm, if there exists one
   if (deformable_model_->ExistsMpmModel()){

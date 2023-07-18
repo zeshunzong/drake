@@ -7,6 +7,9 @@
 #include "drake/multibody/mpm/mpm_model.h"
 #include "drake/multibody/mpm/SparseGrid.h"
 #include "drake/multibody/mpm/MPMTransfer.h"
+#include "drake/multibody/mpm/KinematicCollisionObjects.h"
+#include "drake/multibody/mpm/GravitationalForce.h"
+
 namespace drake {
 namespace multibody {
 namespace mpm {
@@ -22,6 +25,8 @@ class MpmSolver {
   MpmSolver(const MpmModel<T>* model);
 
   MpmSolver(const MpmModel<T>* model, double dt);
+
+  MpmSolver(const MpmModel<T>* model, double dt, KinematicCollisionObjects collision_objects);
 
   int AdvanceOneTimeStep(const MpmState<T>& prev_state, MpmState<T>* next_state) const;
 
@@ -59,6 +64,9 @@ class MpmSolver {
       // CFL number
       double CFL_; // not needed
 
+  mutable KinematicCollisionObjects collision_objects_{};
+  mutable GravitationalForce gravitational_force_{};
+
  private:
 
   /* The FEM model being solved by `this` solver. */
@@ -72,6 +80,7 @@ class MpmSolver {
   int kMaxIterations_{100};
   mutable SparseGrid grid_;
   mutable MPMTransfer mpm_transfer_;
+  
 };
 
 }  // namespace internal

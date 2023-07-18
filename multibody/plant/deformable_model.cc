@@ -104,7 +104,7 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
   //                                               1
   //                                               };
 
-  mpm_model_->set_grid_h(0.025);
+  mpm_model_->set_grid_h(0.02);
   // mpm_model_->set_spatial_velocity(velocity_sphere);
   // mpm_model_->set_level_set(level_set_sphere);
   // mpm_model_->set_pose(pose_sphere);
@@ -360,27 +360,39 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     //                                             };
 
     multibody::SpatialVelocity<double> velocity_sphere;
-    velocity_sphere.translational() = Vector3<double>{5.0, 0.0, 0.0};
+    velocity_sphere.translational() = Vector3<double>{0.0, 0.0, -0.0};
     velocity_sphere.rotational() = Vector3<double>{0.0, 0.0, 0.0};
+
+    // Initialize a sphere
+    double radius = 0.2;
+    mpm::SphereLevelSet level_set_sphere = mpm::SphereLevelSet(radius);
+    Vector3<double> translation_sphere = {0.0, 0.0, 0.4};
+    math::RigidTransform<double> pose_sphere =
+                            math::RigidTransform<double>(translation_sphere);
 
     double E = 8e4;
     double nu = 0.4;
-    std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
-            = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
+    double yield_stress = 8e2;
+    // std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
+    //         = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
+
+
+    std::unique_ptr<mpm::StvkHenckyWithVonMisesModel> elastoplastic_model
+            = std::make_unique<mpm::StvkHenckyWithVonMisesModel>(E, nu,
+                                                            yield_stress);
     typename mpm::MpmModel<T>::MaterialParameters m_param_sphere{
                                                 std::move(elastoplastic_model),
                                                 500,
                                                 velocity_sphere,
                                                 1
-                                                };
-
-    mpm::KinematicCollisionObjects objects = mpm::KinematicCollisionObjects();
+                                                };    
+    
 
 
     mpm::Particles particles(0);
 
-    // InitializeParticles(level_set_sphere, pose_sphere, 
-    //                     std::move(m_param_sphere), mpm_model_->grid_h(), particles);
+    InitializeParticles(level_set_sphere, pose_sphere, 
+                        std::move(m_param_sphere), mpm_model_->grid_h(), particles);
     // InitializeParticles(level_set_sphere, pose_sphere, 
     //                     *(mpm_model_->material_params()), mpm_model_->grid_h(), particles);
 
@@ -498,7 +510,8 @@ void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
                                elastic_deformation_grad_p,
                                kirchhoff_stress_p,
                                B_p, std::move(elastoplastic_model_p));
-    }                         
+    }
+    std::cout << "num particles genearted: " << num_particles << std::endl; getchar();                         
   }
 
 
