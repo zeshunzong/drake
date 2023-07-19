@@ -109,6 +109,12 @@ drake_cc_library(
         "tamsi_driver.h",
     ],
     visibility = ["//visibility:private"],
+    data = [
+        "drake_204k.obj",
+        "drake_0k.obj",
+        "drake_6k.obj",
+        "drake_44k.obj",
+    ],
     deps = [
         ":constraint_specs",
         ":contact_jacobians",

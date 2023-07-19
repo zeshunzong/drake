@@ -244,7 +244,11 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   void InitializeParticles(const mpm::AnalyticLevelSet& level_set,
                             const math::RigidTransform<double>& pose,
                             const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h,
-                            mpm::Particles& particles);                         
+                            mpm::Particles& particles);    
+
+  void InitializeParticles(std::string obj_filename, const math::RigidTransform<double>& pose,
+                            const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h,
+                            mpm::Particles& particles);                     
 
   /* Helper to throw a useful message if a deformable body with the given `id`
    doesn't exist. */

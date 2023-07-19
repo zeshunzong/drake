@@ -11,6 +11,11 @@
 #include "drake/multibody/fem/linear_simplex_element.h"
 #include "drake/multibody/fem/simplex_gaussian_quadrature.h"
 #include "drake/multibody/fem/volumetric_model.h"
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream> 
+#include "drake/common/find_resource.h"
 
 
 namespace drake {
@@ -390,9 +395,13 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
 
 
     mpm::Particles particles(0);
-
-    InitializeParticles(level_set_sphere, pose_sphere, 
+    const std::string dir = FindResourceOrThrow(
+              "drake/multibody/plant/drake_44k.obj");
+    InitializeParticles(dir, pose_sphere, 
                         std::move(m_param_sphere), mpm_model_->grid_h(), particles);
+    getchar();
+    // InitializeParticles(level_set_sphere, pose_sphere, 
+    //                    std::move(m_param_sphere), mpm_model_->grid_h(), particles);
     // InitializeParticles(level_set_sphere, pose_sphere, 
     //                     *(mpm_model_->material_params()), mpm_model_->grid_h(), particles);
 
@@ -495,6 +504,77 @@ void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
 
     int num_particles = particles_positions.size();
     double reference_volume_p = level_set.get_volume()/num_particles;
+    double init_m = m_param.density*reference_volume_p;
+
+    // Add particles
+    for (int p = 0; p < num_particles; ++p) {
+        const Vector3<double>& xp = particles_positions[p];
+        const Vector3<double>& vp = particles_velocities[p];
+        Matrix3<double> elastic_deformation_grad_p = Matrix3<double>::Identity();
+        Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
+        Matrix3<double> B_p                = Matrix3<double>::Zero();
+        std::unique_ptr<mpm::ElastoPlasticModel> elastoplastic_model_p
+                                        = m_param.elastoplastic_model->Clone();
+        particles.AddParticle(xp, vp, init_m, reference_volume_p,
+                               elastic_deformation_grad_p,
+                               kirchhoff_stress_p,
+                               B_p, std::move(elastoplastic_model_p));
+    }
+    std::cout << "num particles genearted: " << num_particles << std::endl; getchar();                         
+  }
+
+// MODIFY particles in place!!
+  template <typename T>
+  void DeformableModel<T>::InitializeParticles(std::string asset_dir,
+                            const math::RigidTransform<double>& pose,
+                            const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h, 
+                            mpm::Particles& particles){
+
+    DRAKE_DEMAND(m_param.density > 0.0);
+
+    multibody::SpatialVelocity<double> init_v = m_param.initial_velocity;
+    std::vector<Vector3<double>> particles_positions, particles_velocities;
+
+    std::string line;
+    std::ifstream myfile(asset_dir);
+    if (myfile.is_open())
+    {
+      while ( getline (myfile,line) )
+      {
+        std::string str;
+        std::stringstream ss(line); 
+        double x1, x2, x3;
+        getline(ss, str, ' '); // "v"
+        getline(ss, str, ' ');
+        x1 = std::stod(str);
+        getline(ss, str, ' ');
+        x2 = std::stod(str);
+        getline(ss, str, ' ');
+        x3 = std::stod(str);
+
+        // std::cout << x1 << " " << x2 << " " << x3 << std::endl;
+
+        const math::RigidTransform<double>& X_WB       = pose;
+        const multibody::SpatialVelocity<double>& V_WB = init_v;
+        const math::RotationMatrix<double>& Rot_WB     = X_WB.rotation();
+        const Vector3<double>& p_BoBp_B = {x1, x2, x3};
+        const Vector3<double>& p_BoBp_W = Rot_WB*p_BoBp_B;
+        multibody::SpatialVelocity<double> V_WBp   = V_WB.Shift(p_BoBp_W);
+
+        particles_velocities.emplace_back(V_WBp.translational());
+        particles_positions.emplace_back(X_WB*p_BoBp_B);
+
+      }
+      myfile.close();
+      getchar();
+    }
+  else {
+    std::cout << "Unable to open file" << std::endl;}
+    
+
+
+    int num_particles = particles_positions.size();
+    double reference_volume_p = 2e-6;
     double init_m = m_param.density*reference_volume_p;
 
     // Add particles
