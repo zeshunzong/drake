@@ -30,10 +30,6 @@ using geometry::SourceId;
 using fem::DeformableBodyConfig;
 using fem::MaterialModel;
 
-// using drake::multibody::fem::FemModel;
-// using drake::multibody::fem::FemState;
-// using drake::multibody::mpm::MpmState;
-// using drake::multibody::mpm::MpmModel;
 
 
 template <typename T>
@@ -109,7 +105,7 @@ DeformableBodyId DeformableModel<T>::RegisterMpmBody(
   //                                               1
   //                                               };
 
-  mpm_model_->set_grid_h(0.02);
+  mpm_model_->set_grid_h(0.025);
   // mpm_model_->set_spatial_velocity(velocity_sphere);
   // mpm_model_->set_level_set(level_set_sphere);
   // mpm_model_->set_pose(pose_sphere);
@@ -365,19 +361,19 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     //                                             };
 
     multibody::SpatialVelocity<double> velocity_sphere;
-    velocity_sphere.translational() = Vector3<double>{0.0, 0.0, -0.0};
+    velocity_sphere.translational() = Vector3<double>{2.0, 0.0, -0.0};
     velocity_sphere.rotational() = Vector3<double>{0.0, 0.0, 0.0};
 
     // Initialize a sphere
     double radius = 0.2;
     mpm::SphereLevelSet level_set_sphere = mpm::SphereLevelSet(radius);
-    Vector3<double> translation_sphere = {0.0, 0.0, 0.4};
+    Vector3<double> translation_sphere = {-0.9, 0.0, 0.25};
     math::RigidTransform<double> pose_sphere =
                             math::RigidTransform<double>(translation_sphere);
 
     double E = 8e4;
     double nu = 0.4;
-    double yield_stress = 8e2;
+    double yield_stress = 5e3;
     // std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
     //         = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
 
@@ -396,7 +392,7 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
 
     mpm::Particles particles(0);
     const std::string dir = FindResourceOrThrow(
-              "drake/multibody/plant/drake_44k.obj");
+              "drake/multibody/plant/drake_93k.obj");
     InitializeParticles(dir, pose_sphere, 
                         std::move(m_param_sphere), mpm_model_->grid_h(), particles);
     getchar();
@@ -552,7 +548,6 @@ void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
         getline(ss, str, ' ');
         x3 = std::stod(str);
 
-        // std::cout << x1 << " " << x2 << " " << x3 << std::endl;
 
         const math::RigidTransform<double>& X_WB       = pose;
         const multibody::SpatialVelocity<double>& V_WB = init_v;
@@ -574,7 +569,8 @@ void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
 
 
     int num_particles = particles_positions.size();
-    double reference_volume_p = 2e-6;
+    double reference_volume_p = 0.00000147; //44k
+    reference_volume_p = 7.02349052e-7; //93k
     double init_m = m_param.density*reference_volume_p;
 
     // Add particles

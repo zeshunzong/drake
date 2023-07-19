@@ -29,7 +29,7 @@ MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
   zero_velocity.SetZero();
   std::unique_ptr<mpm::SpatialVelocityTimeDependent> left_hand_velocity_ptr =
       std::make_unique<mpm::SpatialVelocityTimeDependent>(zero_velocity);
-  double left_hand_mu = 1.0;
+  double left_hand_mu = 5.0;
   Vector3<double> left_hand_xscale = {10.0, 10.0, 10.0};
   std::unique_ptr<mpm::AnalyticLevelSet> left_hand_level_set =
                           std::make_unique<mpm::BoxLevelSet>(left_hand_xscale);

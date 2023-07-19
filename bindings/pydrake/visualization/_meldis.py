@@ -467,7 +467,7 @@ class _PointCloudApplet:
         self._meshcat.SetObject(
             path=self._channel_to_meshcat_path(channel),
             cloud=cloud,
-            point_size=0.01
+            point_size=0.002
         )
 
 

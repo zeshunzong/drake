@@ -114,6 +114,7 @@ drake_cc_library(
         "drake_0k.obj",
         "drake_6k.obj",
         "drake_44k.obj",
+        "drake_93k.obj",
     ],
     deps = [
         ":constraint_specs",
