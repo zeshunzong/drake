@@ -33,6 +33,200 @@ using fem::MaterialModel;
 
 
 template <typename T>
+DeformableBodyId DeformableModel<T>::RegisterMpmBody(
+    std::unique_ptr<mpm::AnalyticLevelSet> geometry_level_set,
+      std::unique_ptr<mpm::ElastoPlasticModel> constitutive_model,
+      multibody::SpatialVelocity<double>& geometry_initial_veolocity,
+      math::RigidTransform<double>& geometry_initial_pose, double density,
+      double grid_h, int min_num_particles_per_cell) {
+  this->ThrowIfSystemResourcesDeclared(__func__);
+  if (ExistsMpmModel()) {
+    throw std::logic_error("we only allow one mpm model");
+  }
+  mpm_model_ = std::make_unique<mpm::MpmModel<T>>(); 
+  mpm_model_->level_set_ = std::move(geometry_level_set);
+  mpm_model_->mp_ = typename mpm::MpmModel<T>::MaterialParameters (
+                                              std::move(constitutive_model),
+                                              density,
+                                              geometry_initial_veolocity,
+                                              min_num_particles_per_cell);
+  mpm_model_->pose_ = geometry_initial_pose;
+  mpm_model_->set_grid_h(grid_h);
+  const DeformableBodyId body_id = DeformableBodyId::get_new_id();
+  return body_id;
+}
+
+
+template <typename T>
+const mpm::MpmModel<T>& DeformableModel<T>::GetMpmModel() const {
+  if (mpm_model_== nullptr){
+    throw std::logic_error("GetMpmModel(): No MPM Model registered");
+  }
+  return *mpm_model_;
+}
+
+template <typename T>
+void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
+                                             AbstractValue* output) const {
+  auto& output_value = output->get_mutable_value<std::vector<Vector3<double>>>();
+  if (ExistsMpmModel()) {
+    const mpm::MpmState<T>& current_state = context.template get_abstract_state<mpm::MpmState<T>>(particles_container_index_);
+    const std::vector<Vector3<double>>& particle_positions = current_state.GetParticles().get_positions();
+    output_value = particle_positions;
+  } else {
+    const std::vector<Vector3<double>>& particle_positions{}; // empty, port will still be connected anyways
+    output_value = particle_positions;
+  }
+}
+
+template <typename T>
+void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
+  /* Ensure that the owning plant is the one declaring system resources. */
+  DRAKE_DEMAND(plant == plant_);
+  /* Declare the vertex position output port. */
+    vertex_positions_port_index_ =
+        this->DeclareAbstractOutputPort(plant, "vertex_positions",
+                []() {
+                  return AbstractValue::Make<
+                      geometry::GeometryConfigurationVector<T>>();
+                },
+                [this](const systems::Context<T>& context,
+                      AbstractValue* output) {
+                  this->CopyVertexPositions(context, output);
+                },
+                {systems::System<double>::xd_ticket()})
+            .get_index();
+  /* Declare fem states. */
+  if (body_ids_.size() > 0) {
+    for (const auto& [deformable_id, fem_model] : fem_models_) {
+      std::unique_ptr<fem::FemState<T>> default_fem_state =
+          fem_model->MakeFemState();
+      const int num_dofs = default_fem_state->num_dofs();
+      VectorX<T> model_state(num_dofs * 3 /* q, v, and a */);
+      model_state.head(num_dofs) = default_fem_state->GetPositions();
+      model_state.segment(num_dofs, num_dofs) =
+          default_fem_state->GetVelocities();
+      model_state.tail(num_dofs) = default_fem_state->GetAccelerations();
+      discrete_state_indexes_.emplace(
+          deformable_id, this->DeclareDiscreteState(plant, model_state));
+    }
+
+    std::sort(body_ids_.begin(), body_ids_.end());
+    for (DeformableBodyIndex i(0); i < static_cast<int>(body_ids_.size()); ++i) {
+      DeformableBodyId id = body_ids_[i];
+      body_id_to_index_[id] = i;
+    }
+  }
+
+  // all mpm related
+  if (ExistsMpmModel()) {
+    mpm::Particles particles(0);
+    InitializeParticles(*(std::move(mpm_model_->level_set_)), mpm_model_->pose_, 
+                       std::move(mpm_model_->mp_), mpm_model_->grid_h(), particles);
+  
+    mpm::MpmState<T> mpm_state(particles);
+    mpm_model_->num_particles_ = particles.get_num_particles();
+    mpm_model_->particles_container_index_ = this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state));
+    particles_container_index_ = mpm_model_->particles_container_index_;
+    // ---------------------------- add mpm_state to plant's context --------------
+    // all mpm related
+
+    // output port for mpm visualization
+    mpm_particle_positions_port_index_ =
+        this->DeclareAbstractOutputPort(
+                plant, "mpm",
+                []() {
+                  return AbstractValue::Make<
+                      std::vector<Vector3<double>>>();
+                },
+                [this](const systems::Context<T>& context,
+                      AbstractValue* output) {
+                  this->CopyMpmPositions(context, output);
+                },
+                {systems::System<double>::xd_ticket()})
+            .get_index();
+  } else {
+    std::cout << "does not add mpm " << std::endl; getchar();
+  }
+  
+}
+
+// MODIFY particles in place!!
+  // Initialize particles' positions with Poisson disk sampling. 
+template <typename T>
+void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet& level_set,
+                          const math::RigidTransform<double>& pose,
+                          const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h, 
+                          mpm::Particles& particles){
+  DRAKE_DEMAND(m_param.density > 0.0);
+  DRAKE_DEMAND(m_param.min_num_particles_per_cell >= 1);                        
+  const std::array<Vector3<double>, 2> bounding_box = level_set.get_bounding_box();
+  double sample_r = grid_h/(std::cbrt(m_param.min_num_particles_per_cell)+1);
+  multibody::SpatialVelocity<double> init_v = m_param.initial_velocity;
+  std::array<double, 3> xmin = {bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]};
+  std::array<double, 3> xmax = {bounding_box[1][0], bounding_box[1][1], bounding_box[1][2]};
+  std::vector<Vector3<double>> particles_sample_positions = thinks::PoissonDiskSampling<double, 3, Vector3<double>>(sample_r,xmin, xmax);
+  // Pick out sampled particles that are in the object
+  int num_samples = particles_sample_positions.size();
+  std::vector<Vector3<double>> particles_positions, particles_velocities;
+  for (int p = 0; p < num_samples; ++p) {
+      const math::RigidTransform<double>& X_WB       = pose;
+      const multibody::SpatialVelocity<double>& V_WB = init_v;
+      const math::RotationMatrix<double>& Rot_WB     = X_WB.rotation();
+      const Vector3<double>& p_BoBp_B = particles_sample_positions[p];
+      const Vector3<double>& p_BoBp_W = Rot_WB*p_BoBp_B;
+      multibody::SpatialVelocity<double> V_WBp   = V_WB.Shift(p_BoBp_W);
+      // If the particle is in the level set
+      if (level_set.InInterior(p_BoBp_B)) {
+          // TODO(yiminlin.tri): Initialize the affine matrix C_p using V_WBp.rotational() ?
+          particles_velocities.emplace_back(V_WBp.translational());
+          particles_positions.emplace_back(X_WB*p_BoBp_B);
+      }
+  }
+  int num_particles = particles_positions.size();
+  double reference_volume_p = level_set.get_volume()/num_particles;
+  double init_m = m_param.density*reference_volume_p;
+  // Add particles
+  for (int p = 0; p < num_particles; ++p) {
+      const Vector3<double>& xp = particles_positions[p];
+      const Vector3<double>& vp = particles_velocities[p];
+      Matrix3<double> elastic_deformation_grad_p = Matrix3<double>::Identity();
+      Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
+      Matrix3<double> B_p                = Matrix3<double>::Zero();
+      std::unique_ptr<mpm::ElastoPlasticModel> elastoplastic_model_p = m_param.elastoplastic_model->Clone();
+      particles.AddParticle(xp, vp, init_m, reference_volume_p,
+                              elastic_deformation_grad_p,kirchhoff_stress_p,B_p, std::move(elastoplastic_model_p));
+  }
+  std::cout << "num particles genearted: " << num_particles << std::endl; getchar();                         
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+template <typename T>
 DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
     std::unique_ptr<geometry::GeometryInstance> geometry_instance,
     const fem::DeformableBodyConfig<T>& config, double resolution_hint) {
@@ -70,53 +264,6 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
   body_ids_.emplace_back(body_id);
   return body_id;
 }
-
-template <typename T>
-DeformableBodyId DeformableModel<T>::RegisterMpmBody(
-    std::unique_ptr<geometry::GeometryInstance> geometry_instance,
-    const fem::DeformableBodyConfig<T>& config, double resolution_hint) {
-  this->ThrowIfSystemResourcesDeclared(__func__);
-  std::cout << "Temporary:Inputs to RegisterMpmBody are not used." << std::endl; getchar();
-
-  
-  if (ExistsMpmModel()) {
-    throw std::logic_error("we only allow one mpm model");
-  }
-
-  mpm_model_ = std::make_unique<mpm::MpmModel<T>>(); // should add physical parameters to mpm_model_
-
-  // multibody::SpatialVelocity<double> velocity_sphere;
-  //   velocity_sphere.translational() = Vector3<double>{0.1, 0.1, 0.1};
-  //   velocity_sphere.rotational() = Vector3<double>{M_PI/2, M_PI/2, M_PI/2};
-
-  //   mpm::SphereLevelSet level_set_sphere = mpm::SphereLevelSet(0.2);
-  //   Vector3<double> translation_sphere = {0.0, 0.0, 0.0};
-  //   math::RigidTransform<double> pose_sphere =
-  //                           math::RigidTransform<double>(translation_sphere);
-
-  //   double E = 5e4;
-  //   double nu = 0.4;
-  //   std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
-  //           = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
-  //   typename mpm::MpmModel<T>::MaterialParameters m_param_sphere{
-  //                                               std::move(elastoplastic_model),
-  //                                               1000,
-  //                                               velocity_sphere,
-  //                                               1
-  //                                               };
-
-  mpm_model_->set_grid_h(0.025);
-  // mpm_model_->set_spatial_velocity(velocity_sphere);
-  // mpm_model_->set_level_set(level_set_sphere);
-  // mpm_model_->set_pose(pose_sphere);
-  // mpm_model_->set_material_params(m_param_sphere);
-  
-  const DeformableBodyId body_id = DeformableBodyId::get_new_id();
-  return body_id;
-}
-
-
-
 
 template <typename T>
 void DeformableModel<T>::SetWallBoundaryCondition(DeformableBodyId id,
@@ -165,14 +312,6 @@ const fem::FemModel<T>& DeformableModel<T>::GetFemModel(
 }
 
 template <typename T>
-const mpm::MpmModel<T>& DeformableModel<T>::GetMpmModel() const {
-  if (mpm_model_== nullptr){
-    throw std::logic_error("GetMpmModel(): No MPM Model registered");
-  }
-  return *mpm_model_;
-}
-
-template <typename T>
 const VectorX<T>& DeformableModel<T>::GetReferencePositions(
     DeformableBodyId id) const {
   ThrowUnlessRegistered(__func__, id);
@@ -211,14 +350,6 @@ DeformableBodyId DeformableModel<T>::GetBodyId(
                     geometry_id));
   }
   return geometry_id_to_body_id_.at(geometry_id);
-}
-
-template <typename T>
-void DeformableModel<T>::BuildMpmModel(
-    DeformableBodyId id,
-    const fem::DeformableBodyConfig<T>& config,
-    const mpm::Particles& particles) {
-
 }
 
 template <typename T>
@@ -289,140 +420,6 @@ void DeformableModel<T>::BuildLinearVolumetricModelHelper(
 }
 
 template <typename T>
-void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
-  std::cout << "calling do declare system resources" << std::endl;
-  /* Ensure that the owning plant is the one declaring system resources. */
-  DRAKE_DEMAND(plant == plant_);
-  /* Declare discrete states. */
-  for (const auto& [deformable_id, fem_model] : fem_models_) {
-    std::unique_ptr<fem::FemState<T>> default_fem_state =
-        fem_model->MakeFemState();
-    const int num_dofs = default_fem_state->num_dofs();
-    VectorX<T> model_state(num_dofs * 3 /* q, v, and a */);
-    model_state.head(num_dofs) = default_fem_state->GetPositions();
-    model_state.segment(num_dofs, num_dofs) =
-        default_fem_state->GetVelocities();
-    model_state.tail(num_dofs) = default_fem_state->GetAccelerations();
-    discrete_state_indexes_.emplace(
-        deformable_id, this->DeclareDiscreteState(plant, model_state));
-  }
-
-  /* Declare the vertex position output port. */
-  vertex_positions_port_index_ =
-      this->DeclareAbstractOutputPort(
-              plant, "vertex_positions",
-              []() {
-                return AbstractValue::Make<
-                    geometry::GeometryConfigurationVector<T>>();
-              },
-              [this](const systems::Context<T>& context,
-                     AbstractValue* output) {
-                this->CopyVertexPositions(context, output);
-              },
-              {systems::System<double>::xd_ticket()})
-          .get_index();
-
-
-  // output port for visualization
-    mpm_particle_positions_port_index_ =
-        this->DeclareAbstractOutputPort(
-                plant, "mpm",
-                []() {
-                  return AbstractValue::Make<
-                      std::vector<Vector3<double>>>();
-                },
-                [this](const systems::Context<T>& context,
-                      AbstractValue* output) {
-                  this->CopyMpmPositions(context, output);
-                },
-                {systems::System<double>::xd_ticket()})
-            .get_index();
-  // all mpm related
-  if (ExistsMpmModel()) {
-
-    // multibody::SpatialVelocity<double> velocity_sphere;
-    // velocity_sphere.translational() = Vector3<double>{0.1, 0.1, 0.1};
-    // velocity_sphere.rotational() = Vector3<double>{M_PI/2, M_PI/2, M_PI/2};
-
-    // mpm::SphereLevelSet level_set_sphere = mpm::SphereLevelSet(0.2);
-    // Vector3<double> translation_sphere = {0.0, 0.0, 0.0};
-    // math::RigidTransform<double> pose_sphere =
-    //                         math::RigidTransform<double>(translation_sphere);
-
-    // double E = 5e4;
-    // double nu = 0.4;
-    // std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
-    //         = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
-    // typename mpm::MpmModel<T>::MaterialParameters m_param_sphere{
-    //                                             std::move(elastoplastic_model),
-    //                                             1000,
-    //                                             velocity_sphere,
-    //                                             1
-    //                                             };
-
-    multibody::SpatialVelocity<double> velocity_sphere;
-    velocity_sphere.translational() = Vector3<double>{2.0, 0.0, -0.0};
-    velocity_sphere.rotational() = Vector3<double>{0.0, 0.0, 0.0};
-
-    // Initialize a sphere
-    double radius = 0.2;
-    mpm::SphereLevelSet level_set_sphere = mpm::SphereLevelSet(radius);
-    Vector3<double> translation_sphere = {-0.9, 0.0, 0.25};
-    math::RigidTransform<double> pose_sphere =
-                            math::RigidTransform<double>(translation_sphere);
-
-    double E = 8e4;
-    double nu = 0.4;
-    double yield_stress = 5e3;
-    // std::unique_ptr<mpm::CorotatedElasticModel> elastoplastic_model
-    //         = std::make_unique<mpm::CorotatedElasticModel>(E, nu);
-
-
-    std::unique_ptr<mpm::StvkHenckyWithVonMisesModel> elastoplastic_model
-            = std::make_unique<mpm::StvkHenckyWithVonMisesModel>(E, nu,
-                                                            yield_stress);
-    typename mpm::MpmModel<T>::MaterialParameters m_param_sphere{
-                                                std::move(elastoplastic_model),
-                                                500,
-                                                velocity_sphere,
-                                                1
-                                                };    
-    
-
-
-    mpm::Particles particles(0);
-    const std::string dir = FindResourceOrThrow(
-              "drake/multibody/plant/drake_93k.obj");
-    InitializeParticles(dir, pose_sphere, 
-                        std::move(m_param_sphere), mpm_model_->grid_h(), particles);
-    getchar();
-    // InitializeParticles(level_set_sphere, pose_sphere, 
-    //                    std::move(m_param_sphere), mpm_model_->grid_h(), particles);
-    // InitializeParticles(level_set_sphere, pose_sphere, 
-    //                     *(mpm_model_->material_params()), mpm_model_->grid_h(), particles);
-
-    mpm::MpmState<T> mpm_state(particles);
-    mpm_model_->num_particles_ = particles.get_num_particles();
-    mpm_model_->particles_container_index_ = this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state));
-    particles_container_index_ = mpm_model_->particles_container_index_;
-    // ---------------------------- add mpm_state to plant's context --------------
-
-    
-    // all mpm related
-  } else {
-    std::cout << "does not add mpm " << std::endl; getchar();
-  }
-  
-  std::sort(body_ids_.begin(), body_ids_.end());
-  for (DeformableBodyIndex i(0); i < static_cast<int>(body_ids_.size()); ++i) {
-    DeformableBodyId id = body_ids_[i];
-    body_id_to_index_[id] = i;
-  }
-
-
-}
-
-template <typename T>
 void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
                                              AbstractValue* output) const {
   auto& output_value =
@@ -438,86 +435,9 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
   }
 }
 
-template <typename T>
-void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
-                                             AbstractValue* output) const {
-  auto& output_value = output->get_mutable_value<std::vector<Vector3<double>>>();
-  if (ExistsMpmModel()) {
-    const mpm::MpmState<T>& current_state = context.template get_abstract_state<mpm::MpmState<T>>(particles_container_index_);
-    const std::vector<Vector3<double>>& particle_positions = current_state.GetParticles().get_positions();
-    output_value = particle_positions;
-  } else {
-    const std::vector<Vector3<double>>& particle_positions{}; // empty, port will still be connected anyways
-    output_value = particle_positions;
-  }
-  
-  
-}
 
-  // MODIFY particles in place!!
-    // Initialize particles' positions with Poisson disk sampling. 
-  template <typename T>
-  void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet& level_set,
-                            const math::RigidTransform<double>& pose,
-                            const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h, 
-                            mpm::Particles& particles){
 
-    DRAKE_DEMAND(m_param.density > 0.0);
-    DRAKE_DEMAND(m_param.min_num_particles_per_cell >= 1);                        
 
-    const std::array<Vector3<double>, 2> bounding_box = level_set.get_bounding_box();
-    double sample_r =
-            grid_h/(std::cbrt(m_param.min_num_particles_per_cell)+1);
-    multibody::SpatialVelocity<double> init_v = m_param.initial_velocity;
-    std::array<double, 3> xmin = {bounding_box[0][0], bounding_box[0][1],
-                                  bounding_box[0][2]};
-    std::array<double, 3> xmax = {bounding_box[1][0], bounding_box[1][1],
-                                  bounding_box[1][2]};
-    
-    std::vector<Vector3<double>> particles_sample_positions =
-        thinks::PoissonDiskSampling<double, 3, Vector3<double>>(sample_r,
-                                                                xmin, xmax);
-
-    // Pick out sampled particles that are in the object
-    int num_samples = particles_sample_positions.size();
-    std::vector<Vector3<double>> particles_positions, particles_velocities;
-    for (int p = 0; p < num_samples; ++p) {
-        const math::RigidTransform<double>& X_WB       = pose;
-        const multibody::SpatialVelocity<double>& V_WB = init_v;
-        const math::RotationMatrix<double>& Rot_WB     = X_WB.rotation();
-        const Vector3<double>& p_BoBp_B = particles_sample_positions[p];
-        const Vector3<double>& p_BoBp_W = Rot_WB*p_BoBp_B;
-        multibody::SpatialVelocity<double> V_WBp   = V_WB.Shift(p_BoBp_W);
-
-        // If the particle is in the level set
-        if (level_set.InInterior(p_BoBp_B)) {
-            // TODO(yiminlin.tri): Initialize the affine matrix C_p using
-            //                     V_WBp.rotational() ?
-            particles_velocities.emplace_back(V_WBp.translational());
-            particles_positions.emplace_back(X_WB*p_BoBp_B);
-        }
-    }
-
-    int num_particles = particles_positions.size();
-    double reference_volume_p = level_set.get_volume()/num_particles;
-    double init_m = m_param.density*reference_volume_p;
-
-    // Add particles
-    for (int p = 0; p < num_particles; ++p) {
-        const Vector3<double>& xp = particles_positions[p];
-        const Vector3<double>& vp = particles_velocities[p];
-        Matrix3<double> elastic_deformation_grad_p = Matrix3<double>::Identity();
-        Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
-        Matrix3<double> B_p                = Matrix3<double>::Zero();
-        std::unique_ptr<mpm::ElastoPlasticModel> elastoplastic_model_p
-                                        = m_param.elastoplastic_model->Clone();
-        particles.AddParticle(xp, vp, init_m, reference_volume_p,
-                               elastic_deformation_grad_p,
-                               kirchhoff_stress_p,
-                               B_p, std::move(elastoplastic_model_p));
-    }
-    std::cout << "num particles genearted: " << num_particles << std::endl; getchar();                         
-  }
 
 // MODIFY particles in place!!
   template <typename T>
@@ -527,10 +447,8 @@ void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
                             mpm::Particles& particles){
 
     DRAKE_DEMAND(m_param.density > 0.0);
-
     multibody::SpatialVelocity<double> init_v = m_param.initial_velocity;
     std::vector<Vector3<double>> particles_positions, particles_velocities;
-
     std::string line;
     std::ifstream myfile(asset_dir);
     if (myfile.is_open())
@@ -555,24 +473,18 @@ void DeformableModel<T>::CopyMpmPositions(const systems::Context<T>& context,
         const Vector3<double>& p_BoBp_B = {x1, x2, x3};
         const Vector3<double>& p_BoBp_W = Rot_WB*p_BoBp_B;
         multibody::SpatialVelocity<double> V_WBp   = V_WB.Shift(p_BoBp_W);
-
         particles_velocities.emplace_back(V_WBp.translational());
         particles_positions.emplace_back(X_WB*p_BoBp_B);
 
       }
       myfile.close();
-      getchar();
     }
   else {
     std::cout << "Unable to open file" << std::endl;}
-    
-
-
     int num_particles = particles_positions.size();
     double reference_volume_p = 0.00000147; //44k
     reference_volume_p = 7.02349052e-7; //93k
     double init_m = m_param.density*reference_volume_p;
-
     // Add particles
     for (int p = 0; p < num_particles; ++p) {
         const Vector3<double>& xp = particles_positions[p];

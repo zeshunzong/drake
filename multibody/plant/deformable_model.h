@@ -74,10 +74,12 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       std::unique_ptr<geometry::GeometryInstance> geometry_instance,
       const fem::DeformableBodyConfig<T>& config, double resolution_hint);
 
-  // ZESHUN: trial only, not technically set data with this function
   DeformableBodyId RegisterMpmBody(
-      std::unique_ptr<geometry::GeometryInstance> geometry_instance,
-      const fem::DeformableBodyConfig<T>& config, double resolution_hint);
+      std::unique_ptr<mpm::AnalyticLevelSet> geometry_level_set,
+      std::unique_ptr<mpm::ElastoPlasticModel> constitutive_model,
+      multibody::SpatialVelocity<double>& geometry_initial_veolocity,
+      math::RigidTransform<double>& geometry_initial_pose, double density,
+      double grid_h, int min_num_particles_per_cell);
 
   systems::AbstractStateIndex particles_container_index() const {
     return particles_container_index_;
@@ -272,11 +274,12 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   std::vector<DeformableBodyId> body_ids_;
   std::unordered_map<DeformableBodyId, DeformableBodyIndex> body_id_to_index_;
   systems::OutputPortIndex vertex_positions_port_index_;
-  systems::OutputPortIndex mpm_particle_positions_port_index_;
+  
 
     // for mpm only, assume only one mpm body
   std::unique_ptr<mpm::MpmModel<T>> mpm_model_;
   systems::AbstractStateIndex particles_container_index_;
+  systems::OutputPortIndex mpm_particle_positions_port_index_;
 
 };
 

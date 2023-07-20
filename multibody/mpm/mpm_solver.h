@@ -57,7 +57,6 @@ class MpmSolver {
                         const T& initial_residual_norm) const;
 
   // Run the simulation with timestep size dt till endtime
-      double endtime_; // not needed at this time
       double dt_; 
       // Grid parameters, as documented in SparseGrid Class
       double grid_h_;
@@ -65,7 +64,6 @@ class MpmSolver {
       double CFL_; // not needed
 
   mutable KinematicCollisionObjects collision_objects_{};
-  mutable GravitationalForce gravitational_force_{};
 
  private:
 

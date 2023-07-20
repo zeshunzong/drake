@@ -26,8 +26,6 @@ namespace mpm {
 template <typename T>
 class MpmModel {
  public:
-
-
   struct MaterialParameters {
         // Elastoplastic model of the object
         std::unique_ptr<ElastoPlasticModel> elastoplastic_model;
@@ -43,29 +41,23 @@ class MpmModel {
         int min_num_particles_per_cell;
     };
 
-
-
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MpmModel);
 
-  
+    /** Constructs an empty MPM model. */
+  MpmModel(){}
+
   virtual ~MpmModel() = default;
 
 
 
   /** Creates a default FemState compatible with this model. */
-  std::unique_ptr<MpmState<T>> MakeMpmState(Particles& particles) const;
+  std::unique_ptr<MpmState<T>> MakeMpmState(Particles& particles) const{
+    return std::make_unique<MpmState<T>>(particles);
+  }
 
-  std::unique_ptr<MpmState<T>> MakeMpmState() const;
-
-  int num_particles_;
-
-
-  /** Sets the gravity vector for all elements in this model. */
-  void set_gravity_vector(const Vector3<T>& gravity) { gravity_ = gravity; }
-
-  /** Returns the gravity vector for all elements in this model. */
-  const Vector3<T>& gravity_vector() const { return gravity_; }
-
+  std::unique_ptr<MpmState<T>> MakeMpmState() const {
+    return std::make_unique<MpmState<T>>();
+  }
 
   void set_grid_h(const double h) {
     grid_h_ = h;
@@ -74,54 +66,17 @@ class MpmModel {
     return grid_h_;
   }
 
-  void set_spatial_velocity(const multibody::SpatialVelocity<double>& v) {
-    spatial_velocity_ = v;
-  }
-  const multibody::SpatialVelocity<double>& spatial_velocity() const {
-    return spatial_velocity_;
-  }
-  void set_level_set(mpm::AnalyticLevelSet& s) {
-    level_set_ = &s;
-  }
-  const mpm::AnalyticLevelSet* level_set() const {
-    return level_set_;
-  }
-  void set_pose(math::RigidTransform<double>& pose){
-    pose_ = &pose;
-  }
-  const math::RigidTransform<double>* pose() const {
-    return pose_;
-  }
-  void set_material_params(MaterialParameters& material_params) {
-    material_params_ = &material_params;
-  }
-  const MaterialParameters* material_params() const {
-    return material_params_;
-  }
-
-
-  /** Constructs an empty MPM model. */
-  MpmModel(){
-
-  }
-
-
   systems::AbstractStateIndex particles_container_index_;
+
+  int num_particles_;
   double grid_h_;
+  multibody::SpatialVelocity<double> object_initial_velocity_{};
+  MaterialParameters mp_{};
+  std::unique_ptr<mpm::AnalyticLevelSet> level_set_;
+  math::RigidTransform<double> pose_;
 
  private:
   
-  Vector3<T> gravity_{0, 0, -9.81};
-
-  // parameters about geometry
-  
-  multibody::SpatialVelocity<double> spatial_velocity_{};
-  mpm::AnalyticLevelSet* level_set_;
-  math::RigidTransform<double>* pose_;
-  MaterialParameters* material_params_;
-
-
-
 };
 
 }  // namespace mpm

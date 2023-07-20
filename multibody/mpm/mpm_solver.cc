@@ -24,7 +24,7 @@ MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
   std::cout << "construct solver with system dt="<< dt << std::endl; 
 
   // ------------------------ add BC -----------------
-  // Initialize the left wall
+  // ground at z = 0
   multibody::SpatialVelocity<double> zero_velocity;
   zero_velocity.SetZero();
   std::unique_ptr<mpm::SpatialVelocityTimeDependent> left_hand_velocity_ptr =
@@ -39,8 +39,6 @@ MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
   collision_objects_.AddCollisionObject(std::move(left_hand_level_set), std::move(left_hand_pose),
                               std::move(left_hand_velocity_ptr), left_hand_mu);
   // ------------------------ add BC -----------------
-  Vector3<double> gravity = {0.0, 0.0, -9.81};
-  gravitational_force_ = GravitationalForce(gravity);
 
 }
 
@@ -50,7 +48,6 @@ template <typename T>
 int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
                                      MpmState<T>* next_state) const {
   
-  std::cout << "dt is " << dt_ << std::endl;                                    
   const Particles p_prev = prev_state.GetParticles(); //getchar();
 
   const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
@@ -62,8 +59,9 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   grid_.UpdateVelocity(dt_);
 
   // gravity, collision, boundary to be added
-  std::cout << "gravity, collision, boundary to be added" << std::endl;
-  gravitational_force_.ApplyGravitationalForces(dt_, &grid_);
+  Vector3<double> gravitational_acceleration{0.0,0.0,-9.8};
+  grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
+  // gravitational_force_.ApplyGravitationalForces(dt_, &grid_);
 
   collision_objects_.AdvanceOneTimeStep(dt_);
   grid_.EnforceBoundaryCondition(collision_objects_, dt_);
@@ -71,10 +69,8 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   mpm_transfer_.TransferGridToParticles(grid_, dt_, &p_new);
   p_new.AdvectParticles(dt_);
 
-  // Particles p_new(p_prev.get_num_particles());
-  // p_new.set_positions(positions_prev);
-  // p_new.advect_x_coord();
-  p_new.print_info();
+ 
+  // p_new.print_info();
 
   next_state->SetParticles(p_new);
 

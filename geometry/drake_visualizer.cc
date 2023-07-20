@@ -804,21 +804,19 @@ void DrakeVisualizer<T>::SendMPMGeometriesMessage(const std::vector<Vector3<doub
   const size_t kPoints = mpm_data.size();
   if (kPoints==0){
     std::cout << "no mpm to display" << std::endl; return;
+  } else {
+    std::cout << "mpm visualize at time " << time << std::endl;
   }
   perception::PointCloud cloud(
   kPoints, perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
   Eigen::Matrix3Xf m = Eigen::Matrix3Xf::Zero(3, kPoints);
-  Eigen::Matrix3Xf m2 = Eigen::Matrix3Xf::Zero(3, kPoints); // for color
+  // Eigen::Matrix3Xf m2 = Eigen::Matrix3Xf::Zero(3, kPoints); // for color
   for (size_t ind = 0; ind < kPoints; ind++) {
     m.col(ind) = mpm_data[ind].cast <float> ();
-    m2(0,ind) = float(1.0);
-    //m2(1,ind) = float(1.0);
-    //m2(2,ind) = float(1.0);
   }
-  // std::cout << "matrix is " << m << std::endl;
   cloud.mutable_xyzs() = m;
   
-  cloud.mutable_rgbs() = (255.0 * (m2.array() + 0.0) / 2.0).cast<uint8_t>(); // if do not do this, color is black
+  // cloud.mutable_rgbs() = (255.0 * (m2.array() + 0.0) / 2.0).cast<uint8_t>(); // if do not do this, color is black
   lcmt_point_cloud message = ConvertPointCloudToMessage(cloud);
   /* Note: the channel name must be "DRAKE_POINT_CLOUD.**" otherwise it would not be 
   recognized by meldis. This is due to a special setting of handle in meldis. Here 

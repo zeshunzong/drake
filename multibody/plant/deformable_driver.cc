@@ -609,9 +609,6 @@ void DeformableDriver<T>::CalcMpmState(const Context<T>& context,
 
     const MpmState<T>& current_state = context.template get_abstract_state<MpmState<T>>(deformable_model_->particles_container_index());
     mpm_state->SetState(current_state);
-    // mpm_state->print_info(); 
-    std::cout << "finish CalcMpmState" << std::endl;
-
 }
 
 template <typename T>
@@ -746,10 +743,7 @@ void DeformableDriver<T>::CalcNextMpmState(const systems::Context<T>& context,
                                            MpmState<T>* next_mpm_state) const {
   
     const MpmState<T>& free_motion_state = EvalFreeMotionMpmState(context);
-
     next_mpm_state->SetParticles(free_motion_state.GetParticles());
-    // next_mpm_state->print_info();
-    std::cout << "finish CalcNextMpmState" << std::endl; 
 }
 
 template <typename T>
@@ -878,9 +872,10 @@ void DeformableDriver<T>::CalcParticipatingFreeMotionVelocities(
     participating_v_star[i].resize(permutation.permuted_domain_size());
     permutation.Apply(v_star, &participating_v_star[i]);
   }
+  if (num_bodies>0) {
   // TODO(xuchenhan-tri): Consider adding a in-place version of Multiplex.
   *result = EvalParticipatingVelocityMultiplexer(context).Multiplex(
-      std::move(participating_v_star));
+      std::move(participating_v_star));}
 }
 
 template <typename T>

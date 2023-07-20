@@ -79,6 +79,14 @@ class SparseGrid {
     // v^{n+1} = v^n + dt*f^n/m^n
     void UpdateVelocity(double dt);
 
+    void ApplyGravitationalForces(double dt, Vector3<double>& gravitational_acceleration) {
+      Vector3<double> dv = dt*gravitational_acceleration;
+      for (int i = 0; i < get_num_active_gridpt(); ++i) {
+        const Vector3<double>& velocity_i = get_velocity(i);
+        set_velocity(i, velocity_i + dv);
+    }
+    }
+
     // Enforce wall boundary conditions using the given kinematic collision
     // objects. The normal of the given collision object is the outward pointing
     // normal from the interior of the object to the exterior of the object. We
