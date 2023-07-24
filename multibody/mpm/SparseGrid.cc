@@ -10,7 +10,6 @@ SparseGrid::SparseGrid(double h): num_active_gridpts_(0), h_(h),
                                   }
 
 void SparseGrid::reserve(double capacity) {
-    std::cout << "in reserve " << capacity << std::endl;
     index_map_.reserve(capacity);
     active_gridpts_.reserve(capacity);
     velocities_.reserve(capacity);
@@ -110,7 +109,8 @@ void SparseGrid::UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_i
             Vector3<int> gridpt = {batch_idx_3D(0)+a, batch_idx_3D(1)+b,
                                    batch_idx_3D(2)+c}; // get all 27 neighboring grid nodes to particle p
             if (index_map_.count(gridpt) == 0) { // if this node is not active, mark as active here
-                active_gridpts_[num_active_gridpts_++] = gridpt;
+                active_gridpts_.push_back(gridpt);
+                num_active_gridpts_++;
                 index_map_[gridpt] = 1;
             }
         }
@@ -130,27 +130,26 @@ void SparseGrid::UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_i
         index_map_[active_gridpts_[i]] = i;
     }
     // resize
+    masses_.resize(num_active_gridpts_);
+    velocities_.resize(num_active_gridpts_);
+    forces_.resize(num_active_gridpts_);
 }
 
 void SparseGrid::RescaleVelocities() {
-    std::cout << "134" << std::endl;
-    std::cout << num_active_gridpts_ << std::endl;
-    std::cout << velocities_.size() << std::endl;
-    std::cout << masses_.size() << std::endl;
-    std::cout << masses_[0] << masses_[1] << masses_[2] << std::endl;
     for (int i = 0; i < num_active_gridpts_; ++i) {
         velocities_[i] = velocities_[i] / masses_[i];
     }
 }
 
 void SparseGrid::ResetStates() {
-    std::cout << "Active " << num_active_gridpts_ << std::endl;
+    DRAKE_ASSERT(masses_.size() == num_active_gridpts_);
+    DRAKE_ASSERT(velocities_.size() == num_active_gridpts_);
+    DRAKE_ASSERT(forces_.size() == num_active_gridpts_);
     std::fill(masses_.begin(), masses_.begin()+num_active_gridpts_, 0.0);
     std::fill(velocities_.begin(), velocities_.begin()+num_active_gridpts_,
               Vector3<double>::Zero());
     std::fill(forces_.begin(), forces_.begin()+num_active_gridpts_,
               Vector3<double>::Zero());
-    std::cout << "size of masses vector " << masses_.size() << std::endl; 
 }
 
 size_t SparseGrid::Reduce3DIndex(const Vector3<int>& index_3d) const {

@@ -13,13 +13,13 @@ namespace internal {
 
 template <typename T>
 MpmSolver<T>::MpmSolver(const MpmModel<T>* model)
-    : model_(model), grid_(model->grid_h_) {
+    : model_(model) {
   DRAKE_DEMAND(model_ != nullptr);
 }
 
 template <typename T>
 MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
-    : model_(model), grid_(model->grid_h_),dt_(dt) {
+    : model_(model),dt_(dt) {
   DRAKE_DEMAND(model_ != nullptr);
   std::cout << "construct solver with system dt="<< dt << std::endl; 
 
@@ -70,13 +70,11 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
 
 
 
-  scratch->grid_ = SparseGrid(model_->grid_h_);
   scratch->mpm_transfer_ = MPMTransfer();
 
   const Particles p_prev = prev_state.GetParticles(); 
   const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
   Particles p_new(p_prev);
-  std::cout << p_new.get_num_particles() << std::endl; getchar();
   p_new.ApplyPlasticityAndUpdateKirchhoffStresses();
 
   scratch->mpm_transfer_.SetUpTransfer(&(scratch->grid_), &p_new);
@@ -86,18 +84,17 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   // gravity, collision, boundary to be added
   Vector3<double> gravitational_acceleration{0.0,0.0,-9.8};
   scratch->grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
-
   collision_objects_.AdvanceOneTimeStep(dt_);
   scratch->grid_.EnforceBoundaryCondition(collision_objects_, dt_);
 
-  mpm_transfer_.TransferGridToParticles((scratch->grid_), dt_, &p_new);
+  scratch->mpm_transfer_.TransferGridToParticles((scratch->grid_), dt_, &p_new);
   p_new.AdvectParticles(dt_);
 
   next_state->SetParticles(p_new);
 
 
 
-  return 2;
+  return 1;
 }
 
 

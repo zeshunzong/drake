@@ -244,12 +244,17 @@ void DeformableDriver<T>::DeclareCacheEntries(
 
   if (mpm_solver_ != nullptr) {
     /* Scratch data for MpmSolver. */
-    MpmSolverScratchData<T> scratch;
-    const auto& scratch_entry = manager->DeclareCacheEntry(
-        fmt::format("MpmSolver scratch"),
-        systems::ValueProducer(scratch, &systems::ValueProducer::NoopCalc),
-        {systems::SystemBase::nothing_ticket()});
-    cache_indexes_.mpm_solver_scratch = scratch_entry.cache_index();
+
+    if (deformable_model_->ExistsMpmModel()){ 
+
+        MpmSolverScratchData<T> scratch(deformable_model_->GetMpmModel().grid_h_);
+        const auto& scratch_entry = manager->DeclareCacheEntry(
+            fmt::format("MpmSolver scratch"),
+            systems::ValueProducer(scratch, &systems::ValueProducer::NoopCalc),
+            {systems::SystemBase::nothing_ticket()});
+        cache_indexes_.mpm_solver_scratch = scratch_entry.cache_index();
+
+    } else { throw;}
   }
   // cache mpm, if there exists one
   if (deformable_model_->ExistsMpmModel()){

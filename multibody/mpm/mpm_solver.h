@@ -19,6 +19,9 @@ template <typename T>
 class MpmSolverScratchData {
  public:
   //DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MpmSolverScratchData);
+
+  MpmSolverScratchData(double grid_h): grid_(grid_h) {}
+
   SparseGrid grid_;
   MPMTransfer mpm_transfer_;
 
@@ -90,8 +93,8 @@ class MpmSolver {
   /* Max number of Newton-Raphson iterations the solver takes before it gives
    up. */
   int kMaxIterations_{100};
-  mutable SparseGrid grid_;
-  mutable MPMTransfer mpm_transfer_;
+  // mutable SparseGrid grid_;
+  // mutable MPMTransfer mpm_transfer_;
   
 };
 

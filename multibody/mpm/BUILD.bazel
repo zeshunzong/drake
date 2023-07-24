@@ -361,20 +361,7 @@ drake_cc_library(
     ],
 )
 
-drake_cc_library(
-    name = "mpm_state_system",
-    srcs = [
-        "mpm_state_system.cc",
-    ],
-    hdrs = [
-        "mpm_state_system.h",
-    ],
-    deps = [
-        "//common:essential",
-        "//systems/framework:leaf_system",
-        ":Particles",
-    ],
-)
+
 
 drake_cc_library(
     name = "mpm_state",
@@ -385,7 +372,7 @@ drake_cc_library(
         "mpm_state.h",
     ],
     deps = [
-        ":mpm_state_system",
+        ":Particles",
         "//common:essential",
         "//systems/framework:context",
     ],
