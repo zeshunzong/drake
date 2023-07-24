@@ -46,31 +46,52 @@ MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
 
 template <typename T>
 int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
-                                     MpmState<T>* next_state) const {
+                                     MpmState<T>* next_state, MpmSolverScratchData<T>* scratch) const {
   
-  const Particles p_prev = prev_state.GetParticles(); //getchar();
+  // const Particles p_prev = prev_state.GetParticles(); //getchar();
+  // const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
+  // Particles p_new(p_prev);
+  // p_new.ApplyPlasticityAndUpdateKirchhoffStresses();
+  // mpm_transfer_.SetUpTransfer(&grid_, &p_new);
+  // mpm_transfer_.TransferParticlesToGrid(p_new, &grid_);
+  // grid_.UpdateVelocity(dt_);
 
+  // // gravity, collision, boundary to be added
+  // Vector3<double> gravitational_acceleration{0.0,0.0,-9.8};
+  // grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
+
+  // collision_objects_.AdvanceOneTimeStep(dt_);
+  // grid_.EnforceBoundaryCondition(collision_objects_, dt_);
+
+  // mpm_transfer_.TransferGridToParticles(grid_, dt_, &p_new);
+  // p_new.AdvectParticles(dt_);
+
+  // next_state->SetParticles(p_new);
+
+
+
+  scratch->grid_ = SparseGrid(model_->grid_h_);
+  scratch->mpm_transfer_ = MPMTransfer();
+
+  const Particles p_prev = prev_state.GetParticles(); 
   const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
-
   Particles p_new(p_prev);
+  std::cout << p_new.get_num_particles() << std::endl; getchar();
   p_new.ApplyPlasticityAndUpdateKirchhoffStresses();
-  mpm_transfer_.SetUpTransfer(&grid_, &p_new);
-  mpm_transfer_.TransferParticlesToGrid(p_new, &grid_);
-  grid_.UpdateVelocity(dt_);
+
+  scratch->mpm_transfer_.SetUpTransfer(&(scratch->grid_), &p_new);
+  scratch->mpm_transfer_.TransferParticlesToGrid(p_new, &(scratch->grid_));
+  scratch->grid_.UpdateVelocity(dt_);
 
   // gravity, collision, boundary to be added
   Vector3<double> gravitational_acceleration{0.0,0.0,-9.8};
-  grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
-  // gravitational_force_.ApplyGravitationalForces(dt_, &grid_);
+  scratch->grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
 
   collision_objects_.AdvanceOneTimeStep(dt_);
-  grid_.EnforceBoundaryCondition(collision_objects_, dt_);
+  scratch->grid_.EnforceBoundaryCondition(collision_objects_, dt_);
 
-  mpm_transfer_.TransferGridToParticles(grid_, dt_, &p_new);
+  mpm_transfer_.TransferGridToParticles((scratch->grid_), dt_, &p_new);
   p_new.AdvectParticles(dt_);
-
- 
-  // p_new.print_info();
 
   next_state->SetParticles(p_new);
 

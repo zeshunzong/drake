@@ -15,11 +15,25 @@ namespace multibody {
 namespace mpm {
 namespace internal {
 
+template <typename T>
+class MpmSolverScratchData {
+ public:
+  //DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MpmSolverScratchData);
+  SparseGrid grid_;
+  MPMTransfer mpm_transfer_;
+
+};
+
 
 template <typename T>
 class MpmSolver {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MpmSolver);
+
+//  struct MpmScratch {
+//    SparseGrid grid_;
+//    MPMTransfer mpm_transfer_;
+//  };
 
  
   MpmSolver(const MpmModel<T>* model);
@@ -28,7 +42,7 @@ class MpmSolver {
 
   MpmSolver(const MpmModel<T>* model, double dt, KinematicCollisionObjects collision_objects);
 
-  int AdvanceOneTimeStep(const MpmState<T>& prev_state, MpmState<T>* next_state) const;
+  int AdvanceOneTimeStep(const MpmState<T>& prev_state,  MpmState<T>* next_state, MpmSolverScratchData<T>* scratch) const;
 
   /* Returns the FEM model that this solver solves for. */
   const MpmModel<T>& model() const { return *model_; }

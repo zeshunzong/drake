@@ -99,7 +99,7 @@ int do_main() {
   Vector3<double> geometry_translation = {0.0, 0.0, 0.4};
   math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
 
-  double density = 1000.0; double grid_h = 0.025;
+  double density = 10000000.0; double grid_h = 0.025;
   int min_num_particles_per_cell = 1;
   // MPM geometry ------------------
 

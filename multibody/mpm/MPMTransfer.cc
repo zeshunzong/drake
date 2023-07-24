@@ -46,10 +46,9 @@ void MPMTransfer::TransferParticlesToGrid(const Particles& particles,
     // Positions of grid points in the batch
     std::array<Vector3<double>, 27> batch_positions;
     Vector3<int> batch_index_3d;
-
     // Clear grid states
     grid->ResetStates();
-
+    std::cout << grid->get_num_active_gridpt() << std::endl;
     // For each batch of particles
     p_start = 0;
     for (int i = 0; i < num_active_gridpts; ++i) {
@@ -92,7 +91,6 @@ void MPMTransfer::TransferParticlesToGrid(const Particles& particles,
             p_start = p_end;
         }
     }
-
     for (int i = 0; i < num_active_gridpts; ++i) {
         if (batch_sizes_[i] != 0) {
             batch_index_3d = grid->Expand1DIndex(i);
@@ -100,7 +98,7 @@ void MPMTransfer::TransferParticlesToGrid(const Particles& particles,
             WriteBatchStateToGrid(batch_index_3d, local_pads[i], grid);
         }
     }
-
+    std::cout << "103" << std::endl;
     // Calculate grid velocities v_i by (mv)_i / m_i
     grid->RescaleVelocities();
 }

@@ -37,9 +37,11 @@ using drake::multibody::mpm::MpmState;
 using drake::multibody::mpm::MpmModel;
 using drake::multibody::mpm::Particles;
 using drake::multibody::mpm::internal::MpmSolver;
+using drake::multibody::mpm::internal::MpmSolverScratchData;
 using drake::multibody::fem::internal::DirichletBoundaryCondition;
 using drake::multibody::fem::internal::FemSolver;
 using drake::multibody::fem::internal::FemSolverScratchData;
+
 using drake::multibody::fem::internal::PetscSymmetricBlockSparseMatrix;
 using drake::multibody::fem::internal::SchurComplement;
 using drake::systems::Context;
@@ -240,6 +242,15 @@ void DeformableDriver<T>::DeclareCacheEntries(
 
   }
 
+  if (mpm_solver_ != nullptr) {
+    /* Scratch data for MpmSolver. */
+    MpmSolverScratchData<T> scratch;
+    const auto& scratch_entry = manager->DeclareCacheEntry(
+        fmt::format("MpmSolver scratch"),
+        systems::ValueProducer(scratch, &systems::ValueProducer::NoopCalc),
+        {systems::SystemBase::nothing_ticket()});
+    cache_indexes_.mpm_solver_scratch = scratch_entry.cache_index();
+  }
   // cache mpm, if there exists one
   if (deformable_model_->ExistsMpmModel()){
     const mpm::MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
@@ -653,8 +664,14 @@ void DeformableDriver<T>::CalcFreeMotionMpmState(
 
   const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
 
-  //const MpmSolver<T> solver(&mpm_model);
-  mpm_solver_->AdvanceOneTimeStep(mpm_state, mpm_state_star);
+  MpmSolverScratchData<T>& scratch =
+     manager_->plant()
+         .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+         .get_mutable_cache_entry_value(context)
+         .template GetMutableValueOrThrow<MpmSolverScratchData<T>>();
+  mpm_solver_->AdvanceOneTimeStep(mpm_state, mpm_state_star, &scratch);
+
+  // mpm_solver_->AdvanceOneTimeStep(mpm_state, mpm_state_star);
   std::cout << "finish CalcFreeMotionMpmState" << std::endl;
 
 }

@@ -183,6 +183,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     systems::CacheIndex mpm_state;
     systems::CacheIndex free_motion_mpm_state;
     systems::CacheIndex next_mpm_state;
+    systems::CacheIndex mpm_solver_scratch;
 
 
     std::vector<systems::CacheIndex> fem_solver_scratches;
