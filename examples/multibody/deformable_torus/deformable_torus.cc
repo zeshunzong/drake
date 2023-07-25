@@ -89,8 +89,8 @@ int do_main() {
 
   double E = 5e4;
   double nu = 0.4;
-  std::unique_ptr<multibody::mpm::ElastoPlasticModel> constitutive_model
-          = std::make_unique<multibody::mpm::CorotatedElasticModel>(E, nu);
+  std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model
+          = std::make_unique<multibody::mpm::CorotatedElasticModel<double>>(E, nu);
 
   multibody::SpatialVelocity<double> geometry_initial_veolocity;
     geometry_initial_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.0};//{0.1, 0.1, 0.1};

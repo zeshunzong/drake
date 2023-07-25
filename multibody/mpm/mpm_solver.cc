@@ -73,7 +73,7 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   scratch->mpm_transfer_ = MPMTransfer();
 
   const Particles p_prev = prev_state.GetParticles(); 
-  const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
+  // const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
   Particles p_new(p_prev);
   p_new.ApplyPlasticityAndUpdateKirchhoffStresses();
 

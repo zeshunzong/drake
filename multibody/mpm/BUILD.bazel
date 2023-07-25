@@ -446,20 +446,13 @@ drake_cc_binary(
     ],
 )
 
-drake_cc_binary(
-    name = "ball_on_floor",
-    srcs = [
-        "examples/ball_on_floor/main.cpp",
-    ],
+
+drake_cc_googletest(
+    name = "BSpline_test",
     deps = [
-        ":CorotatedElasticModel",
-        ":MPMDriver",
-#        ":SpatialVelocityTimeDependent",
-        "//common:essential",
-        "//math:geometric_transform",
-        "@partio",
+        ":BSpline",
+        "//common/test_utilities:eigen_matrix_compare",
     ],
 )
-
 
 add_lint_tests()

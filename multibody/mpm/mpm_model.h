@@ -28,7 +28,7 @@ class MpmModel {
  public:
   struct MaterialParameters {
         // Elastoplastic model of the object
-        std::unique_ptr<ElastoPlasticModel> elastoplastic_model;
+        std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model;
         // @pre density is positive
         // Density and the initial velocity of the object, we assume the object
         // has uniform density and velocity.
@@ -62,7 +62,7 @@ class MpmModel {
   void set_grid_h(const double h) {
     grid_h_ = h;
   }
-  const double grid_h() const {
+  double grid_h() const {
     return grid_h_;
   }
 

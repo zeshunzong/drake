@@ -73,12 +73,15 @@ class MpmSolver {
   bool solver_converged(const T& residual_norm,
                         const T& initial_residual_norm) const;
 
-  // Run the simulation with timestep size dt till endtime
-      double dt_; 
-      // Grid parameters, as documented in SparseGrid Class
-      double grid_h_;
-      // CFL number
-      double CFL_; // not needed
+  double get_dt() const {return dt_;}
+  void set_dt(const double dt) {dt_ = dt;}
+
+  double get_grid_h() const {return grid_h_;}
+  void set_grid_h(const double grid_h) {grid_h_ = grid_h;}
+
+
+  
+  
 
   mutable KinematicCollisionObjects collision_objects_{};
 
@@ -86,6 +89,13 @@ class MpmSolver {
 
   /* The FEM model being solved by `this` solver. */
   const MpmModel<T>* model_{nullptr};
+
+  // Run the simulation with timestep size dt till endtime
+  double dt_; 
+  // Grid parameters, as documented in SparseGrid Class
+  double grid_h_;
+
+
   /* The discrete time integrator the solver uses. */
   /* Tolerance for convergence. */
   double relative_tolerance_{1e-4};  // unitless.

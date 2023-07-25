@@ -35,7 +35,7 @@ using fem::MaterialModel;
 template <typename T>
 DeformableBodyId DeformableModel<T>::RegisterMpmBody(
     std::unique_ptr<mpm::AnalyticLevelSet> geometry_level_set,
-      std::unique_ptr<mpm::ElastoPlasticModel> constitutive_model,
+      std::unique_ptr<mpm::ElastoPlasticModel<double>> constitutive_model,
       multibody::SpatialVelocity<double>& geometry_initial_veolocity,
       math::RigidTransform<double>& geometry_initial_pose, double density,
       double grid_h, int min_num_particles_per_cell) {
@@ -193,7 +193,7 @@ void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet& level_
       Matrix3<double> elastic_deformation_grad_p = Matrix3<double>::Identity();
       Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
       Matrix3<double> B_p                = Matrix3<double>::Zero();
-      std::unique_ptr<mpm::ElastoPlasticModel> elastoplastic_model_p = m_param.elastoplastic_model->Clone();
+      std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p = m_param.elastoplastic_model->Clone();
       particles.AddParticle(xp, vp, init_m, reference_volume_p,
                               elastic_deformation_grad_p,kirchhoff_stress_p,B_p, std::move(elastoplastic_model_p));
   }
@@ -439,11 +439,11 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
 
 
 
-// MODIFY particles in place!!
+// MODIFY particles in place!! load obj
   template <typename T>
   void DeformableModel<T>::InitializeParticles(std::string asset_dir,
                             const math::RigidTransform<double>& pose,
-                            const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h, 
+                            const typename mpm::MpmModel<T>::MaterialParameters& m_param, 
                             mpm::Particles& particles){
 
     DRAKE_DEMAND(m_param.density > 0.0);
@@ -492,7 +492,7 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
         Matrix3<double> elastic_deformation_grad_p = Matrix3<double>::Identity();
         Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
         Matrix3<double> B_p                = Matrix3<double>::Zero();
-        std::unique_ptr<mpm::ElastoPlasticModel> elastoplastic_model_p
+        std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p
                                         = m_param.elastoplastic_model->Clone();
         particles.AddParticle(xp, vp, init_m, reference_volume_p,
                                elastic_deformation_grad_p,

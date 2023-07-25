@@ -12,20 +12,21 @@ namespace mpm {
 
 // A implementation of Fixed Corotated Model (Constitutive Model), without
 // plasticity
-class CorotatedElasticModel : public ElastoPlasticModel {
+template <typename T>
+class CorotatedElasticModel : public ElastoPlasticModel<T> {
  public:
     CorotatedElasticModel();
-    CorotatedElasticModel(double E, double nu);
+    CorotatedElasticModel(T E, T nu);
 
-    virtual std::unique_ptr<ElastoPlasticModel> Clone() const {
-        return std::make_unique<CorotatedElasticModel>(*this);
+    virtual std::unique_ptr<ElastoPlasticModel<T>> Clone() const {
+        return std::make_unique<CorotatedElasticModel<T>>(*this);
     }
 
-    double CalcStrainEnergyDensity(const Matrix3<double>& FE) const final;
+    T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
 
     void UpdateDeformationGradientAndCalcKirchhoffStress(
-                    Matrix3<double>* tau,
-                    Matrix3<double>* elastic_deformation_gradient) const final;
+                    Matrix3<T>* tau,
+                    Matrix3<T>* elastic_deformation_gradient) const final;
 };  // class ElastoPlasticModel
 
 }  // namespace mpm

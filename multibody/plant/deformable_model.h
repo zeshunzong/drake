@@ -76,7 +76,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   DeformableBodyId RegisterMpmBody(
       std::unique_ptr<mpm::AnalyticLevelSet> geometry_level_set,
-      std::unique_ptr<mpm::ElastoPlasticModel> constitutive_model,
+      std::unique_ptr<mpm::ElastoPlasticModel<double>> constitutive_model,
       multibody::SpatialVelocity<double>& geometry_initial_veolocity,
       math::RigidTransform<double>& geometry_initial_pose, double density,
       double grid_h, int min_num_particles_per_cell);
@@ -249,7 +249,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
                             mpm::Particles& particles);    
 
   void InitializeParticles(std::string obj_filename, const math::RigidTransform<double>& pose,
-                            const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h,
+                            const typename mpm::MpmModel<T>::MaterialParameters& m_param,
                             mpm::Particles& particles);                     
 
   /* Helper to throw a useful message if a deformable body with the given `id`

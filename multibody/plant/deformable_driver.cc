@@ -667,8 +667,6 @@ void DeformableDriver<T>::CalcFreeMotionMpmState(
 
   const MpmState<T>& mpm_state = EvalMpmState(context);
 
-  const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
-
   MpmSolverScratchData<T>& scratch =
      manager_->plant()
          .get_cache_entry(cache_indexes_.mpm_solver_scratch)

@@ -99,10 +99,14 @@ class SparseGrid {
       for (int i = 0; i < num_active_gridpts_; ++i) {
          double mi = masses_[i];
          sum_mass += mi;
-         Vector3<double> prev_v = velocities_[i];
+         // Vector3<double> prev_v = velocities_[i];
          Vector3<double> xi = get_position(active_gridpts_[i]);
          objects.ApplyBoundaryConditions(xi, &velocities_[i]);
-         Vector3<double> dv = velocities_[i] - prev_v;
+         // Vector3<double> dv = velocities_[i] - prev_v;
+         // should be deleted later
+         if (dt > 100.0){
+            throw; 
+         }
          
       }
     }

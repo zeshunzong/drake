@@ -10,20 +10,21 @@ namespace multibody {
 namespace mpm {
 
 // A base class providing the interface of constituive and plastic model
+template <typename T>
 class ElastoPlasticModel {
  public:
     // Default material, dough: E = 9e4 Pa, nu = 0.49
     ElastoPlasticModel();
 
     // Constructor uses Young's modulus E and Poisson's ratio nu
-    ElastoPlasticModel(double E, double nu);
+    ElastoPlasticModel(T E, T nu);
 
-    virtual std::unique_ptr<ElastoPlasticModel> Clone() const = 0;
+    virtual std::unique_ptr<ElastoPlasticModel<T>> Clone() const = 0;
 
-    double get_lambda() const {  return lambda_;  };
-    double get_mu() const     {  return mu_;  };
+    T get_lambda() const {  return lambda_;  };
+    T get_mu() const     {  return mu_;  };
 
-    virtual double CalcStrainEnergyDensity(const Matrix3<double>& FE) const = 0;
+    virtual T CalcStrainEnergyDensity(const Matrix3<T>& FE) const = 0;
 
     // Update the elastic deformation gradient according to the plasticity model
     // by projecting the trial elastic stress to the yield surface. Then
@@ -32,14 +33,14 @@ class ElastoPlasticModel {
     //                                                      = dψ/dFᴱ Fᴱ^T,
     // where ψ denotes the energy density
     virtual void UpdateDeformationGradientAndCalcKirchhoffStress(
-                    Matrix3<double>* tau,
-                    Matrix3<double>* elastic_deformation_gradient) const = 0;
+                    Matrix3<T>* tau,
+                    Matrix3<T>* elastic_deformation_gradient) const = 0;
 
     virtual ~ElastoPlasticModel() = default;
 
  protected:
-    double lambda_;                       // The first Lamé coefficient
-    double mu_;                           // The second Lamé coefficient
+    T lambda_;                       // The first Lamé coefficient
+    T mu_;                           // The second Lamé coefficient
 };  // class ElastoPlasticModel
 
 }  // namespace mpm

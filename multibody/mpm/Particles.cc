@@ -115,7 +115,7 @@ void Particles::set_B_matrix(int index, const Matrix3<double>& B_matrix) {
 }
 
 void Particles::set_elastoplastic_model(int index,
-                    std::unique_ptr<ElastoPlasticModel> elastoplastic_model) {
+                    std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model) {
     elastoplastic_models_[index] = std::move(elastoplastic_model);
 }
 
@@ -161,7 +161,7 @@ void Particles::Reorder(const std::vector<size_t>& new_order) {
                         elastic_deformation_gradients_sorted(num_particles_);
     std::vector<Matrix3<double>> kirchhoff_stresses_sorted(num_particles_);
     std::vector<Matrix3<double>> B_matrices_sorted(num_particles_);
-    std::vector<copyable_unique_ptr<ElastoPlasticModel>>
+    std::vector<copyable_unique_ptr<ElastoPlasticModel<double>>>
                                  elastoplastic_models_sorted(num_particles_);
     for (int p = 0; p < num_particles_; ++p) {
         p_new = new_order[p];
@@ -192,7 +192,7 @@ void Particles::AddParticle(const Vector3<double>& position,
                             const Matrix3<double>& elastic_deformation_gradient,
                             const Matrix3<double>& kirchhoff_stress,
                             const Matrix3<double>& B_matrix,
-                    std::unique_ptr<ElastoPlasticModel> elastoplastic_model) {
+                    std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model) {
     positions_.emplace_back(position);
     velocities_.emplace_back(velocity);
     masses_.emplace_back(mass);

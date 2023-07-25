@@ -22,7 +22,6 @@ class Particles {
     Particles();
     explicit Particles(int num_particles);
 
-    int testtt = 999;
 
     int get_num_particles() const;
     // Note that we didn't overload get_position: get_positions for getting
@@ -74,7 +73,7 @@ class Particles {
                               const Matrix3<double>& kirchhoff_stress);
     void set_B_matrix(int index, const Matrix3<double>& B_matrix);
     void set_elastoplastic_model(int index,
-                     std::unique_ptr<ElastoPlasticModel> elastoplastic_model);
+                     std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model);
 
     void set_positions(const std::vector<Vector3<double>>& positions);
     void set_velocities(const std::vector<Vector3<double>>& velocities);
@@ -106,7 +105,7 @@ class Particles {
                      const Matrix3<double>& elastic_deformation_gradient,
                      const Matrix3<double>& kirchhoff_stress,
                      const Matrix3<double>& B_matrix,
-                     std::unique_ptr<ElastoPlasticModel> elastoplastic_model);
+                     std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model);
 
     // Assume the elastic deformation gradients are in their trial state
     // (Fₑ = Fₑᵗʳⁱᵃˡ), update the elastic deformation gradients by projecting
@@ -133,7 +132,7 @@ class Particles {
     std::vector<Matrix3<double>> kirchhoff_stresses_{};
     // The affine matrix B_p in APIC
     std::vector<Matrix3<double>> B_matrices_{};
-    std::vector<copyable_unique_ptr<ElastoPlasticModel>> elastoplastic_models_{};
+    std::vector<copyable_unique_ptr<ElastoPlasticModel<double>>> elastoplastic_models_{};
 };  // class Particles
 
 }  // namespace mpm

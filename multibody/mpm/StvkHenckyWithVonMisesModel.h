@@ -58,52 +58,55 @@ namespace mpm {
 // no hardening in the plastic model, so the yield surface (function) doesn't
 // change with respect to time. This is equivalent to the formulation in
 // (BW Box 7.1) with H = 0.
-class StvkHenckyWithVonMisesModel: public ElastoPlasticModel {
+template <typename T>
+class StvkHenckyWithVonMisesModel: public ElastoPlasticModel<T> {
  public:
     // Yield stress is the minimum stress at which the material undergoes
     // plastic deformation
     // @pre yield_stress > 0
-    explicit StvkHenckyWithVonMisesModel(double yield_stress);
-    StvkHenckyWithVonMisesModel(double E, double nu, double yield_stress);
+    explicit StvkHenckyWithVonMisesModel(T yield_stress);
+    StvkHenckyWithVonMisesModel(T E, T nu, T yield_stress);
 
-    virtual std::unique_ptr<ElastoPlasticModel> Clone() const {
-        return std::make_unique<StvkHenckyWithVonMisesModel>(*this);
+    virtual std::unique_ptr<ElastoPlasticModel<T>> Clone() const {
+        return std::make_unique<StvkHenckyWithVonMisesModel<T>>(*this);
     }
 
     // TODO(yiminlin.tri): do nothing currently
-    double CalcStrainEnergyDensity(const Matrix3<double>& FE) const final;
+    T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
 
     void UpdateDeformationGradientAndCalcKirchhoffStress(
-            Matrix3<double>* tau,
-            Matrix3<double>* trial_elastic_deformation_gradient) const final;
+            Matrix3<T>* tau,
+            Matrix3<T>* trial_elastic_deformation_gradient) const final;
 
     // Evaluate the yield function f in the plasticity model given the elastic
     // deformation gradient FE. (f <= 0 if the stress is in/on the yield surface
     // , and there is only elastic response. If f > 0, there will be plastic
     // response). Return 0.0 for a purely elastic model.
-    double EvalYieldFunction(const Matrix3<double>& FE) const;
+    T EvalYieldFunction(const Matrix3<T>& FE) const;
 
  private:
     // Given the Hencky strain ε, assume he SVD of it is U Σ Vᵀ,
     // We store U in `U`, V in `V`, eps_hat in `Σ`, and tr(Σ) in `tr_eps`
+    //template <typename T>
     struct StrainData {
-        Matrix3<double> U;
-        Matrix3<double> V;
-        Vector3<double> eps_hat;
-        double tr_eps;
+        Matrix3<T> U;
+        Matrix3<T> V;
+        Vector3<T> eps_hat;
+        T tr_eps;
     };
 
     // Given the Kirchhoff stress τ, the deviatoric component of τ is defined as
     // dev(τ) = τ - pJI = τ - 1/3tr(τ)I
     // Store dev(τ)'s singular values into `tau_dev_hat` and the norm of
     // `tau_dev_hat` in `tau_dev_hat_norm`
+    //template <typename T>
     struct StressData {
-        Vector3<double> tau_dev_hat;
-        double tau_dev_hat_norm;
+        Vector3<T> tau_dev_hat;
+        T tau_dev_hat_norm;
     };
 
     // Calculate the strain data using the elastic deformation gradient `FE`
-    StrainData CalcStrainData(const Matrix3<double>& FE) const;
+    StrainData CalcStrainData(const Matrix3<T>& FE) const;
 
     // Calculate the stress data using the strain data  `strain_data`
     StressData CalcStressData(const StrainData& strain_data) const;
@@ -111,12 +114,12 @@ class StvkHenckyWithVonMisesModel: public ElastoPlasticModel {
     // Helper function, calculate Kirchhoff stress given the left singular
     // vectors and the singular values and the trace of the trial Hencky strain
     void CalcKirchhoffStress(const StrainData& trial_strain_data,
-                             Matrix3<double>* tau) const;
+                             Matrix3<T>* tau) const;
 
     // Helper function, evaluate the yield function
     // f(τ) = sqrt(3/2)‖ dev(τ) ‖ - τ_c, where dev(τ) is the deviatoric
     // component of Kirchhoff stress in the princpal frame
-    double EvalYieldFunction(const StressData& trialStressData) const;
+    T EvalYieldFunction(const StressData& trialStressData) const;
 
     // Given the left and right singular vectors of the deformation gradient (U
     // and V), the singular values and the trace of the trial Hencky strain
@@ -129,11 +132,11 @@ class StvkHenckyWithVonMisesModel: public ElastoPlasticModel {
     void ProjectDeformationGradientToYieldSurface(
                                         const StressData& trial_stress_data,
                                         StrainData* trial_strain_data,
-                                        Matrix3<double>* FE_trial) const;
+                                        Matrix3<T>* FE_trial) const;
 
     // sqrt(3.0/2.0)
-    static constexpr double sqrt_32 = 1.224744871391589;
-    double yield_stress_;
+    static constexpr T sqrt_32 = 1.224744871391589;
+    T yield_stress_;
 };  // class StvkHenckyWithVonMisesModel
 
 }  // namespace mpm
