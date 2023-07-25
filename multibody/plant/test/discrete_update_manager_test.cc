@@ -156,6 +156,10 @@ class DummyDiscreteUpdateManager final : public DiscreteUpdateManager<T> {
     }
   }
 
+  void DoCalcAbstractValues(
+      const systems::Context<T>& context,
+      systems::State<T>* update) const final {}
+
   // TODO(joemasterjohn): Add a unit test here for when the contact results
   // calculated by the manager are hooked up to MultibodyPlant.
   void DoCalcContactResults(const systems::Context<T>& context,

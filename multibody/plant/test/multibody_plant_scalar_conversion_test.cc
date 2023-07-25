@@ -186,6 +186,9 @@ class DoubleOnlyDiscreteUpdateManager final
 
   void DoCalcDiscreteValues(const systems::Context<T>&,
                             systems::DiscreteValues<T>*) const final {}
+  void DoCalcAbstractValues(
+      const systems::Context<T>& context,
+      systems::State<T>* update) const final {}
 
   void DoCalcContactResults(const systems::Context<T>&,
                             ContactResults<T>*) const final {}

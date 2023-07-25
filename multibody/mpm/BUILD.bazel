@@ -336,31 +336,6 @@ drake_cc_library(
 )
 
 
-drake_cc_library(
-    name = "MPMDriver",
-    srcs = [
-        "MPMDriver.cc",
-    ],
-    hdrs = [
-        "MPMDriver.h",
-    ],
-    deps = [
-        ":AnalyticLevelSet",
-        ":ElastoPlasticModel",
-        ":GravitationalForce",
-        ":MPMParameters",
-        ":MPMRunTimeStatistics",
-        ":MPMTransfer",
-        ":Particles",
-        ":SparseGrid",
-        ":particles_to_bgeo",
-        ":poisson_disk_sampling",
-        "//common:essential",
-        "//math:geometric_transform",
-        "//multibody/math:spatial_algebra",
-    ],
-)
-
 
 
 drake_cc_library(
@@ -416,35 +391,8 @@ drake_cc_binary(
         ":MPMParameters",
     ],
 )
-drake_cc_binary(
-    name = "ball",
-    srcs = [
-        "examples/ball/main.cpp",
-    ],
-    deps = [
-        ":CorotatedElasticModel",
-        ":MPMDriver",
-#        ":SpatialVelocityTimeDependent",
-        "//common:essential",
-        "//math:geometric_transform",
-        "@partio",
-    ],
-)
 
-drake_cc_binary(
-    name = "pingpong",
-    srcs = [
-        "examples/pingpong/main.cpp",
-    ],
-    deps = [
-        ":CorotatedElasticModel",
-        ":MPMDriver",
-        ":SpatialVelocityTimeDependent",
-        "//common:essential",
-        "//math:geometric_transform",
-        "@partio",
-    ],
-)
+
 
 
 drake_cc_googletest(

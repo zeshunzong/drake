@@ -1,4 +1,4 @@
-#include "drake/multibody/fem/mpm-dev/BSpline.h"
+#include "drake/multibody/mpm/BSpline.h"
 
 #include <gtest/gtest.h>
 
