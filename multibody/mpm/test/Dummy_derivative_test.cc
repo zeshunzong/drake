@@ -49,39 +49,39 @@ void TestPIsDerivativeOfPsi(){
          kTolerance));
 }
 
-// void TestPIsDerivativeOfPsi2(){
-//     StvkHenckyWithVonMisesModel<AutoDiffXd> model(2.5, 0.3, 0.2);
-//     Matrix3<AutoDiffXd> F = MakeDeformationGradientsWithDerivatives();
-//     AutoDiffXd f = model.CalcStrainEnergyDensity(F);
-//     Matrix3<AutoDiffXd> dfdF;
-//     model.CalcFirstPiolaStress(F, &dfdF);
-//     const double kTolerance = 1e-12;
-//     EXPECT_TRUE(CompareMatrices(
-//         Eigen::Map<const Matrix3d>(f.derivatives().data(), 3, 3), dfdF,
-//          kTolerance));
-// }
+void TestPIsDerivativeOfPsi2(){
+    StvkHenckyWithVonMisesModel<AutoDiffXd> model(2.5, 0.3, 0.2);
+    Matrix3<AutoDiffXd> F = MakeDeformationGradientsWithDerivatives();
+    AutoDiffXd f = model.CalcStrainEnergyDensity(F);
+    Matrix3<AutoDiffXd> dfdF;
+    model.CalcFirstPiolaStress(F, &dfdF);
+    const double kTolerance = 1e-12;
+    EXPECT_TRUE(CompareMatrices(
+        Eigen::Map<const Matrix3d>(f.derivatives().data(), 3, 3), dfdF,
+         kTolerance));
+}
 
-// void TestTauIsPFT2(){
-//     //P Fᵀ = τ this should hold for first PK stress P and Kirchhoff stress τ
-//     StvkHenckyWithVonMisesModel<double> model(2.5, 0.3, 0.2);
-//     Matrix3d F;
-//     // clang-format off
-//     F << 0.18, 0.63, 0.54,
-//         0.13, 0.92, 0.17,
-//         0.03, 0.86, 0.85;
-//     // clang-format on
-//     Matrix3d tau;
-//     model.UpdateDeformationGradientAndCalcKirchhoffStress(&tau, &F);
-//     // compute P F^T
-//     Matrix3d P;
-//     model.CalcFirstPiolaStress(F, &P);
-//     Matrix3d PFT = P * F.transpose();
-//     const double kTolerance = 1e-12;
-//     EXPECT_TRUE(CompareMatrices(
-//         tau, PFT,
-//          kTolerance));
+void TestTauIsPFT2(){
+    //P Fᵀ = τ this should hold for first PK stress P and Kirchhoff stress τ
+    StvkHenckyWithVonMisesModel<double> model(2.5, 0.3, 0.2);
+    Matrix3d F;
+    // clang-format off
+    F << 0.18, 0.63, 0.54,
+        0.13, 0.92, 0.17,
+        0.03, 0.86, 0.85;
+    // clang-format on
+    Matrix3d tau;
+    model.UpdateDeformationGradientAndCalcKirchhoffStress(&tau, &F);
+    // compute P F^T
+    Matrix3d P;
+    model.CalcFirstPiolaStress(F, &P);
+    Matrix3d PFT = P * F.transpose();
+    const double kTolerance = 1e-12;
+    EXPECT_TRUE(CompareMatrices(
+        tau, PFT,
+         kTolerance));
 
-// }
+}
 
 
 void TestTauIsPFT(){
@@ -133,32 +133,32 @@ void TestdPdFIsDerivativeOfP(){
 
 }
 
-// void TestdPdFIsDerivativeOfP2(){
-//     constexpr int kSpaceDimension = 3;
-//     const double kTolerance = 1e-12;
-//     StvkHenckyWithVonMisesModel<AutoDiffXd> model(2.5, 0.3, 0.2);
-//     Matrix3<AutoDiffXd> F = MakeDeformationGradientsWithDerivatives();
+void TestdPdFIsDerivativeOfP2(){
+    constexpr int kSpaceDimension = 3;
+    const double kTolerance = 1e-12;
+    StvkHenckyWithVonMisesModel<AutoDiffXd> model(2.5, 0.3, 0.2);
+    Matrix3<AutoDiffXd> F = MakeDeformationGradientsWithDerivatives();
 
-//     Matrix3<AutoDiffXd> P; 
-//     model.CalcFirstPiolaStress(F, &P);
+    Matrix3<AutoDiffXd> P; 
+    model.CalcFirstPiolaStress(F, &P);
 
-//     Eigen::Matrix<AutoDiffXd, 9, 9> dPdF;
-//     model.CalcFirstPiolaStressDerivative(F, &dPdF);
-//     for (int i = 0; i < kSpaceDimension; ++i) {
-//       for (int j = 0; j < kSpaceDimension; ++j) {
-//         Matrix3d dPijdF;
-//         for (int k = 0; k < kSpaceDimension; ++k) {
-//           for (int l = 0; l < kSpaceDimension; ++l) {
-//             dPijdF(k, l) = dPdF(3 * j + i, 3 * l + k).value();
-//           }
-//         }
-//         EXPECT_TRUE(CompareMatrices(
-//             Eigen::Map<const Matrix3d>(P(i, j).derivatives().data(), 3, 3),
-//             dPijdF, kTolerance));
-//       }
-//     }
+    Eigen::Matrix<AutoDiffXd, 9, 9> dPdF;
+    model.CalcFirstPiolaStressDerivative(F, &dPdF);
+    for (int i = 0; i < kSpaceDimension; ++i) {
+      for (int j = 0; j < kSpaceDimension; ++j) {
+        Matrix3d dPijdF;
+        for (int k = 0; k < kSpaceDimension; ++k) {
+          for (int l = 0; l < kSpaceDimension; ++l) {
+            dPijdF(k, l) = dPdF(3 * j + i, 3 * l + k).value();
+          }
+        }
+        EXPECT_TRUE(CompareMatrices(
+            Eigen::Map<const Matrix3d>(P(i, j).derivatives().data(), 3, 3),
+            dPijdF, kTolerance));
+      }
+    }
 
-// }
+}
 
 void TestDummyDerivative() {
     CorotatedElasticModel<AutoDiffXd> model(2.5,0.3);
@@ -186,9 +186,9 @@ GTEST_TEST(Dummy_derivative_test, dummy_test) {
     TestdPdFIsDerivativeOfP();
     TestTauIsPFT();
 
-    // TestPIsDerivativeOfPsi2();
-    // TestTauIsPFT2();
-    // TestdPdFIsDerivativeOfP2();
+    TestPIsDerivativeOfPsi2();
+    TestTauIsPFT2();
+    TestdPdFIsDerivativeOfP2();
 }
 
 

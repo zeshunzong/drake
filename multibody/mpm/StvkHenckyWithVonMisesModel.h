@@ -110,36 +110,36 @@ class StvkHenckyWithVonMisesModel: public ElastoPlasticModel<T> {
         T tau_dev_hat_norm;
     };
 
-    // // derivatives of energy density psi w.r.t singular values sigma0, sigma1, and sigma2
-    // struct PsiSigmaDerivative {
-    //     T psi0; // d_PsiHat_d_sigma0
-    //     T psi1; // d_PsiHat_d_sigma1
-    //     T psi2; // d_PsiHat_d_sigma2
-    //     T psi00; // d^2_PsiHat_d_sigma0_d_sigma0
-    //     T psi11; // d^2_PsiHat_d_sigma1_d_sigma1
-    //     T psi22; // d^2_PsiHat_d_sigma2_d_sigma2
-    //     T psi01; // d^2_PsiHat_d_sigma0_d_sigma1
-    //     T psi02; // d^2_PsiHat_d_sigma0_d_sigma2
-    //     T psi12; // d^2_PsiHat_d_sigma1_d_sigma2
-    //     T m01; // (psi0-psi1)/(sigma0-sigma1), usually can be computed robustly
-    //     T p01; // (psi0+psi1)/(sigma0+sigma1), need to clamp bottom with 1e-6
-    //     T m02; // (psi0-psi2)/(sigma0-sigma2), usually can be computed robustly
-    //     T p02; // (psi0+psi2)/(sigma0+sigma2), need to clamp bottom with 1e-6
-    //     T m12; // (psi1-psi2)/(sigma1-sigma2), usually can be computed robustly
-    //     T p12; // (psi1+psi2)/(sigma1+sigma2), need to clamp bottom with 1e-6
-    // };
+    // derivatives of energy density psi w.r.t singular values sigma0, sigma1, and sigma2
+    struct PsiSigmaDerivative {
+        T psi0; // d_PsiHat_d_sigma0
+        T psi1; // d_PsiHat_d_sigma1
+        T psi2; // d_PsiHat_d_sigma2
+        T psi00; // d^2_PsiHat_d_sigma0_d_sigma0
+        T psi11; // d^2_PsiHat_d_sigma1_d_sigma1
+        T psi22; // d^2_PsiHat_d_sigma2_d_sigma2
+        T psi01; // d^2_PsiHat_d_sigma0_d_sigma1
+        T psi02; // d^2_PsiHat_d_sigma0_d_sigma2
+        T psi12; // d^2_PsiHat_d_sigma1_d_sigma2
+        T m01; // (psi0-psi1)/(sigma0-sigma1), usually can be computed robustly
+        T p01; // (psi0+psi1)/(sigma0+sigma1), need to clamp bottom with 1e-6
+        T m02; // (psi0-psi2)/(sigma0-sigma2), usually can be computed robustly
+        T p02; // (psi0+psi2)/(sigma0+sigma2), need to clamp bottom with 1e-6
+        T m12; // (psi1-psi2)/(sigma1-sigma2), usually can be computed robustly
+        T p12; // (psi1+psi2)/(sigma1+sigma2), need to clamp bottom with 1e-6
+    };
 
-    // T b01(PsiSigmaDerivative& psi_derivative, int i, int j) const {
-    //     return (i == j ? psi_derivative.m01 + psi_derivative.p01 : psi_derivative.m01 - psi_derivative.p01) * 0.5;
-    // }
+    T b01(PsiSigmaDerivative& psi_derivative, int i, int j) const {
+        return (i == j ? psi_derivative.m01 + psi_derivative.p01 : psi_derivative.m01 - psi_derivative.p01) * 0.5;
+    }
 
-    // T b12(PsiSigmaDerivative& psi_derivative, int i, int j) const {
-    //     return (i == j ? psi_derivative.m12 + psi_derivative.p12 : psi_derivative.m12 - psi_derivative.p12) * 0.5;
-    // }
+    T b12(PsiSigmaDerivative& psi_derivative, int i, int j) const {
+        return (i == j ? psi_derivative.m12 + psi_derivative.p12 : psi_derivative.m12 - psi_derivative.p12) * 0.5;
+    }
 
-    // T b20(PsiSigmaDerivative& psi_derivative, int i, int j) const {
-    //     return (i == j ? psi_derivative.m02 + psi_derivative.p02 : psi_derivative.m02 - psi_derivative.p02) * 0.5;
-    // }
+    T b20(PsiSigmaDerivative& psi_derivative, int i, int j) const {
+        return (i == j ? psi_derivative.m02 + psi_derivative.p02 : psi_derivative.m02 - psi_derivative.p02) * 0.5;
+    }
 
     // Calculate the strain data using the elastic deformation gradient `FE`
     StrainData CalcStrainData(const Matrix3<T>& FE) const;
@@ -147,7 +147,7 @@ class StvkHenckyWithVonMisesModel: public ElastoPlasticModel<T> {
     // Calculate the stress data using the strain data  `strain_data`
     StressData CalcStressData(const StrainData& strain_data) const;
 
-    // PsiSigmaDerivative CalcPsiSigmaDerivative(const Matrix3<T>& FE) const;
+    PsiSigmaDerivative CalcPsiSigmaDerivative(const Matrix3<T>& FE) const;
 
     // Helper function, calculate Kirchhoff stress given the left singular
     // vectors and the singular values and the trace of the trial Hencky strain
