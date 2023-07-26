@@ -46,6 +46,7 @@ drake_cc_library(
     ],
     deps = [
         "//common:essential",
+        "//common:autodiff",
     ],
 )
 
@@ -156,6 +157,7 @@ drake_cc_library(
     deps = [
         "//common:essential",
         "//multibody/fem:matrix_utilities",
+        ":MathUtils",
     ],
 )
 
@@ -400,6 +402,19 @@ drake_cc_googletest(
     deps = [
         ":BSpline",
         "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_googletest(
+    name = "Dummy_derivative_test",
+    deps = [
+        ":BSpline",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common:autodiff",
+        "//math:gradient",
+        ":CorotatedElasticModel",
+        ":StvkHenckyWithVonMisesModel",
+
     ],
 )
 

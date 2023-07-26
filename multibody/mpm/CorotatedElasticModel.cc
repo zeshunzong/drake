@@ -25,6 +25,34 @@ T CorotatedElasticModel<T>::CalcStrainEnergyDensity(const Matrix3<T>& FE)
 }
 
 template <typename T>
+void CorotatedElasticModel<T>::CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix3<T>* P) const {
+      const T Jm1 = this->computeJm1(FE);
+      Matrix3<T> R, S, JFinvT;
+      this->computePolarDecomp(FE, &R, &S);
+      this->computeJFinvT(FE, &JFinvT);
+      (*P) = 2.0 * this->mu_ * (FE - R) + this->lambda_ * Jm1 * JFinvT;
+}
+
+template <typename T>
+void CorotatedElasticModel<T>::CalcFirstPiolaStressDerivative(const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF) const {
+      const T Jm1 = this->computeJm1(FE);
+      Matrix3<T> R, S, JFinvT;
+      this->computePolarDecomp(FE, &R, &S);
+      this->computeJFinvT(FE, &JFinvT);
+      const Vector<T, 3 * 3>& flat_JFinvT =
+        Eigen::Map<const Vector<T, 3 * 3>>(JFinvT.data(), 3 * 3);
+      /* The contribution from derivatives of Jm1. */
+      (*dPdF) = this->lambda_ * flat_JFinvT * flat_JFinvT.transpose();
+      /* The contribution from derivatives of F. */
+      (*dPdF).diagonal().array() += 2.0 * this->mu_;
+      /* The contribution from derivatives of R. */
+      fem::internal::AddScaledRotationalDerivative<T>(R, S, -2.0 * this->mu_, dPdF);
+      /* The contribution from derivatives of JFinvT. */
+      fem::internal::AddScaledCofactorMatrixDerivative<T>(FE, this->lambda_ * Jm1,
+                                                   dPdF);
+}
+
+template <typename T>
 void CorotatedElasticModel<T>::UpdateDeformationGradientAndCalcKirchhoffStress(
                         Matrix3<T>* tau, Matrix3<T>* FE) const {
     Matrix3<T> R, S;
@@ -33,7 +61,7 @@ void CorotatedElasticModel<T>::UpdateDeformationGradientAndCalcKirchhoffStress(
     *tau = 2.0*ElastoPlasticModel<T>::mu_*(*FE-R)*FE->transpose()
          + ElastoPlasticModel<T>::lambda_*(J-1.0)*J*Matrix3<T>::Identity();
 }
-
+template class CorotatedElasticModel<AutoDiffXd>;
 template class CorotatedElasticModel<double>;
 }  // namespace mpm
 }  // namespace multibody
