@@ -27,8 +27,8 @@ MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
   // ground at z = 0
   multibody::SpatialVelocity<double> zero_velocity;
   zero_velocity.SetZero();
-  std::unique_ptr<mpm::SpatialVelocityTimeDependent> left_hand_velocity_ptr =
-      std::make_unique<mpm::SpatialVelocityTimeDependent>(zero_velocity);
+  std::unique_ptr<mpm::SpatialVelocityTimeDependent<double>> left_hand_velocity_ptr =
+      std::make_unique<mpm::SpatialVelocityTimeDependent<double>>(zero_velocity);
   double left_hand_mu = 5.0;
   Vector3<double> left_hand_xscale = {10.0, 10.0, 10.0};
   std::unique_ptr<mpm::AnalyticLevelSet> left_hand_level_set =
@@ -61,7 +61,7 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   // grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
 
   // collision_objects_.AdvanceOneTimeStep(dt_);
-  // grid_.EnforceBoundaryCondition(collision_objects_, dt_);
+  // grid_.EnforceBoundaryCondition(collision_objects_);
 
   // mpm_transfer_.TransferGridToParticles(grid_, dt_, &p_new);
   // p_new.AdvectParticles(dt_);
@@ -85,7 +85,7 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   Vector3<double> gravitational_acceleration{0.0,0.0,-9.8};
   scratch->grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
   collision_objects_.AdvanceOneTimeStep(dt_);
-  scratch->grid_.EnforceBoundaryCondition(collision_objects_, dt_);
+  scratch->grid_.EnforceBoundaryCondition(collision_objects_);
 
   scratch->mpm_transfer_.TransferGridToParticles((scratch->grid_), dt_, &p_new);
   p_new.AdvectParticles(dt_);

@@ -29,6 +29,8 @@ class ElastoPlasticModel {
 
     virtual T CalcStrainEnergyDensity(const Matrix3<T>& FE) const = 0;
 
+    virtual void CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix3<T>* P) const = 0;
+
     T dummy_function(const Matrix3<T>& FE) const {
       return FE(0,0) * FE(0,0) + FE(0,1) * FE(0,1) + 3.0 * FE(0,2);
     }

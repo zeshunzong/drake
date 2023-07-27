@@ -4,33 +4,37 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
-void KinematicCollisionObjects::AddCollisionObject(
+template <typename T>
+void KinematicCollisionObjects<T>::AddCollisionObject(
                     std::unique_ptr<AnalyticLevelSet> level_set,
-                    math::RigidTransform<double> pose,
-                    std::unique_ptr<SpatialVelocityTimeDependent>
+                    math::RigidTransform<T> pose,
+                    std::unique_ptr<SpatialVelocityTimeDependent<T>>
                                                       spatial_velocity,
-                    double friction_coeff) {
-    CollisionObject::CollisionObjectState state = {std::move(pose),
+                    T friction_coeff) {
+    typename CollisionObject<T>::CollisionObjectState state = {std::move(pose),
                                                    std::move(spatial_velocity)};
     collision_objects_.emplace_back(
-                        std::make_unique<CollisionObject>(std::move(level_set),
+                        std::make_unique<CollisionObject<T>>(std::move(level_set),
                                                           std::move(state),
                                                           friction_coeff));
 }
 
-int KinematicCollisionObjects::get_num_collision_objects() const {
+template <typename T>
+int KinematicCollisionObjects<T>::get_num_collision_objects() const {
     return collision_objects_.size();
 }
 
-void KinematicCollisionObjects::AdvanceOneTimeStep(double dt) {
+template <typename T>
+void KinematicCollisionObjects<T>::AdvanceOneTimeStep(T dt) {
     for (auto& obj : collision_objects_) {
         obj->AdvanceOneTimeStep(dt);
     }
 }
 
-bool KinematicCollisionObjects::ApplyBoundaryConditions(
-                                            const Vector3<double>& position,
-                                            Vector3<double>* velocity) const {
+template <typename T>
+bool KinematicCollisionObjects<T>::ApplyBoundaryConditions(
+                                            const Vector3<T>& position,
+                                            Vector3<T>* velocity) const {
     bool applied_BC = false;
     for (const auto& obj : collision_objects_) {
         bool applied = obj->ApplyBoundaryCondition(position, velocity);
@@ -38,6 +42,9 @@ bool KinematicCollisionObjects::ApplyBoundaryConditions(
     }
     return applied_BC;
 }
+
+template class KinematicCollisionObjects<double>;
+template class KinematicCollisionObjects<AutoDiffXd>;
 
 }  // namespace mpm
 }  // namespace multibody

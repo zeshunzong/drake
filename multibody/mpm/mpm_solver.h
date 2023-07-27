@@ -8,7 +8,6 @@
 #include "drake/multibody/mpm/SparseGrid.h"
 #include "drake/multibody/mpm/MPMTransfer.h"
 #include "drake/multibody/mpm/KinematicCollisionObjects.h"
-#include "drake/multibody/mpm/GravitationalForce.h"
 
 namespace drake {
 namespace multibody {
@@ -22,7 +21,7 @@ class MpmSolverScratchData {
 
   MpmSolverScratchData(double grid_h): grid_(grid_h) {}
 
-  SparseGrid grid_;
+  SparseGrid<double> grid_;
   MPMTransfer mpm_transfer_;
 
 };
@@ -43,7 +42,7 @@ class MpmSolver {
 
   MpmSolver(const MpmModel<T>* model, double dt);
 
-  MpmSolver(const MpmModel<T>* model, double dt, KinematicCollisionObjects collision_objects);
+  MpmSolver(const MpmModel<T>* model, double dt, KinematicCollisionObjects<double> collision_objects);
 
   int AdvanceOneTimeStep(const MpmState<T>& prev_state,  MpmState<T>* next_state, MpmSolverScratchData<T>* scratch) const;
 
@@ -83,7 +82,7 @@ class MpmSolver {
   
   
 
-  mutable KinematicCollisionObjects collision_objects_{};
+  mutable KinematicCollisionObjects<double> collision_objects_{};
 
  private:
 

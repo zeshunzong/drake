@@ -23,19 +23,20 @@ namespace mpm {
 // that are not coupled with "MPM objects", for example, to enforce the boundary
 // conditions prescribed by this object. We assume the collision object is not
 // deformable.
+template <typename T>
 class CollisionObject {
  public:
     struct CollisionObjectState {
-        math::RigidTransform<double> pose;
-        std::unique_ptr<SpatialVelocityTimeDependent> spatial_velocity;
+        math::RigidTransform<T> pose;
+        std::unique_ptr<SpatialVelocityTimeDependent<T>> spatial_velocity;
     };
 
     CollisionObject(std::unique_ptr<AnalyticLevelSet> level_set,
                     CollisionObjectState initial_state,
-                    double friction_coeff);
+                    T friction_coeff);
 
     // Advance the state (pose) of the collision object by dt
-    void AdvanceOneTimeStep(double dt);
+    void AdvanceOneTimeStep(T dt);
 
     // Apply the boundary condition prescribed by this object to a point in
     // the space with the given postion and velocity. On Boundaries,
@@ -49,20 +50,20 @@ class CollisionObject {
     // If ‖vₜ‖ <= μ‖vₙ‖,   v_new = 0.0
     // Otherwise    ,   v_new = vₜ - μ‖vₙ‖t, t - tangential direction
     // Then we overwrite the passed in velocity with v_new.
-    bool ApplyBoundaryCondition(const Vector3<double>& position,
-                                Vector3<double>* velocity) const;
+    bool ApplyBoundaryCondition(const Vector3<T>& position,
+                                Vector3<T>* velocity) const;
 
  private:
-    friend class CollisionObjectTest;
+    // friend class CollisionObjectTest;
 
     // Given the normal vector and friction coefficient mu, update the input
     // velocity using Coulumb friction law
-    void UpdateVelocityCoulumbFriction(const Vector3<double>& normal,
-                                       Vector3<double>* velocity) const;
+    void UpdateVelocityCoulumbFriction(const Vector3<T>& normal,
+                                       Vector3<T>* velocity) const;
 
     CollisionObjectState state_;
     std::unique_ptr<AnalyticLevelSet> level_set_;
-    double friction_coeff_;
+    T friction_coeff_;
 };  // class CollisionObject
 
 }  // namespace mpm

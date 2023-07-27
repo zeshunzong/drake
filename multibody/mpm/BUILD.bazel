@@ -220,7 +220,7 @@ drake_cc_library(
 )
 
 
-
+'''
 drake_cc_library(
     name = "Grid",
     srcs = [
@@ -236,8 +236,8 @@ drake_cc_library(
         ":TotalMassEnergyMomentum",
     ],
 )
-
-
+'''
+'''
 drake_cc_library(
     name = "GravitationalForce",
     srcs = [
@@ -251,7 +251,7 @@ drake_cc_library(
         "//common:essential",
     ],
 )
-
+'''
 
 drake_cc_library(
     name = "Particles",
@@ -374,7 +374,6 @@ drake_cc_library(
         ":SpatialVelocityTimeDependent",
         ":KinematicCollisionObjects",
         ":StvkHenckyWithVonMisesModel",
-        ":GravitationalForce",
     ],
 )
 
