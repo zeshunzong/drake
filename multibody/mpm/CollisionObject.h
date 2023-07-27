@@ -31,7 +31,7 @@ class CollisionObject {
         std::unique_ptr<SpatialVelocityTimeDependent<T>> spatial_velocity;
     };
 
-    CollisionObject(std::unique_ptr<AnalyticLevelSet> level_set,
+    CollisionObject(std::unique_ptr<AnalyticLevelSet<T>> level_set,
                     CollisionObjectState initial_state,
                     T friction_coeff);
 
@@ -62,7 +62,7 @@ class CollisionObject {
                                        Vector3<T>* velocity) const;
 
     CollisionObjectState state_;
-    std::unique_ptr<AnalyticLevelSet> level_set_;
+    std::unique_ptr<AnalyticLevelSet<T>> level_set_;
     T friction_coeff_;
 };  // class CollisionObject
 

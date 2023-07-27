@@ -5,7 +5,7 @@ namespace multibody {
 namespace mpm {
 
 template <typename T>
-CollisionObject<T>::CollisionObject(std::unique_ptr<AnalyticLevelSet> level_set,
+CollisionObject<T>::CollisionObject(std::unique_ptr<AnalyticLevelSet<T>> level_set,
                     CollisionObject<T>::CollisionObjectState initial_state,
                     T friction_coeff): state_(std::move(initial_state)),
                                             level_set_(std::move(level_set)),
@@ -65,7 +65,7 @@ bool CollisionObject<T>::ApplyBoundaryCondition(
     const Vector3<T> p_RoRq_R = Rot_RW * p_RoRq_W;
 
     // Don't apply BC if the input grid point is not in the collision object
-    // if (!level_set_->InInterior(p_RoRq_R)) return false;
+    if (!level_set_->InInterior(p_RoRq_R)) return false;
 
     // Compute the spatial velocity at Rq for the collision object.
     const multibody::SpatialVelocity<T> V_WRq = V_WR.Shift(p_RoRq_W);
@@ -77,7 +77,7 @@ bool CollisionObject<T>::ApplyBoundaryCondition(
     // Express the relative velocity in the collision object's frame R.
     Vector3<T> v_RqQ_R = Rot_RW * v_RqQ_W;
 
-    // UpdateVelocityCoulumbFriction(level_set_->Normal(p_RoRq_R), &v_RqQ_R);
+    UpdateVelocityCoulumbFriction(level_set_->Normal(p_RoRq_R), &v_RqQ_R);
 
     // Transform the velocity back to the world frame.
     v_RqQ_W = X_WR.rotation() * v_RqQ_R;

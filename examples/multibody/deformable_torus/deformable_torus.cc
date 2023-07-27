@@ -84,8 +84,8 @@ int do_main() {
 
 
   // MPM geometry ------------------
-  std::unique_ptr<multibody::mpm::AnalyticLevelSet> mpm_geometry_level_set = 
-                                    std::make_unique<multibody::mpm::SphereLevelSet>(0.2);
+  std::unique_ptr<multibody::mpm::AnalyticLevelSet<double>> mpm_geometry_level_set = 
+                                    std::make_unique<multibody::mpm::SphereLevelSet<double>>(0.2);
 
   double E = 5e4;
   double nu = 0.4;
@@ -99,7 +99,7 @@ int do_main() {
   Vector3<double> geometry_translation = {0.0, 0.0, 0.4};
   math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
 
-  double density = 1000.0; double grid_h = 0.025 * 5;
+  double density = 1000.0; double grid_h = 0.025;
   int min_num_particles_per_cell = 1;
   // MPM geometry ------------------
 

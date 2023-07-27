@@ -75,7 +75,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       const fem::DeformableBodyConfig<T>& config, double resolution_hint);
 
   DeformableBodyId RegisterMpmBody(
-      std::unique_ptr<mpm::AnalyticLevelSet> geometry_level_set,
+      std::unique_ptr<mpm::AnalyticLevelSet<double>> geometry_level_set,
       std::unique_ptr<mpm::ElastoPlasticModel<double>> constitutive_model,
       multibody::SpatialVelocity<double>& geometry_initial_veolocity,
       math::RigidTransform<double>& geometry_initial_pose, double density,
@@ -243,7 +243,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   // volumes, then we can initialize particles' masses with the given constant
   // density, Finally, we initialize the velocities of particles with the
   // constant given velocity.
-  void InitializeParticles(const mpm::AnalyticLevelSet& level_set,
+  void InitializeParticles(const mpm::AnalyticLevelSet<double>& level_set,
                             const math::RigidTransform<double>& pose,
                             const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h,
                             mpm::Particles<double>& particles);    

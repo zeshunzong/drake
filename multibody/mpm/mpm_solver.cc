@@ -18,24 +18,24 @@ MpmSolver<T>::MpmSolver(const MpmModel<T>* model)
 }
 
 template <typename T>
-MpmSolver<T>::MpmSolver(const MpmModel<T>* model, double dt)
+MpmSolver<T>::MpmSolver(const MpmModel<T>* model, T dt)
     : model_(model),dt_(dt) {
   DRAKE_DEMAND(model_ != nullptr);
   std::cout << "construct solver with system dt="<< dt << std::endl; 
 
   // ------------------------ add BC -----------------
   // ground at z = 0
-  multibody::SpatialVelocity<double> zero_velocity;
+  multibody::SpatialVelocity<T> zero_velocity;
   zero_velocity.SetZero();
-  std::unique_ptr<mpm::SpatialVelocityTimeDependent<double>> left_hand_velocity_ptr =
-      std::make_unique<mpm::SpatialVelocityTimeDependent<double>>(zero_velocity);
-  double left_hand_mu = 5.0;
-  Vector3<double> left_hand_xscale = {10.0, 10.0, 10.0};
-  std::unique_ptr<mpm::AnalyticLevelSet> left_hand_level_set =
-                          std::make_unique<mpm::BoxLevelSet>(left_hand_xscale);
-  Vector3<double> left_hand_translation = {0.0, 0.0, -10.0};
-  math::RigidTransform<double> left_hand_pose =
-                          math::RigidTransform<double>(left_hand_translation);
+  std::unique_ptr<mpm::SpatialVelocityTimeDependent<T>> left_hand_velocity_ptr =
+      std::make_unique<mpm::SpatialVelocityTimeDependent<T>>(zero_velocity);
+  T left_hand_mu = 5.0;
+  Vector3<T> left_hand_xscale = {10.0, 10.0, 10.0};
+  std::unique_ptr<mpm::AnalyticLevelSet<T>> left_hand_level_set =
+                          std::make_unique<mpm::BoxLevelSet<T>>(left_hand_xscale);
+  Vector3<T> left_hand_translation = {0.0, 0.0, -10.0};
+  math::RigidTransform<T> left_hand_pose =
+                          math::RigidTransform<T>(left_hand_translation);
   collision_objects_.AddCollisionObject(std::move(left_hand_level_set), std::move(left_hand_pose),
                               std::move(left_hand_velocity_ptr), left_hand_mu);
   // ------------------------ add BC -----------------
@@ -49,7 +49,7 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
                                      MpmState<T>* next_state, MpmSolverScratchData<T>* scratch) const {
   
   // const Particles p_prev = prev_state.GetParticles(); //getchar();
-  // const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
+  // const std::vector<Vector3<T>>& positions_prev = p_prev.get_positions();
   // Particles p_new(p_prev);
   // p_new.ApplyPlasticityAndUpdateKirchhoffStresses();
   // mpm_transfer_.SetUpTransfer(&grid_, &p_new);
@@ -57,7 +57,7 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   // grid_.UpdateVelocity(dt_);
 
   // // gravity, collision, boundary to be added
-  // Vector3<double> gravitational_acceleration{0.0,0.0,-9.8};
+  // Vector3<T> gravitational_acceleration{0.0,0.0,-9.8};
   // grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
 
   // collision_objects_.AdvanceOneTimeStep(dt_);
@@ -70,11 +70,10 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
 
 
 
-  scratch->mpm_transfer_ = MPMTransfer();
+  scratch->mpm_transfer_ = MPMTransfer<T>();
 
-  const Particles<double> p_prev = prev_state.GetParticles(); 
-  // const std::vector<Vector3<double>>& positions_prev = p_prev.get_positions();
-  Particles<double> p_new(p_prev);
+  const Particles<T> p_prev = prev_state.GetParticles(); 
+  Particles<T> p_new(p_prev);
   p_new.ApplyPlasticityAndUpdateKirchhoffStresses();
 
   scratch->mpm_transfer_.SetUpTransfer(&(scratch->grid_), &p_new);
@@ -82,7 +81,7 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
   scratch->grid_.UpdateVelocity(dt_);
 
   // gravity, collision, boundary to be added
-  Vector3<double> gravitational_acceleration{0.0,0.0,-9.8};
+  Vector3<T> gravitational_acceleration{0.0,0.0,-9.8};
   scratch->grid_.ApplyGravitationalForces(dt_, gravitational_acceleration);
   collision_objects_.AdvanceOneTimeStep(dt_);
   scratch->grid_.EnforceBoundaryCondition(collision_objects_);
@@ -105,11 +104,10 @@ bool MpmSolver<T>::solver_converged(const T& residual_norm,
                                   absolute_tolerance_);
 }
 
-
+template class MpmSolver<double>;
+template class MpmSolver<AutoDiffXd>;
 
 }  // namespace internal
 }  // namespace mpm
 }  // namespace multibody
 }  // namespace drake
-
-template class drake::multibody::mpm::internal::MpmSolver<double>;

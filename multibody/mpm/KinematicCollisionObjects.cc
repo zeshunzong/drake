@@ -6,7 +6,7 @@ namespace mpm {
 
 template <typename T>
 void KinematicCollisionObjects<T>::AddCollisionObject(
-                    std::unique_ptr<AnalyticLevelSet> level_set,
+                    std::unique_ptr<AnalyticLevelSet<T>> level_set,
                     math::RigidTransform<T> pose,
                     std::unique_ptr<SpatialVelocityTimeDependent<T>>
                                                       spatial_velocity,

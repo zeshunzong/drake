@@ -34,7 +34,7 @@ using fem::MaterialModel;
 
 template <typename T>
 DeformableBodyId DeformableModel<T>::RegisterMpmBody(
-    std::unique_ptr<mpm::AnalyticLevelSet> geometry_level_set,
+    std::unique_ptr<mpm::AnalyticLevelSet<double>> geometry_level_set,
       std::unique_ptr<mpm::ElastoPlasticModel<double>> constitutive_model,
       multibody::SpatialVelocity<double>& geometry_initial_veolocity,
       math::RigidTransform<double>& geometry_initial_pose, double density,
@@ -154,7 +154,7 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
 // MODIFY particles in place!!
   // Initialize particles' positions with Poisson disk sampling. 
 template <typename T>
-void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet& level_set,
+void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet<double>& level_set,
                           const math::RigidTransform<double>& pose,
                           const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h, 
                           mpm::Particles<double>& particles){

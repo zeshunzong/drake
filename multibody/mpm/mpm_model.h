@@ -28,14 +28,14 @@ class MpmModel {
  public:
   struct MaterialParameters {
         // Elastoplastic model of the object
-        std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model;
+        std::unique_ptr<ElastoPlasticModel<T>> elastoplastic_model;
         // @pre density is positive
         // Density and the initial velocity of the object, we assume the object
         // has uniform density and velocity.
-        double density;
+        T density;
         // V_WB, The object B's spatial velocity measured and expressed in the
         // world frame W.
-        multibody::SpatialVelocity<double> initial_velocity;
+        multibody::SpatialVelocity<T> initial_velocity;
         // User defined parameter to control the minimum number of particles per
         // grid cell.
         int min_num_particles_per_cell;
@@ -51,7 +51,7 @@ class MpmModel {
 
 
   /** Creates a default FemState compatible with this model. */
-  std::unique_ptr<MpmState<T>> MakeMpmState(Particles<double>& particles) const{
+  std::unique_ptr<MpmState<T>> MakeMpmState(Particles<T>& particles) const{
     return std::make_unique<MpmState<T>>(particles);
   }
 
@@ -59,21 +59,21 @@ class MpmModel {
     return std::make_unique<MpmState<T>>();
   }
 
-  void set_grid_h(const double h) {
+  void set_grid_h(const T h) {
     grid_h_ = h;
   }
-  double grid_h() const {
+  T grid_h() const {
     return grid_h_;
   }
 
   systems::AbstractStateIndex particles_container_index_;
 
   int num_particles_;
-  double grid_h_;
-  multibody::SpatialVelocity<double> object_initial_velocity_{};
+  T grid_h_;
+  multibody::SpatialVelocity<T> object_initial_velocity_{};
   MaterialParameters mp_{};
-  std::unique_ptr<mpm::AnalyticLevelSet> level_set_;
-  math::RigidTransform<double> pose_;
+  std::unique_ptr<mpm::AnalyticLevelSet<T>> level_set_;
+  math::RigidTransform<T> pose_;
 
  private:
   

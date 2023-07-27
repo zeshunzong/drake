@@ -21,6 +21,7 @@ namespace mpm {
 
 // A implementation of MPM's Particles to Grid (P2G) and Grid to Particles (G2P)
 // operations
+template <typename T>
 class MPMTransfer {
  public:
     MPMTransfer() {}
@@ -29,16 +30,16 @@ class MPMTransfer {
     // bases' evaluations for transfer routines. This routine has to be called
     // at the beginning of each time step (before P2G and G2P transfers),
     // otherwise the results will be incorrect.
-    void SetUpTransfer(SparseGrid<double>* grid, Particles<double>* particles);
+    void SetUpTransfer(SparseGrid<T>* grid, Particles<T>* particles);
 
     // Transfer masses, velocities, and Kirchhoff stresses on the particles
     // to masses, velocities, and forces on the grid
-    void TransferParticlesToGrid(const Particles<double>& particles, SparseGrid<double>* grid);
+    void TransferParticlesToGrid(const Particles<T>& particles, SparseGrid<T>* grid);
 
     // Transfer velocities on the grids to velocities and deformation
     // gradients on the particles
-    void TransferGridToParticles(const SparseGrid<double>& grid, double dt,
-                                 Particles<double>* particles);
+    void TransferGridToParticles(const SparseGrid<T>& grid, T dt,
+                                 Particles<T>* particles);
 
  private:
     friend class MPMTransferTest;
@@ -46,9 +47,9 @@ class MPMTransfer {
     // A struct holding the accmulated grid state on a batch when transferring
     // from particles to grid.
     struct GridState {
-        double mass;
-        Vector3<double> velocity;
-        Vector3<double> force;
+        T mass;
+        Vector3<T> velocity;
+        Vector3<T> force;
 
         void reset() {
             mass = 0.0;
@@ -62,8 +63,8 @@ class MPMTransfer {
     // a particle, and we use the velocity of a grid point to update the
     // velocities and gradients of velocities of particles.
     struct BatchState {
-        Vector3<double> position;
-        Vector3<double> velocity;
+        Vector3<T> position;
+        Vector3<T> velocity;
     };
 
     // Sort the particles according to the batch number, in increasing order.
@@ -98,17 +99,17 @@ class MPMTransfer {
     // points.
     // SortParticles also initialize the sparse grid with active grid points
     void SortParticles(const std::vector<Vector3<int>>& batch_indices,
-                       const SparseGrid<double>& grid, Particles<double>* particles);
+                       const SparseGrid<T>& grid, Particles<T>* particles);
 
     // Update the evalutions and gradients of BSpline bases on each particle,
     // and update bases_val_particles_ and bases_grad_particles_
-    void UpdateBasisAndGradientParticles(const SparseGrid<double>& grid,
-                                         const Particles<double>& particles);
+    void UpdateBasisAndGradientParticles(const SparseGrid<T>& grid,
+                                         const Particles<T>& particles);
 
     // Evaluate (27) bases neighboring to the given batch, at the p-th particle
     // with position xp, and put the results into preallocated vectors
-    void EvalBasisOnBatch(int p, const Vector3<double>& xp,
-                          const SparseGrid<double>& grid,
+    void EvalBasisOnBatch(int p, const Vector3<T>& xp,
+                          const SparseGrid<T>& grid,
                           const Vector3<int>& batch_index_3d);
 
     // At a particular particle p in batch with batch_index_3d, transfer
@@ -122,38 +123,38 @@ class MPMTransfer {
     // B_p is a 3x3 matrix stored in Particles and D_p^-1 is a constant depends
     // on the grid size. D_p^-1 is stored in the class as a member variable.
     // We refer C_p as the affine matrix.
-    void AccumulateGridStatesOnBatch(int p, double mass_p,
-                                     double reference_volume_p,
-                                     const Vector3<double>& position_p,
-                                     const Vector3<double>& velocity_p,
-                                     const Matrix3<double>& affine_matrix_p,
-                                     const Matrix3<double>& tau_p,
-                                     const std::array<Vector3<double>, 27>&
+    void AccumulateGridStatesOnBatch(int p, T mass_p,
+                                     T reference_volume_p,
+                                     const Vector3<T>& position_p,
+                                     const Vector3<T>& velocity_p,
+                                     const Matrix3<T>& affine_matrix_p,
+                                     const Matrix3<T>& tau_p,
+                                     const std::array<Vector3<T>, 27>&
                                                             batch_positions,
                                      std::array<GridState, 27>* sum_local);
 
     void WriteBatchStateToGrid(const Vector3<int>& batch_index_3d,
                                const std::array<GridState, 27>& sum_local,
-                               SparseGrid<double>* grid);
+                               SparseGrid<T>* grid);
 
     // Update particle states F_p^{n+1} and v_p^{n+1}
     void UpdateParticleStates(const std::array<BatchState, 27>& batch_states,
-                              double dt, int p,
-                              Particles<double>* particles);
+                              T dt, int p,
+                              Particles<T>* particles);
 
     // Given the position of a particle xp, calculate the index of the batch
     // this particle is in.
-    Vector3<int> CalcBatchIndex(const Vector3<double>& xp, double h) const;
+    Vector3<int> CalcBatchIndex(const Vector3<T>& xp, T h) const;
 
     // The inverse value of diagonal entries of the matrix D_p in APIC
-    double Dp_inv_;
+    T Dp_inv_;
 
     // Evaluations and gradients of BSpline bases on each particle
     // i.e. N_i(x_p), \nabla N_i(x_p)
     // Length of the vector = # of particles.
     // Length of an element in the vector = 27 (max # of affected grid nodes)
-    std::vector<std::array<double, 27>> bases_val_particles_{};
-    std::vector<std::array<Vector3<double>, 27>> bases_grad_particles_{};
+    std::vector<std::array<T, 27>> bases_val_particles_{};
+    std::vector<std::array<Vector3<T>, 27>> bases_grad_particles_{};
     // A vector holding the number of particles inside each batch
     std::vector<int> batch_sizes_{};
     int num_batches_;

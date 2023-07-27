@@ -4,34 +4,40 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
-AnalyticLevelSet::AnalyticLevelSet(double volume,
-                            const std::array<Vector3<double>, 2>& bounding_box):
+template <typename T>
+AnalyticLevelSet<T>::AnalyticLevelSet(T volume,
+                            const std::array<Vector3<T>, 2>& bounding_box):
                                 volume_(volume), bounding_box_(bounding_box) {}
 
-double AnalyticLevelSet::get_volume() const {
+template <typename T>
+T AnalyticLevelSet<T>::get_volume() const {
     return volume_;
 }
 
-const std::array<Vector3<double>, 2>& AnalyticLevelSet::get_bounding_box()
+template <typename T>
+const std::array<Vector3<T>, 2>& AnalyticLevelSet<T>::get_bounding_box()
                                                                         const {
     return bounding_box_;
 }
 
-HalfSpaceLevelSet::HalfSpaceLevelSet(const Vector3<double>& normal):
-                AnalyticLevelSet(std::numeric_limits<double>::infinity(),
-                                 {{-std::numeric_limits<double>::infinity()
-                                    *Vector3<double>::Ones(),
-                                    std::numeric_limits<double>::infinity()
-                                    *Vector3<double>::Ones()}}) {
+template <typename T>
+HalfSpaceLevelSet<T>::HalfSpaceLevelSet(const Vector3<T>& normal):
+                AnalyticLevelSet<T>(std::numeric_limits<T>::infinity(),
+                                 {{-std::numeric_limits<T>::infinity()
+                                    *Vector3<T>::Ones(),
+                                    std::numeric_limits<T>::infinity()
+                                    *Vector3<T>::Ones()}}) {
     DRAKE_DEMAND(!(normal(0) == 0 && normal(1) == 0 && normal(2) == 0));
     normal_ = normal.normalized();
 }
 
-bool HalfSpaceLevelSet::InInterior(const Vector3<double>& position) const {
+template <typename T>
+bool HalfSpaceLevelSet<T>::InInterior(const Vector3<T>& position) const {
     return (position.dot(normal_) <= 0.0);
 }
 
-Vector3<double> HalfSpaceLevelSet::Normal(const Vector3<double>& position)
+template <typename T>
+Vector3<T> HalfSpaceLevelSet<T>::Normal(const Vector3<T>& position)
                                                                         const {
     if (InInterior(position)) {
         return normal_;
@@ -41,22 +47,25 @@ Vector3<double> HalfSpaceLevelSet::Normal(const Vector3<double>& position)
     }
 }
 
-SphereLevelSet::SphereLevelSet(double radius):
-                    AnalyticLevelSet(4.0/3.0*M_PI*radius*radius*radius,
-                                    {{-radius*Vector3<double>::Ones(),
-                                       radius*Vector3<double>::Ones()}}),
+template <typename T>
+SphereLevelSet<T>::SphereLevelSet(T radius):
+                    AnalyticLevelSet<T>(4.0/3.0*M_PI*radius*radius*radius,
+                                    {{-radius*Vector3<T>::Ones(),
+                                       radius*Vector3<T>::Ones()}}),
                     radius_(radius) {
     DRAKE_DEMAND(radius > 0);
 }
 
-bool SphereLevelSet::InInterior(const Vector3<double>& position) const {
+template <typename T>
+bool SphereLevelSet<T>::InInterior(const Vector3<T>& position) const {
     return position.norm() <= radius_;
 }
 
-Vector3<double> SphereLevelSet::Normal(const Vector3<double>& position) const {
+template <typename T>
+Vector3<T> SphereLevelSet<T>::Normal(const Vector3<T>& position) const {
     if (InInterior(position)) {
         if (position.norm() == 0) {
-            return Vector3<double>{1.0, 0.0, 0.0};
+            return Vector3<T>{1.0, 0.0, 0.0};
         }
         return position.normalized();
     } else {
@@ -65,8 +74,9 @@ Vector3<double> SphereLevelSet::Normal(const Vector3<double>& position) const {
     }
 }
 
-BoxLevelSet::BoxLevelSet(const Vector3<double>& xscale):
-                    AnalyticLevelSet(8*xscale(0)*xscale(1)*xscale(2),
+template <typename T>
+BoxLevelSet<T>::BoxLevelSet(const Vector3<T>& xscale):
+                    AnalyticLevelSet<T>(8*xscale(0)*xscale(1)*xscale(2),
                                     {{-xscale, xscale}}),
                     xscale_(xscale) {
     DRAKE_ASSERT(xscale_(0) > 0);
@@ -74,35 +84,39 @@ BoxLevelSet::BoxLevelSet(const Vector3<double>& xscale):
     DRAKE_ASSERT(xscale_(2) > 0);
 }
 
-bool BoxLevelSet::InInterior(const Vector3<double>& position) const {
-    return ((std::abs(position(0)) <= xscale_(0))
-         && (std::abs(position(1)) <= xscale_(1))
-         && (std::abs(position(2)) <= xscale_(2)));
+template <typename T>
+bool BoxLevelSet<T>::InInterior(const Vector3<T>& position) const {
+    using std::abs;
+    return ((abs(position(0)) <= xscale_(0))
+         && (abs(position(1)) <= xscale_(1))
+         && (abs(position(2)) <= xscale_(2)));
 }
 
-Vector3<double> BoxLevelSet::Normal(const Vector3<double>& position) const {
+template <typename T>
+Vector3<T> BoxLevelSet<T>::Normal(const Vector3<T>& position) const {
     if (InInterior(position)) {
-        double dist_left   = (position(0) + xscale_(0));
-        double dist_right  = (xscale_(0) - position(0));
-        double dist_front  = (position(1) + xscale_(1));
-        double dist_back   = (xscale_(1) - position(1));
-        double dist_bottom = (position(2) + xscale_(2));
-        double dist_top    = (xscale_(2) - position(2));
-        double min_dist    = std::min({dist_left, dist_right,
+        using std::min;
+        T dist_left   = (position(0) + xscale_(0));
+        T dist_right  = (xscale_(0) - position(0));
+        T dist_front  = (position(1) + xscale_(1));
+        T dist_back   = (xscale_(1) - position(1));
+        T dist_bottom = (position(2) + xscale_(2));
+        T dist_top    = (xscale_(2) - position(2));
+        T min_dist    = min({dist_left, dist_right,
                                        dist_front, dist_back,
                                        dist_bottom, dist_top});
         if (min_dist == dist_left)
-                            { return Vector3<double>{-1.0, 0.0, 0.0}; }
+                            { return Vector3<T>{-1.0, 0.0, 0.0}; }
         if (min_dist == dist_right)
-                            { return Vector3<double>{1.0, 0.0,  0.0}; }
+                            { return Vector3<T>{1.0, 0.0,  0.0}; }
         if (min_dist == dist_front)
-                            { return Vector3<double>{0.0, -1.0, 0.0}; }
+                            { return Vector3<T>{0.0, -1.0, 0.0}; }
         if (min_dist == dist_back)
-                            { return Vector3<double>{0.0,  1.0, 0.0}; }
+                            { return Vector3<T>{0.0,  1.0, 0.0}; }
         if (min_dist == dist_bottom)
-                            { return Vector3<double>{0.0, 0.0, -1.0}; }
+                            { return Vector3<T>{0.0, 0.0, -1.0}; }
         if (min_dist == dist_top)
-                            { return Vector3<double>{0.0, 0.0, 1.0}; }
+                            { return Vector3<T>{0.0, 0.0, 1.0}; }
         DRAKE_UNREACHABLE();
     } else {
         throw
@@ -110,8 +124,9 @@ Vector3<double> BoxLevelSet::Normal(const Vector3<double>& position) const {
     }
 }
 
-CylinderLevelSet::CylinderLevelSet(double height, double radius):
-                            AnalyticLevelSet(2.0*M_PI*radius*radius*height,
+template <typename T>
+CylinderLevelSet<T>::CylinderLevelSet(T height, T radius):
+                            AnalyticLevelSet<T>(2.0*M_PI*radius*radius*height,
                                             {{{-radius, -radius, -height},
                                               { radius,  radius,  height}}}),
                                             height_(height), radius_(radius) {
@@ -119,18 +134,21 @@ CylinderLevelSet::CylinderLevelSet(double height, double radius):
     DRAKE_DEMAND(radius > 0);
 }
 
-bool CylinderLevelSet::InInterior(const Vector3<double>& position) const {
+template <typename T>
+bool CylinderLevelSet<T>::InInterior(const Vector3<T>& position) const {
+    using std::abs;
     return (((position(0)*position(0) + position(1)*position(1))
                                                             <= radius_*radius_)
-         && (std::abs(position(2)) <= height_));
+         && (abs(position(2)) <= height_));
 }
 
-Vector3<double> CylinderLevelSet::Normal(const Vector3<double>& position)
+template <typename T>
+Vector3<T> CylinderLevelSet<T>::Normal(const Vector3<T>& position)
                                                                         const {
     if (InInterior(position)) {
-        Vector3<double> projection_xy(position(0), position(1), 0.0);
+        Vector3<T> projection_xy(position(0), position(1), 0.0);
         if (projection_xy.norm() == 0) {
-            return Vector3<double>{1.0, 0.0, 0.0};
+            return Vector3<T>{1.0, 0.0, 0.0};
         }
         return projection_xy.normalized();
     } else {
@@ -138,6 +156,18 @@ Vector3<double> CylinderLevelSet::Normal(const Vector3<double>& position)
             std::logic_error("Normal outside of the level set is unavailable");
     }
 }
+
+template class AnalyticLevelSet<double>;
+template class AnalyticLevelSet<AutoDiffXd>;
+
+template class HalfSpaceLevelSet<double>;
+template class HalfSpaceLevelSet<AutoDiffXd>;
+
+template class SphereLevelSet<double>;
+template class SphereLevelSet<AutoDiffXd>;
+
+template class BoxLevelSet<double>;
+template class BoxLevelSet<AutoDiffXd>;
 
 }  // namespace mpm
 }  // namespace multibody
