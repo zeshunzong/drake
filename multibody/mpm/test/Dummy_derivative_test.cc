@@ -7,6 +7,11 @@
 #include "drake/math/autodiff_gradient.h"
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
 #include <iostream>
+
+#include "drake/multibody/plant/deformable_model.h"
+#include <stdlib.h> 
+
+
 namespace drake {
 namespace multibody {
 namespace mpm {
@@ -16,6 +21,43 @@ namespace {
 constexpr double kEps = 4.0 * std::numeric_limits<double>::epsilon();
 
 using Eigen::Matrix3d;
+
+
+void TestEnergyAndForce(){
+
+    double r = (rand()%100)/100.0;
+
+
+  // MPM geometry ------------------
+//   std::unique_ptr<multibody::mpm::AnalyticLevelSet> mpm_geometry_level_set = 
+//                                     std::make_unique<multibody::mpm::SphereLevelSet>(0.2);
+  double E = 5e4;
+  double nu = 0.4;
+  std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model
+          = std::make_unique<multibody::mpm::CorotatedElasticModel<double>>(E, nu);
+
+//   multibody::SpatialVelocity<double> geometry_initial_veolocity;
+//     geometry_initial_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.0};//{0.1, 0.1, 0.1};
+//     geometry_initial_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};//{M_PI/2, M_PI/2, M_PI/2};
+
+//   Vector3<double> geometry_translation = {0.0, 0.0, 0.4};
+//   math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
+
+//   double density = 1000.0; double grid_h = 0.025 * 5;
+//   int min_num_particles_per_cell = 1;
+  // MPM geometry ------------------
+    int num_particles = 10;
+
+    mpm::Particles<double> particles(0);
+    for (int i = 0; i < num_particles; i++) {
+        std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p = constitutive_model->Clone();
+        particles.AddParticle(xp, vp, init_m, reference_volume_p,
+                              elastic_deformation_grad_p,kirchhoff_stress_p,B_p, std::move(elastoplastic_model_p));
+    }
+
+
+
+}
 
 
 
@@ -189,6 +231,10 @@ GTEST_TEST(Dummy_derivative_test, dummy_test) {
     TestPIsDerivativeOfPsi2();
     TestTauIsPFT2();
     TestdPdFIsDerivativeOfP2();
+}
+
+GTEST_TEST(Dummy_derivative_test, energy_test) {
+    TestEnergyAndForce();
 }
 
 

@@ -29,16 +29,16 @@ class MPMTransfer {
     // bases' evaluations for transfer routines. This routine has to be called
     // at the beginning of each time step (before P2G and G2P transfers),
     // otherwise the results will be incorrect.
-    void SetUpTransfer(SparseGrid* grid, Particles* particles);
+    void SetUpTransfer(SparseGrid* grid, Particles<double>* particles);
 
     // Transfer masses, velocities, and Kirchhoff stresses on the particles
     // to masses, velocities, and forces on the grid
-    void TransferParticlesToGrid(const Particles& particles, SparseGrid* grid);
+    void TransferParticlesToGrid(const Particles<double>& particles, SparseGrid* grid);
 
     // Transfer velocities on the grids to velocities and deformation
     // gradients on the particles
     void TransferGridToParticles(const SparseGrid& grid, double dt,
-                                 Particles* particles);
+                                 Particles<double>* particles);
 
  private:
     friend class MPMTransferTest;
@@ -98,12 +98,12 @@ class MPMTransfer {
     // points.
     // SortParticles also initialize the sparse grid with active grid points
     void SortParticles(const std::vector<Vector3<int>>& batch_indices,
-                       const SparseGrid& grid, Particles* particles);
+                       const SparseGrid& grid, Particles<double>* particles);
 
     // Update the evalutions and gradients of BSpline bases on each particle,
     // and update bases_val_particles_ and bases_grad_particles_
     void UpdateBasisAndGradientParticles(const SparseGrid& grid,
-                                         const Particles& particles);
+                                         const Particles<double>& particles);
 
     // Evaluate (27) bases neighboring to the given batch, at the p-th particle
     // with position xp, and put the results into preallocated vectors
@@ -139,7 +139,7 @@ class MPMTransfer {
     // Update particle states F_p^{n+1} and v_p^{n+1}
     void UpdateParticleStates(const std::array<BatchState, 27>& batch_states,
                               double dt, int p,
-                              Particles* particles);
+                              Particles<double>* particles);
 
     // Given the position of a particle xp, calculate the index of the batch
     // this particle is in.

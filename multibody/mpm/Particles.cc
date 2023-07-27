@@ -4,9 +4,11 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
-Particles::Particles(): num_particles_(0) {}
+template <typename T>
+Particles<T>::Particles(): num_particles_(0) {}
 
-Particles::Particles(int num_particles): num_particles_(num_particles),
+template <typename T>
+Particles<T>::Particles(int num_particles): num_particles_(num_particles),
                                          positions_(num_particles),
                                          velocities_(num_particles),
                                          masses_(num_particles),
@@ -19,149 +21,180 @@ Particles::Particles(int num_particles): num_particles_(num_particles),
     DRAKE_ASSERT(num_particles >= 0);
 }
 
-int Particles::get_num_particles() const {
+template <typename T>
+int Particles<T>::get_num_particles() const {
     return num_particles_;
 }
 
-const Vector3<double>& Particles::get_position(int index) const {
+template <typename T>
+const Vector3<T>& Particles<T>::get_position(int index) const {
     return positions_[index];
 }
 
-const Vector3<double>& Particles::get_velocity(int index) const {
+template <typename T>
+const Vector3<T>& Particles<T>::get_velocity(int index) const {
     return velocities_[index];
 }
 
-const double& Particles::get_mass(int index) const {
+template <typename T>
+const T& Particles<T>::get_mass(int index) const {
     return masses_[index];
 }
 
-const double& Particles::get_reference_volume(int index) const {
+template <typename T>
+const T& Particles<T>::get_reference_volume(int index) const {
     return reference_volumes_[index];
 }
 
-const Matrix3<double>& Particles::get_elastic_deformation_gradient(int index)
+template <typename T>
+const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient(int index)
                                                                         const {
     return elastic_deformation_gradients_[index];
 }
 
-const Matrix3<double>& Particles::get_kirchhoff_stress(int index) const {
+template <typename T>
+const Matrix3<T>& Particles<T>::get_kirchhoff_stress(int index) const {
     return kirchhoff_stresses_[index];
 }
 
-const Matrix3<double>& Particles::get_B_matrix(int index) const {
+template <typename T>
+const Matrix3<T>& Particles<T>::get_B_matrix(int index) const {
     return B_matrices_[index];
 }
 
-const std::vector<Vector3<double>>& Particles::get_positions() const {
+template <typename T>
+const std::vector<Vector3<T>>& Particles<T>::get_positions() const {
     return positions_;
 }
 
-const std::vector<Vector3<double>>& Particles::get_velocities() const {
+template <typename T>
+const std::vector<Vector3<T>>& Particles<T>::get_velocities() const {
     return velocities_;
 }
 
-const std::vector<double>& Particles::get_masses() const {
+template <typename T>
+const std::vector<T>& Particles<T>::get_masses() const {
     return masses_;
 }
 
-const std::vector<double>& Particles::get_reference_volumes() const {
+template <typename T>
+const std::vector<T>& Particles<T>::get_reference_volumes() const {
     return reference_volumes_;
 }
 
-const std::vector<Matrix3<double>>&
-                            Particles::get_elastic_deformation_gradients()
+template <typename T>
+const std::vector<Matrix3<T>>&
+                            Particles<T>::get_elastic_deformation_gradients()
                                                                         const {
     return elastic_deformation_gradients_;
 }
 
-const std::vector<Matrix3<double>>& Particles::get_kirchhoff_stresses() const {
+template <typename T>
+const std::vector<Matrix3<T>>& Particles<T>::get_kirchhoff_stresses() const {
     return kirchhoff_stresses_;
 }
 
-const std::vector<Matrix3<double>>& Particles::get_B_matrices() const {
+template <typename T>
+const std::vector<Matrix3<T>>& Particles<T>::get_B_matrices() const {
     return B_matrices_;
 }
 
-void Particles::set_position(int index, const Vector3<double>& position) {
+template <typename T>
+void Particles<T>::set_position(int index, const Vector3<T>& position) {
     positions_[index] = position;
 }
 
-void Particles::set_velocity(int index, const Vector3<double>& velocity) {
+template <typename T>
+void Particles<T>::set_velocity(int index, const Vector3<T>& velocity) {
     velocities_[index] = velocity;
 }
 
-void Particles::set_mass(int index, double mass) {
+template <typename T>
+void Particles<T>::set_mass(int index, T mass) {
     DRAKE_DEMAND(mass > 0.0);
     masses_[index] = mass;
 }
 
-void Particles::set_reference_volume(int index, double reference_volume) {
+template <typename T>
+void Particles<T>::set_reference_volume(int index, T reference_volume) {
     DRAKE_DEMAND(reference_volume > 0.0);
     reference_volumes_[index] = reference_volume;
 }
 
-void Particles::set_elastic_deformation_gradient(int index,
-                        const Matrix3<double>& elastic_deformation_gradient) {
+template <typename T>
+void Particles<T>::set_elastic_deformation_gradient(int index,
+                        const Matrix3<T>& elastic_deformation_gradient) {
     elastic_deformation_gradients_[index] = elastic_deformation_gradient;
 }
 
-void Particles::set_kirchhoff_stress(int index,
-                                     const Matrix3<double>& kirchhoff_stress) {
+template <typename T>
+void Particles<T>::set_kirchhoff_stress(int index,
+                                     const Matrix3<T>& kirchhoff_stress) {
     kirchhoff_stresses_[index] = kirchhoff_stress;
 }
 
-void Particles::set_B_matrix(int index, const Matrix3<double>& B_matrix) {
+template <typename T>
+void Particles<T>::set_B_matrix(int index, const Matrix3<T>& B_matrix) {
     B_matrices_[index] = B_matrix;
 }
 
-void Particles::set_elastoplastic_model(int index,
-                    std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model) {
+template <typename T>
+void Particles<T>::set_elastoplastic_model(int index,
+                    std::unique_ptr<ElastoPlasticModel<T>> elastoplastic_model) {
     elastoplastic_models_[index] = std::move(elastoplastic_model);
 }
 
-void Particles::set_positions(const std::vector<Vector3<double>>& positions) {
+template <typename T>
+void Particles<T>::set_positions(const std::vector<Vector3<T>>& positions) {
     positions_ = positions;
 }
 
-void Particles::set_velocities(const std::vector<Vector3<double>>& velocities) {
+template <typename T>
+void Particles<T>::set_velocities(const std::vector<Vector3<T>>& velocities) {
     velocities_ = velocities;
 }
 
-void Particles::set_masses(const std::vector<double>& masses) {
+template <typename T>
+void Particles<T>::set_masses(const std::vector<T>& masses) {
     masses_ = masses;
 }
 
-void Particles::set_reference_volumes(const std::vector<double>&
+template <typename T>
+void Particles<T>::set_reference_volumes(const std::vector<T>&
                                         reference_volumes) {
     reference_volumes_ = reference_volumes;
 }
 
-void Particles::set_elastic_deformation_gradients(
-            const std::vector<Matrix3<double>>& elastic_deformation_gradients) {
+template <typename T>
+void Particles<T>::set_elastic_deformation_gradients(
+            const std::vector<Matrix3<T>>& elastic_deformation_gradients) {
     elastic_deformation_gradients_ = elastic_deformation_gradients;
 }
 
-void Particles::set_kirchhoff_stresses(const std::vector<Matrix3<double>>&
+template <typename T>
+void Particles<T>::set_kirchhoff_stresses(const std::vector<Matrix3<T>>&
                             kirchhoff_stresses) {
     kirchhoff_stresses_ = kirchhoff_stresses;
 }
 
-void Particles::set_B_matrices(const std::vector<Matrix3<double>>& B_matrices) {
+template <typename T>
+void Particles<T>::set_B_matrices(const std::vector<Matrix3<T>>& B_matrices) {
     B_matrices_ = B_matrices;
 }
 
-void Particles::Reorder(const std::vector<size_t>& new_order) {
+template <typename T>
+void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
     DRAKE_DEMAND(static_cast<int>(new_order.size()) == num_particles_);
     int p_new;
-    std::vector<Vector3<double>> positions_sorted(num_particles_);
-    std::vector<Vector3<double>> velocities_sorted(num_particles_);
-    std::vector<double> masses_sorted(num_particles_);
-    std::vector<double> reference_volumes_sorted(num_particles_);
-    std::vector<Matrix3<double>>
+    std::vector<Vector3<T>> positions_sorted(num_particles_);
+    std::vector<Vector3<T>> velocities_sorted(num_particles_);
+    std::vector<T> masses_sorted(num_particles_);
+    std::vector<T> reference_volumes_sorted(num_particles_);
+    std::vector<Matrix3<T>>
                         elastic_deformation_gradients_sorted(num_particles_);
-    std::vector<Matrix3<double>> kirchhoff_stresses_sorted(num_particles_);
-    std::vector<Matrix3<double>> B_matrices_sorted(num_particles_);
-    std::vector<copyable_unique_ptr<ElastoPlasticModel<double>>>
+    std::vector<Matrix3<T>> kirchhoff_stresses_sorted(num_particles_);
+    std::vector<Matrix3<T>> B_matrices_sorted(num_particles_);
+    std::vector<copyable_unique_ptr<ElastoPlasticModel<T>>>
                                  elastoplastic_models_sorted(num_particles_);
     for (int p = 0; p < num_particles_; ++p) {
         p_new = new_order[p];
@@ -186,13 +219,14 @@ void Particles::Reorder(const std::vector<size_t>& new_order) {
     elastoplastic_models_.swap(elastoplastic_models_sorted);
 }
 
-void Particles::AddParticle(const Vector3<double>& position,
-                            const Vector3<double>& velocity,
-                            double mass, double reference_volume,
-                            const Matrix3<double>& elastic_deformation_gradient,
-                            const Matrix3<double>& kirchhoff_stress,
-                            const Matrix3<double>& B_matrix,
-                    std::unique_ptr<ElastoPlasticModel<double>> elastoplastic_model) {
+template <typename T>
+void Particles<T>::AddParticle(const Vector3<T>& position,
+                            const Vector3<T>& velocity,
+                            T mass, T reference_volume,
+                            const Matrix3<T>& elastic_deformation_gradient,
+                            const Matrix3<T>& kirchhoff_stress,
+                            const Matrix3<T>& B_matrix,
+                    std::unique_ptr<ElastoPlasticModel<T>> elastoplastic_model) {
     positions_.emplace_back(position);
     velocities_.emplace_back(velocity);
     masses_.emplace_back(mass);
@@ -204,7 +238,8 @@ void Particles::AddParticle(const Vector3<double>& position,
     num_particles_++;
 }
 
-void Particles::ApplyPlasticityAndUpdateKirchhoffStresses() {
+template <typename T>
+void Particles<T>::ApplyPlasticityAndUpdateKirchhoffStresses() {
     for (int p = 0; p < num_particles_; ++p) {
         elastoplastic_models_[p]->
                             UpdateDeformationGradientAndCalcKirchhoffStress(
@@ -213,14 +248,16 @@ void Particles::ApplyPlasticityAndUpdateKirchhoffStresses() {
     }
 }
 
-void Particles::AdvectParticles(double dt) {
+template <typename T>
+void Particles<T>::AdvectParticles(T dt) {
     for (int p = 0; p < num_particles_; ++p) {
         positions_[p] += dt*velocities_[p];
     }
 }
 
-TotalMassEnergyMomentum Particles::GetTotalMassEnergyMomentum(double g) const {
-    TotalMassEnergyMomentum sum_particles_state;
+template <typename T>
+TotalMassEnergyMomentum<T> Particles<T>::GetTotalMassEnergyMomentum(T g) const {
+    TotalMassEnergyMomentum<T> sum_particles_state;
     // Particles' sum of mass and momentum
     sum_particles_state.sum_mass             = 0.0;
     sum_particles_state.sum_kinetic_energy   = 0.0;
@@ -229,12 +266,12 @@ TotalMassEnergyMomentum Particles::GetTotalMassEnergyMomentum(double g) const {
     sum_particles_state.sum_momentum         = {0.0, 0.0, 0.0};
     sum_particles_state.sum_angular_momentum = {0.0, 0.0, 0.0};
     for (int p = 0; p < num_particles_; ++p) {
-        double mp   = masses_[p];
-        double volp = reference_volumes_[p];
-        const Vector3<double>& vp = velocities_[p];
-        const Vector3<double>& xp = positions_[p];
-        const Matrix3<double>& Bp = B_matrices_[p];
-        const Matrix3<double>& Fp = elastic_deformation_gradients_[p]; 
+        T mp   = masses_[p];
+        T volp = reference_volumes_[p];
+        const Vector3<T>& vp = velocities_[p];
+        const Vector3<T>& xp = positions_[p];
+        const Matrix3<T>& Bp = B_matrices_[p];
+        const Matrix3<T>& Fp = elastic_deformation_gradients_[p]; 
         sum_particles_state.sum_mass             += mp;
         sum_particles_state.sum_kinetic_energy   += .5*mp*vp.dot(vp);
         sum_particles_state.sum_strain_energy    += volp*
@@ -245,11 +282,14 @@ TotalMassEnergyMomentum Particles::GetTotalMassEnergyMomentum(double g) const {
         sum_particles_state.sum_potential_energy += -mp*g*xp[2];
         sum_particles_state.sum_momentum         += mp*vp;
         sum_particles_state.sum_angular_momentum += mp*(xp.cross(vp)
-                        + mathutils::ContractionWithLeviCivita(Bp.transpose()));
+                        + mathutils::ContractionWithLeviCivita<T>(Bp.transpose()));
     }
     return sum_particles_state;
 }
 
+
+template class Particles<double>;
+template class Particles<AutoDiffXd>;
 }  // namespace mpm
 }  // namespace multibody
 }  // namespace drake

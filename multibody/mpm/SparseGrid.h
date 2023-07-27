@@ -58,7 +58,7 @@ class SparseGrid {
 
     // loop over all particles to mark active grid nodes, also sort them
     void UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_indices,
-                                const Particles& particles);
+                                const Particles<double>& particles);
 
     // Rescale the velocities_ vector by the mass_, used in P2G where we
     // temporarily store momentum mv into velocities
@@ -118,7 +118,7 @@ class SparseGrid {
                                update_velocity, double t);
 
     // Return the sum of mass, momentum and angular momentum of all grid points
-    TotalMassEnergyMomentum GetTotalMassAndMomentum() const;
+    TotalMassEnergyMomentum<double> GetTotalMassAndMomentum() const;
 
  private:
     int num_active_gridpts_;

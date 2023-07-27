@@ -51,7 +51,7 @@ class MpmModel {
 
 
   /** Creates a default FemState compatible with this model. */
-  std::unique_ptr<MpmState<T>> MakeMpmState(Particles& particles) const{
+  std::unique_ptr<MpmState<T>> MakeMpmState(Particles<double>& particles) const{
     return std::make_unique<MpmState<T>>(particles);
   }
 

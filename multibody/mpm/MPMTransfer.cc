@@ -5,7 +5,7 @@ namespace multibody {
 namespace mpm {
 
 void MPMTransfer::SetUpTransfer(SparseGrid* grid,
-                                Particles* particles) {
+                                Particles<double>* particles) {
 
     int num_particles = particles->get_num_particles();
     std::vector<Vector3<int>> batch_indices(num_particles); // batch_indices is the 3Dindex of batch that each particle belongs to
@@ -36,7 +36,7 @@ void MPMTransfer::SetUpTransfer(SparseGrid* grid,
     Dp_inv_ = 4.0/(grid->get_h()*grid->get_h());
 }
 
-void MPMTransfer::TransferParticlesToGrid(const Particles& particles,
+void MPMTransfer::TransferParticlesToGrid(const Particles<double>& particles,
                                           SparseGrid* grid) {
     int p_start, p_end, idx_local;
     double mass_p, ref_volume_p;
@@ -102,7 +102,7 @@ void MPMTransfer::TransferParticlesToGrid(const Particles& particles,
 }
 
 void MPMTransfer::TransferGridToParticles(const SparseGrid& grid, double dt,
-                                          Particles* particles) {
+                                          Particles<double>* particles) {
     DRAKE_ASSERT(dt > 0.0);
     int bi, bj, bk, idx_local;
     int p_start, p_end;
@@ -149,7 +149,7 @@ void MPMTransfer::TransferGridToParticles(const SparseGrid& grid, double dt,
 }
 
 void MPMTransfer::SortParticles(const std::vector<Vector3<int>>& batch_indices,
-                                const SparseGrid& grid, Particles* particles) {
+                                const SparseGrid& grid, Particles<double>* particles) {
     // Vector3<int> batch_idx_3D;
     int num_particles = particles->get_num_particles();
     // A temporary array storing the particle index permutation after sorting
@@ -185,7 +185,7 @@ void MPMTransfer::SortParticles(const std::vector<Vector3<int>>& batch_indices,
 }
 
 void MPMTransfer::UpdateBasisAndGradientParticles(const SparseGrid& grid,
-                                                  const Particles& particles) {
+                                                  const Particles<double>& particles) {
     int num_particles, p_start, p_end;
     Vector3<int> batch_index_3d;
     num_particles = particles.get_num_particles();
@@ -309,7 +309,7 @@ void MPMTransfer::WriteBatchStateToGrid(const Vector3<int>& batch_index_3d,
 void MPMTransfer::UpdateParticleStates(const std::array<BatchState, 27>&
                                        batch_states,
                                        double dt, int p,
-                                       Particles* particles) {
+                                       Particles<double>* particles) {
     int idx_local;
     double Ni_p;
     // vp_new_i = v_i^{n+1} * N_i(x_p)

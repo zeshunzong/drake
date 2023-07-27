@@ -120,7 +120,7 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
 
   // all mpm related
   if (ExistsMpmModel()) {
-    mpm::Particles particles(0);
+    mpm::Particles<double> particles(0);
     InitializeParticles(*(std::move(mpm_model_->level_set_)), mpm_model_->pose_, 
                        std::move(mpm_model_->mp_), mpm_model_->grid_h(), particles);
   
@@ -157,7 +157,7 @@ template <typename T>
 void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet& level_set,
                           const math::RigidTransform<double>& pose,
                           const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h, 
-                          mpm::Particles& particles){
+                          mpm::Particles<double>& particles){
   DRAKE_DEMAND(m_param.density > 0.0);
   DRAKE_DEMAND(m_param.min_num_particles_per_cell >= 1);                        
   const std::array<Vector3<double>, 2> bounding_box = level_set.get_bounding_box();
@@ -444,7 +444,7 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
   void DeformableModel<T>::InitializeParticles(std::string asset_dir,
                             const math::RigidTransform<double>& pose,
                             const typename mpm::MpmModel<T>::MaterialParameters& m_param, 
-                            mpm::Particles& particles){
+                            mpm::Particles<double>& particles){
 
     DRAKE_DEMAND(m_param.density > 0.0);
     multibody::SpatialVelocity<double> init_v = m_param.initial_velocity;

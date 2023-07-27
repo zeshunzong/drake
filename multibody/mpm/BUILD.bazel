@@ -378,7 +378,7 @@ drake_cc_library(
     ],
 )
 
-
+'''
 drake_cc_binary(
     name = "helloworld",
     srcs = [
@@ -393,7 +393,7 @@ drake_cc_binary(
         ":MPMParameters",
     ],
 )
-
+'''
 
 
 
@@ -414,6 +414,9 @@ drake_cc_googletest(
         "//math:gradient",
         ":CorotatedElasticModel",
         ":StvkHenckyWithVonMisesModel",
+
+
+        "//multibody/plant",
 
     ],
 )

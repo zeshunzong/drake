@@ -23,19 +23,19 @@ class MpmState {
 
   }
 
-  MpmState(const Particles& particles){
+  MpmState(const Particles<double>& particles){
     particles_ = particles;
   }
 
-  const Particles& GetParticles() const {
+  const Particles<double>& GetParticles() const {
     return particles_;
   }
 
-  void SetParticles(const Particles& particles) {
+  void SetParticles(const Particles<double>& particles) {
     particles_ = particles;
   }
 
-  void SetState(const MpmState& mpmstate){
+  void SetState(const MpmState<double>& mpmstate){
     particles_ = mpmstate.GetParticles();
   }
 
@@ -55,7 +55,7 @@ class MpmState {
 
  private:
 
-  Particles particles_;
+  Particles<double> particles_;
 };
 
 }  // namespace mpm

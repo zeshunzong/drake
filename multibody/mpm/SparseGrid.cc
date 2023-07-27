@@ -94,7 +94,7 @@ void SparseGrid::UpdateActiveGridPoints(
 }
 
 void SparseGrid::UpdateActiveGridPoints(const std::vector<Vector3<int>>& batch_indices,
-                                        const Particles& particles) {
+                                        const Particles<double>& particles) {
     // Clear active grid points
     num_active_gridpts_ = 0;
     active_gridpts_.clear();
@@ -267,8 +267,8 @@ void SparseGrid::OverwriteGridVelocity(std::function<void(Vector3<double>,
     }
 }
 
-TotalMassEnergyMomentum SparseGrid::GetTotalMassAndMomentum() const {
-    TotalMassEnergyMomentum sum_state;
+TotalMassEnergyMomentum<double> SparseGrid::GetTotalMassAndMomentum() const {
+    TotalMassEnergyMomentum<double> sum_state;
     sum_state.sum_mass             = 0.0;
     sum_state.sum_momentum         = Vector3<double>::Zero();
     sum_state.sum_angular_momentum = Vector3<double>::Zero();

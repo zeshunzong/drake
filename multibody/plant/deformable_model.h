@@ -222,7 +222,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
  and add the newly built mpm_model to class attribute */
   void BuildMpmModel(DeformableBodyId id,
                                   const fem::DeformableBodyConfig<T>& config,
-                                  const mpm::Particles& particles);
+                                  const mpm::Particles<double>& particles);
 
   template <template <class, int> class Model>
   void BuildLinearVolumetricModelHelper(
@@ -246,11 +246,11 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   void InitializeParticles(const mpm::AnalyticLevelSet& level_set,
                             const math::RigidTransform<double>& pose,
                             const typename mpm::MpmModel<T>::MaterialParameters& m_param, double grid_h,
-                            mpm::Particles& particles);    
+                            mpm::Particles<double>& particles);    
 
   void InitializeParticles(std::string obj_filename, const math::RigidTransform<double>& pose,
                             const typename mpm::MpmModel<T>::MaterialParameters& m_param,
-                            mpm::Particles& particles);                     
+                            mpm::Particles<double>& particles);                     
 
   /* Helper to throw a useful message if a deformable body with the given `id`
    doesn't exist. */

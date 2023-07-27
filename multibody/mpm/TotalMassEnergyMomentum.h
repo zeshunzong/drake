@@ -9,13 +9,14 @@ namespace mpm {
 // Store the sum of mass, momentum and angular momentum of the grid/particles
 // The angular momentum is about the origin in the world frame
 // TODO(yiminlin.tri): change name and doc to include energy
+template <typename T>
 struct TotalMassEnergyMomentum {
-    double sum_mass;
-    double sum_kinetic_energy;
-    double sum_strain_energy;
-    double sum_potential_energy;
-    Vector3<double> sum_momentum;
-    Vector3<double> sum_angular_momentum;
+    T sum_mass;
+    T sum_kinetic_energy;
+    T sum_strain_energy;
+    T sum_potential_energy;
+    Vector3<T> sum_momentum;
+    Vector3<T> sum_angular_momentum;
 };
 
 }  // namespace mpm
