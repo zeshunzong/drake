@@ -47,6 +47,44 @@ class ElastoPlasticModel {
       (*derivative)(2,2) = 0.0;
     }
 
+    T dummy_function2(const Eigen::Matrix3X<T>& Xp){
+
+      Eigen::MatrixX<T> result = Xp.array().square();
+      return result.sum();
+    }
+
+    void dummy_function2_derivative(const Eigen::Matrix3X<T>& Xp, Eigen::Matrix3X<T>* derivative) const {
+      (*derivative) = 2 * Xp;
+      // (*derivative)(0,0) = (*derivative)(0,0) + 0.1;
+    }
+
+    void TestAssignF(Eigen::Matrix3X<T>& Xp, std::vector<Matrix3<T>>* F_from_Xp){
+        int kParticles = Xp.cols();
+        (F_from_Xp)->clear();
+        for (int i = 0; i < kParticles; i++) {
+            Eigen::Vector3<T> m = Xp.col(i);
+            m(1) = 2.0 * m(1);
+            m(2) = 3.0 * m(2);
+            F_from_Xp->push_back(m.asDiagonal());
+        }
+    }
+
+    void dummy_assign_F(const Eigen::Vector3<T>& X, Eigen::Matrix3<T>* F_from_Xp) {
+      (*F_from_Xp)(0,0) = X(0);
+      (*F_from_Xp)(0,1) = 0.0;
+      (*F_from_Xp)(0,2) = 0.0;
+      (*F_from_Xp)(1,0) = 0.0;
+      (*F_from_Xp)(1,1) = 2.0 * X(1);
+      (*F_from_Xp)(1,2) = 0.0;
+      (*F_from_Xp)(2,0) = 0.0;
+      (*F_from_Xp)(2,1) = 0.0;
+      (*F_from_Xp)(2,2) = 3.0 * X(2);
+    } 
+
+    T dummy_psi_of_F(const Eigen::Matrix3X<T>& F){
+      return F.sum();
+    }
+
 
     // Update the elastic deformation gradient according to the plasticity model
     // by projecting the trial elastic stress to the yield surface. Then
