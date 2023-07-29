@@ -77,7 +77,7 @@ int DoMain() {
     //std::cout << energy.derivatives()
     std::cout << ddd(0) << " " << " " << ddd(1) << " " << ddd(2) << std::endl;
 
-    std::cout << grid.get_force(0)[0] * 0.2 << std::endl;
+    std::cout << grid.get_force(0)[0] * 0.02 << " " << grid.get_force(0)[1] * 0.02 << std::endl;
     return 0;
 
 
