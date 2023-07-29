@@ -32,16 +32,19 @@ class Particles {
     const T& get_mass(int index) const;
     const T& get_reference_volume(int index) const;
     const Matrix3<T>& get_elastic_deformation_gradient(int index) const;
+    const Matrix3<T>& get_elastic_deformation_gradient_tmp(int index) const;
     const Matrix3<T>& get_kirchhoff_stress(int index) const;
+    const Matrix3<T>& get_first_PK_stress(int index) const;
     const Matrix3<T>& get_B_matrix(int index) const;
 
     const std::vector<Vector3<T>>& get_positions() const;
     const std::vector<Vector3<T>>& get_velocities() const;
     const std::vector<T>& get_masses() const;
     const std::vector<T>& get_reference_volumes() const;
-    const std::vector<Matrix3<T>>& get_elastic_deformation_gradients()
-                                                                        const;
+    const std::vector<Matrix3<T>>& get_elastic_deformation_gradients()const;
+
     const std::vector<Matrix3<T>>& get_kirchhoff_stresses() const;
+    const std::vector<Matrix3<T>>& get_first_PK_stresses() const;
     // Get the matrix B_p, who composes the affine matrix C_p in APIC:
     // v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p),
     const std::vector<Matrix3<T>>& get_B_matrices() const;
@@ -70,8 +73,27 @@ class Particles {
     void set_reference_volume(int index, T reference_volume);
     void set_elastic_deformation_gradient(int index,
                            const Matrix3<T>& elastic_deformation_gradient);
+   
+    void resize_elastic_deformation_gradient_tmp(size_t s) {
+      elastic_deformation_gradients_tmp_.resize(s);
+    }
+    void set_elastic_deformation_gradient_tmp(int index,
+                        const Matrix3<T>& elastic_deformation_gradient_tmp);
+   
+    T CalcParticleEnergyDensity(int index, const Matrix3<T>& Fp) const {
+      return elastoplastic_models_[index]->CalcStrainEnergyDensity(Fp);
+    }
+
     void set_kirchhoff_stress(int index,
                               const Matrix3<T>& kirchhoff_stress);
+    void set_first_PK_stress(int index,
+                              const Matrix3<T>& first_PK_stress);
+                              
+    void compute_first_PK_stress(int index, const Matrix3<T>& FE, Matrix3<T>* PK_stress) const {
+      elastoplastic_models_[index]->CalcFirstPiolaStress(FE, PK_stress);
+    }         
+
+
     void set_B_matrix(int index, const Matrix3<T>& B_matrix);
     void set_elastoplastic_model(int index,
                      std::unique_ptr<ElastoPlasticModel<T>> elastoplastic_model);
@@ -84,6 +106,8 @@ class Particles {
                                            elastic_deformation_gradients);
     void set_kirchhoff_stresses(const std::vector<Matrix3<T>>&
                                 kirchhoff_stresses);
+    void set_first_PK_stresses(const std::vector<Matrix3<T>>&
+                                first_PK_stresses);
     // Set the matrix B_p, who composes the affine matrix C_p in APIC:
     // v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p),
     void set_B_matrices(const std::vector<Matrix3<T>>& B_matrices);
@@ -105,14 +129,15 @@ class Particles {
                      T mass, T reference_volume,
                      const Matrix3<T>& elastic_deformation_gradient,
                      const Matrix3<T>& kirchhoff_stress,
+                     const Matrix3<T>& first_PK_stress,
                      const Matrix3<T>& B_matrix,
                      std::unique_ptr<ElastoPlasticModel<T>> elastoplastic_model);
 
     // Assume the elastic deformation gradients are in their trial state
     // (Fₑ = Fₑᵗʳⁱᵃˡ), update the elastic deformation gradients by projecting
     // the elastic deformation gradient to the yield surface, and update
-    // Kirchhoff stress with the constitutive relation.
-    void ApplyPlasticityAndUpdateKirchhoffStresses();
+    // Kirchhoff stress AS WELL AS FIRST_PK_stress with the constitutive relation.
+    void ApplyPlasticityAndUpdateStresses();
 
     // Particle advection using the updated velocities, assuming they are
     // already updated in the member variables.
@@ -130,10 +155,15 @@ class Particles {
     std::vector<T> masses_{};
     std::vector<T> reference_volumes_{};
     std::vector<Matrix3<T>> elastic_deformation_gradients_{};
+    std::vector<Matrix3<T>> elastic_deformation_gradients_tmp_{}; // as a function of grid v
     std::vector<Matrix3<T>> kirchhoff_stresses_{};
+    std::vector<Matrix3<T>> first_PK_stresses_{};
     // The affine matrix B_p in APIC
     std::vector<Matrix3<T>> B_matrices_{};
     std::vector<copyable_unique_ptr<ElastoPlasticModel<T>>> elastoplastic_models_{};
+
+
+    
 };  // class Particles
 
 }  // namespace mpm

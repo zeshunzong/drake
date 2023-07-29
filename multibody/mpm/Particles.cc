@@ -16,6 +16,7 @@ Particles<T>::Particles(int num_particles): num_particles_(num_particles),
                                          elastic_deformation_gradients_(
                                                             num_particles),
                                          kirchhoff_stresses_(num_particles),
+                                         first_PK_stresses_(num_particles),
                                          B_matrices_(num_particles),
                                          elastoplastic_models_(num_particles) {
     DRAKE_ASSERT(num_particles >= 0);
@@ -53,8 +54,19 @@ const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient(int index)
 }
 
 template <typename T>
+const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient_tmp(int index)
+                                                                        const {
+    return elastic_deformation_gradients_tmp_[index];
+}
+
+template <typename T>
 const Matrix3<T>& Particles<T>::get_kirchhoff_stress(int index) const {
     return kirchhoff_stresses_[index];
+}
+
+template <typename T>
+const Matrix3<T>& Particles<T>::get_first_PK_stress(int index) const {
+    return first_PK_stresses_[index];
 }
 
 template <typename T>
@@ -95,6 +107,11 @@ const std::vector<Matrix3<T>>& Particles<T>::get_kirchhoff_stresses() const {
 }
 
 template <typename T>
+const std::vector<Matrix3<T>>& Particles<T>::get_first_PK_stresses() const {
+    return first_PK_stresses_;
+}
+
+template <typename T>
 const std::vector<Matrix3<T>>& Particles<T>::get_B_matrices() const {
     return B_matrices_;
 }
@@ -128,9 +145,21 @@ void Particles<T>::set_elastic_deformation_gradient(int index,
 }
 
 template <typename T>
+void Particles<T>::set_elastic_deformation_gradient_tmp(int index,
+                        const Matrix3<T>& elastic_deformation_gradient_tmp) {
+    elastic_deformation_gradients_tmp_[index] = elastic_deformation_gradient_tmp;
+}
+
+template <typename T>
 void Particles<T>::set_kirchhoff_stress(int index,
                                      const Matrix3<T>& kirchhoff_stress) {
     kirchhoff_stresses_[index] = kirchhoff_stress;
+}
+
+template <typename T>
+void Particles<T>::set_first_PK_stress(int index,
+                                     const Matrix3<T>& first_PK_stress) {
+    first_PK_stresses_[index] = first_PK_stress;
 }
 
 template <typename T>
@@ -178,6 +207,12 @@ void Particles<T>::set_kirchhoff_stresses(const std::vector<Matrix3<T>>&
 }
 
 template <typename T>
+void Particles<T>::set_first_PK_stresses(const std::vector<Matrix3<T>>&
+                            first_PK_stresses) {
+    first_PK_stresses_ = first_PK_stresses;
+}
+
+template <typename T>
 void Particles<T>::set_B_matrices(const std::vector<Matrix3<T>>& B_matrices) {
     B_matrices_ = B_matrices;
 }
@@ -193,6 +228,7 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
     std::vector<Matrix3<T>>
                         elastic_deformation_gradients_sorted(num_particles_);
     std::vector<Matrix3<T>> kirchhoff_stresses_sorted(num_particles_);
+    std::vector<Matrix3<T>> first_PK_stresses_sorted(num_particles_);
     std::vector<Matrix3<T>> B_matrices_sorted(num_particles_);
     std::vector<copyable_unique_ptr<ElastoPlasticModel<T>>>
                                  elastoplastic_models_sorted(num_particles_);
@@ -205,6 +241,7 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
         elastic_deformation_gradients_sorted[p] =
                                         elastic_deformation_gradients_[p_new];
         kirchhoff_stresses_sorted[p]            = kirchhoff_stresses_[p_new];
+        first_PK_stresses_sorted[p]             = first_PK_stresses_[p_new];
         B_matrices_sorted[p]                    = B_matrices_[p_new];
         elastoplastic_models_sorted[p]          =
                                         std::move(elastoplastic_models_[p_new]);
@@ -215,6 +252,7 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
     reference_volumes_.swap(reference_volumes_sorted);
     elastic_deformation_gradients_.swap(elastic_deformation_gradients_sorted);
     kirchhoff_stresses_.swap(kirchhoff_stresses_sorted);
+    first_PK_stresses_.swap(first_PK_stresses_sorted);
     B_matrices_.swap(B_matrices_sorted);
     elastoplastic_models_.swap(elastoplastic_models_sorted);
 }
@@ -225,6 +263,7 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
                             T mass, T reference_volume,
                             const Matrix3<T>& elastic_deformation_gradient,
                             const Matrix3<T>& kirchhoff_stress,
+                            const Matrix3<T>& first_PK_stress,
                             const Matrix3<T>& B_matrix,
                     std::unique_ptr<ElastoPlasticModel<T>> elastoplastic_model) {
     positions_.emplace_back(position);
@@ -233,20 +272,26 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
     reference_volumes_.emplace_back(reference_volume);
     elastic_deformation_gradients_.emplace_back(elastic_deformation_gradient);
     kirchhoff_stresses_.emplace_back(kirchhoff_stress);
+    first_PK_stresses_.emplace_back(first_PK_stress);
     B_matrices_.emplace_back(B_matrix);
     elastoplastic_models_.emplace_back(std::move(elastoplastic_model));
     num_particles_++;
 }
 
 template <typename T>
-void Particles<T>::ApplyPlasticityAndUpdateKirchhoffStresses() {
+void Particles<T>::ApplyPlasticityAndUpdateStresses() {
     for (int p = 0; p < num_particles_; ++p) {
         elastoplastic_models_[p]->
                             UpdateDeformationGradientAndCalcKirchhoffStress(
                                             &kirchhoff_stresses_[p],
                                             &elastic_deformation_gradients_[p]);
+        elastoplastic_models_[p]->
+                            CalcFirstPiolaStress(
+                                            elastic_deformation_gradients_[p],
+                                            &first_PK_stresses_[p]);
     }
 }
+
 
 template <typename T>
 void Particles<T>::AdvectParticles(T dt) {

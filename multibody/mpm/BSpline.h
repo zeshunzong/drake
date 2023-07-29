@@ -4,6 +4,7 @@
 
 #include "drake/common/eigen_types.h"
 #include "drake/common/autodiff.h"
+#include <iostream>
 namespace drake {
 namespace multibody {
 namespace mpm {

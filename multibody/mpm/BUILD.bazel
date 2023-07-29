@@ -394,7 +394,26 @@ drake_cc_binary(
     ],
 )
 '''
-
+drake_cc_binary(
+    name = "dummymain",
+    srcs = [
+        "dummy_main.cc",
+    ],
+    deps = [
+        "//common:essential",
+        ":CorotatedElasticModel",
+        ":TotalMassEnergyMomentum",
+        ":Particles",
+        ":MPMParameters",
+        ":BSpline",
+        "//common:autodiff",
+        "//math:gradient",
+        ":StvkHenckyWithVonMisesModel",
+        ":SparseGrid",
+        ":MPMTransfer",
+        "//multibody/plant",
+    ],
+)
 
 '''
 drake_cc_googletest(
@@ -414,8 +433,8 @@ drake_cc_googletest(
         "//math:gradient",
         ":CorotatedElasticModel",
         ":StvkHenckyWithVonMisesModel",
-
-
+        ":SparseGrid",
+        ":MPMTransfer",
         "//multibody/plant",
 
     ],

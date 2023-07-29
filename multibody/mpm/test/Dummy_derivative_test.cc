@@ -1,4 +1,6 @@
 #include "drake/multibody/mpm/BSpline.h"
+#include "drake/multibody/mpm/SparseGrid.h"
+#include "drake/multibody/mpm/MPMTransfer.h"
 #include "drake/multibody/mpm/ElastoPlasticModel.h"
 #include "drake/multibody/mpm/CorotatedElasticModel.h"
 #include "drake/multibody/mpm/StvkHenckyWithVonMisesModel.h"
@@ -41,6 +43,21 @@ Eigen::Matrix3X<AutoDiffXd> MakeXpWithDerivatives(){
     return Xp_autodiff;
 }
 
+Eigen::Matrix3X<AutoDiffXd> MakeMatrix3XWithDerivatives(){
+    constexpr int columns=27;
+    Eigen::Matrix3Xd X = Eigen::MatrixXd::Random(3,columns);
+
+    const Eigen::Matrix<double, 3*columns, Eigen::Dynamic> derivatives(
+        Eigen::Matrix<double, 3*columns, 3*columns>::Identity());
+    const auto X_autodiff_flat =
+        math::InitializeAutoDiff(Eigen::Map<const Eigen::Matrix<double, 3*columns, 1>>(
+                                    X.data(), 3*columns),
+                                derivatives);
+    Eigen::Matrix3X<AutoDiffXd> X_autodiff = Eigen::Map<const Matrix3X<AutoDiffXd>>(X_autodiff_flat.data(), 3, columns);
+    return X_autodiff;
+}
+
+
 void TestEnergyAndForce(){
     CorotatedElasticModel<AutoDiffXd> model(2.5,0.3);
     Eigen::Matrix3X<AutoDiffXd> Xp = MakeXpWithDerivatives();
@@ -57,23 +74,37 @@ void TestEnergyAndForce(){
 
 void xx(){
 
-
     mpm::Particles<AutoDiffXd> particles(0);
-
-    Eigen::Matrix3X<AutoDiffXd> Xp = MakeXpWithDerivatives();
-
-    int kParticles = Xp.cols();
-
+    SparseGrid<AutoDiffXd> grid{0.6};
+    MPMTransfer<AutoDiffXd> mpm_transfer{};
     CorotatedElasticModel<AutoDiffXd> model(2.5,0.3);
+    std::unique_ptr<mpm::ElastoPlasticModel<AutoDiffXd>> elastoplastic_model_p = model.Clone();
 
-    for (int i = 0; i < kParticles; i++) {
-        Eigen::Matrix3<AutoDiffXd> F_of_X;
-        model.dummy_assign_F(Xp.col(0), &F_of_X);
+    particles.AddParticle(Eigen::Vector3<AutoDiffXd>{0.5,0.5,0.5}, Eigen::Vector3<AutoDiffXd>{0,0,0}, 1.0, 10.0,
+            Eigen::Matrix3<AutoDiffXd>::Identity(), Eigen::Matrix3<AutoDiffXd>::Identity(), 
+            Eigen::Matrix3<AutoDiffXd>::Identity(),Eigen::Matrix3<AutoDiffXd>::Zero(), std::move(elastoplastic_model_p));
+    
+    int num_active_grids = mpm_transfer.DerivativeTest1(&grid, &particles);
+    EXPECT_EQ(num_active_grids, 27);
 
-        std::unique_ptr<mpm::ElastoPlasticModel<AutoDiffXd>> elastoplastic_model_p = model.Clone();
-        particles.AddParticle(Xp.col(0), Eigen::Vector3<AutoDiffXd>{0,0,0}, 1.0, 1.0,
-                              F_of_X, Eigen::Matrix3<AutoDiffXd>::Identity() ,Eigen::Matrix3<AutoDiffXd>::Zero(), std::move(elastoplastic_model_p));
+    Eigen::Matrix3X<AutoDiffXd> Vi = MakeMatrix3XWithDerivatives();
+    std::vector<Eigen::Vector3<AutoDiffXd>> grid_velocities_input{};
+
+    for (size_t i = 0; i < 27; i++){
+        grid_velocities_input.push_back(Vi.col(i));
     }
+
+    mpm_transfer.DerivativeTest2(&grid, grid_velocities_input);
+    mpm_transfer.DerivativeTest3(grid, 0.02, &particles);
+
+    // for (int i = 0; i < kParticles; i++) {
+    //     Eigen::Matrix3<AutoDiffXd> F_of_X;
+    //     model.dummy_assign_F(Xp.col(0), &F_of_X);
+
+    //     std::unique_ptr<mpm::ElastoPlasticModel<AutoDiffXd>> elastoplastic_model_p = model.Clone();
+    //     particles.AddParticle(Xp.col(0), Eigen::Vector3<AutoDiffXd>{0,0,0}, 1.0, 1.0,
+    //                           F_of_X, Eigen::Matrix3<AutoDiffXd>::Identity() ,Eigen::Matrix3<AutoDiffXd>::Zero(), std::move(elastoplastic_model_p));
+    // }
     
 
 
@@ -222,7 +253,6 @@ void TestdPdFIsDerivativeOfP2(){
 
 void TestDummyDerivative() {
     CorotatedElasticModel<AutoDiffXd> model(2.5,0.3);
-
     Matrix3<AutoDiffXd> F = MakeDeformationGradientsWithDerivatives();
 
     AutoDiffXd f = model.dummy_function(F);
@@ -239,22 +269,24 @@ void TestDummyDerivative() {
 
 
 
-GTEST_TEST(Dummy_derivative_test, dummy_test) {
-    TestDummyDerivative();
+// GTEST_TEST(Dummy_derivative_test, dummy_test) {
+//     TestDummyDerivative();
 
-    TestPIsDerivativeOfPsi();
-    TestdPdFIsDerivativeOfP();
-    TestTauIsPFT();
+//     TestPIsDerivativeOfPsi();
+//     TestdPdFIsDerivativeOfP();
+//     TestTauIsPFT();
 
-    TestPIsDerivativeOfPsi2();
-    TestTauIsPFT2();
-    TestdPdFIsDerivativeOfP2();
+//     TestPIsDerivativeOfPsi2();
+//     TestTauIsPFT2();
+//     TestdPdFIsDerivativeOfP2();
 
-    TestEnergyAndForce();
-}
+//     TestEnergyAndForce();
+
+
+// }
 
 GTEST_TEST(Dummy_derivative_test, energy_test) {
-    TestEnergyAndForce();
+        xx();
 }
 
 

@@ -74,7 +74,7 @@ int MpmSolver<T>::AdvanceOneTimeStep(const MpmState<T>& prev_state,
 
   const Particles<T> p_prev = prev_state.GetParticles(); 
   Particles<T> p_new(p_prev);
-  p_new.ApplyPlasticityAndUpdateKirchhoffStresses();
+  p_new.ApplyPlasticityAndUpdateStresses();
 
   scratch->mpm_transfer_.SetUpTransfer(&(scratch->grid_), &p_new);
   scratch->mpm_transfer_.TransferParticlesToGrid(p_new, &(scratch->grid_));

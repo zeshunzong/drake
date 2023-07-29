@@ -98,6 +98,8 @@ void StvkHenckyWithVonMisesModel<T>::
     CalcKirchhoffStress(trial_strain_data, tau);
 }
 
+
+
 template <typename T>
 StvkHenckyWithVonMisesModel<T>::StrainData
         StvkHenckyWithVonMisesModel<T>::CalcStrainData(const Matrix3<T>& FE)

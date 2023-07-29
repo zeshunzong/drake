@@ -33,6 +33,7 @@ class SparseGrid {
     const Vector3<T>& get_velocity(const Vector3<int>& index_3d) const;
     T get_mass(const Vector3<int>& index_3d) const;
     const Vector3<T>& get_force(const Vector3<int>& index_3d) const;
+    const Vector3<T>& get_force(size_t index_1d) const;
     
     const Vector3<T>& get_velocity(size_t index_1d) const;
 
@@ -114,6 +115,9 @@ class SparseGrid {
     std::vector<Vector3<T>> velocities_{};
     std::vector<T> masses_{};
     std::vector<Vector3<T>> forces_{};
+
+
+    std::vector<Vector3<T>> dedxi_{};
 };  // class Grid
 
 }  // namespace mpm

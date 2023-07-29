@@ -192,10 +192,11 @@ void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet<double>
       const Vector3<double>& vp = particles_velocities[p];
       Matrix3<double> elastic_deformation_grad_p = Matrix3<double>::Identity();
       Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
+      Matrix3<double> first_PK_stress_p = Matrix3<double>::Identity();
       Matrix3<double> B_p                = Matrix3<double>::Zero();
       std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p = m_param.elastoplastic_model->Clone();
       particles.AddParticle(xp, vp, init_m, reference_volume_p,
-                              elastic_deformation_grad_p,kirchhoff_stress_p,B_p, std::move(elastoplastic_model_p));
+                              elastic_deformation_grad_p,kirchhoff_stress_p, first_PK_stress_p, B_p, std::move(elastoplastic_model_p));
   }
   std::cout << "num particles genearted: " << num_particles << std::endl; getchar();                         
 }
@@ -491,12 +492,13 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
         const Vector3<double>& vp = particles_velocities[p];
         Matrix3<double> elastic_deformation_grad_p = Matrix3<double>::Identity();
         Matrix3<double> kirchhoff_stress_p = Matrix3<double>::Identity();
+        Matrix3<double> first_PK_stress_p = Matrix3<double>::Identity();
         Matrix3<double> B_p                = Matrix3<double>::Zero();
         std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p
                                         = m_param.elastoplastic_model->Clone();
         particles.AddParticle(xp, vp, init_m, reference_volume_p,
                                elastic_deformation_grad_p,
-                               kirchhoff_stress_p,
+                               kirchhoff_stress_p, first_PK_stress_p,
                                B_p, std::move(elastoplastic_model_p));
     }
     std::cout << "num particles genearted: " << num_particles << std::endl; getchar();                         

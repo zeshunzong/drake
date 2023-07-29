@@ -52,6 +52,12 @@ const Vector3<T>& SparseGrid<T>::get_force(const Vector3<int>& index_3d)
 }
 
 template <typename T>
+const Vector3<T>& SparseGrid<T>::get_force(size_t index_1d)
+                                                                        const {
+    return forces_[index_1d];
+}
+
+template <typename T>
 const Vector3<T>& SparseGrid<T>::get_velocity(size_t index_1d) const {
     return velocities_[index_1d];
 }
