@@ -158,13 +158,6 @@ class Particles {
 
     void ComputePiolaDerivatives();
 
-    void ContractPiolaDerivativesWithFWithF();
-      ///CalcFirstPiolaStressDerivative(const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF)
-
-    Eigen::Matrix<T, 9, 9>& get_stress_derivatives_contractF_contractF_(int index) {
-      return stress_derivatives_contractF_contractF_[index];
-    }
-
 
     // Return the sum of mass, momentum and angular momentum of all particles.
     // The sum of particles' angular momentums is ∑ mp xp×vp + Bp^T:ϵ

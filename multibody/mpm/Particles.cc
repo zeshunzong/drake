@@ -313,37 +313,6 @@ void Particles<T>::AdvectParticles(T dt) {
 }
 
 template <typename T>
-void Particles<T>::ComputePiolaDerivatives() {
-    // DRAKE_DEMAND(stress_derivatives_.size() == num_particles_);
-    for (int p = 0; p < num_particles_; ++p) {
-        elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(elastic_deformation_gradients_new_[p], &stress_derivatives_[p]);
-    }
-}
-
-// to be checked
-template <typename T>
-void Particles<T>::ContractPiolaDerivativesWithFWithF() {
-    //DRAKE_DEMAND(stress_derivatives_contractF_contractF_.size() == num_particles_);
-    for (int index = 0; index < num_particles_; ++index) {
-        stress_derivatives_contractF_contractF_[index].setZero();
-        Eigen::Matrix3<T> Fp0T = elastic_deformation_gradients_[index].transpose();
-        for (int beta = 0; beta < 3; ++beta){
-            for (int v = 0; v < 3; ++v){
-                for (int alpha = 0; alpha < 3; ++alpha) {
-                    for (int p = 0; p < 3; ++p) {
-                        for (int q = 0; q < 3; ++q) {
-                            for (int tau = 0; tau < 3; ++tau) {
-                                stress_derivatives_contractF_contractF_[index](beta + alpha * 3, p + tau * 3) +=  stress_derivatives_[index](beta + v * 3, p + q * 3) * Fp0T(v, alpha) * Fp0T(q, tau) * get_reference_volume(index);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-template <typename T>
 TotalMassEnergyMomentum<T> Particles<T>::GetTotalMassEnergyMomentum(T g) const {
     TotalMassEnergyMomentum<T> sum_particles_state;
     // Particles' sum of mass and momentum
