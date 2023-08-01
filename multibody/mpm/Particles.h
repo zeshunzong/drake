@@ -155,8 +155,16 @@ class Particles {
     // already updated in the member variables.
     void AdvectParticles(T dt);
 
-
+    // For each particle p, after elastic_deformation_gradients_new_[p] is computed, compute dPdF and store it.
     void ComputePiolaDerivatives();
+
+
+    // For each particle p, after dPdF is computed, compute dPdF contract F⁰ₚ contract F⁰ₚ * Vₚ⁰ and store it.
+    void ContractPiolaDerivativesWithFWithF();
+
+    Eigen::Matrix<T, 9, 9>& get_stress_derivatives_contractF_contractF_(int index) {
+      return stress_derivatives_contractF_contractF_[index];
+    }
 
 
     // Return the sum of mass, momentum and angular momentum of all particles.
