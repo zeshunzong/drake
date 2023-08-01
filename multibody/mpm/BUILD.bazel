@@ -439,5 +439,20 @@ drake_cc_googletest(
 
     ],
 )
+drake_cc_googletest(
+    name = "TestEnergyForceHessian",
+    deps = [
+        ":BSpline",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common:autodiff",
+        "//math:gradient",
+        ":CorotatedElasticModel",
+        ":StvkHenckyWithVonMisesModel",
+        ":SparseGrid",
+        ":MPMTransfer",
+        "//multibody/plant",
+
+    ],
+)
 
 add_lint_tests()

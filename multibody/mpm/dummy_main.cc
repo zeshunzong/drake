@@ -56,7 +56,7 @@ int DoMain() {
     F_in(0,2) = 0.2;
     F_in(2,1) = 0.3;
 
-    particles.AddParticle(Eigen::Vector3<AutoDiffXd>{0.1,0.0,0.0}, Eigen::Vector3<AutoDiffXd>{0,0,0}, 1.0, 1.0,
+    particles.AddParticle(Eigen::Vector3<AutoDiffXd>{0.1,0.0,0.0}, Eigen::Vector3<AutoDiffXd>{0,0,0}, 5.0, 1.0,
             F_in, Eigen::Matrix3<AutoDiffXd>::Identity(), 
             Eigen::Matrix3<AutoDiffXd>::Identity(),Eigen::Matrix3<AutoDiffXd>::Zero(), std::move(elastoplastic_model_p));
 
@@ -66,7 +66,7 @@ int DoMain() {
     F_in2(2,1) = -0.1;
     F_in2(0,1) = 0.3;
     std::unique_ptr<mpm::ElastoPlasticModel<AutoDiffXd>> elastoplastic_model_p2 = model.Clone();
-    particles.AddParticle(Eigen::Vector3<AutoDiffXd>{0.3,0.2,0.15}, Eigen::Vector3<AutoDiffXd>{0,0,0}, 1.0, 1.0,
+    particles.AddParticle(Eigen::Vector3<AutoDiffXd>{0.3,0.2,0.15}, Eigen::Vector3<AutoDiffXd>{0,0,0}, 3.0, 1.0,
             F_in2, Eigen::Matrix3<AutoDiffXd>::Identity(), 
             Eigen::Matrix3<AutoDiffXd>::Identity(),Eigen::Matrix3<AutoDiffXd>::Zero(), std::move(elastoplastic_model_p2));
  
@@ -85,15 +85,13 @@ int DoMain() {
     // Temporary----Manually set up vi*
 
     AutoDiffXd dt = 0.1;
-    AutoDiffXd energy = mpm_transfer.computeEnergyForceHessian(&particles, &grid, dt);
+    MatrixX<AutoDiffXd> hessian;
+    AutoDiffXd energy = mpm_transfer.computeEnergyForceHessian(&particles, &grid, &hessian, dt);
     Eigen::VectorX<AutoDiffXd> ddd = energy.derivatives();
+
+
     std::cout << ddd(0) << " " << ddd(1) << " " << ddd(2) << " " << ddd(3) << std::endl;
     std::cout << grid.get_force(0)[0] * dt << " " << grid.get_force(0)[1] * dt << " " << grid.get_force(0)[2] * dt << " " << grid.get_force(1)[0] * dt <<std::endl;
-
-
-    MatrixX<AutoDiffXd> hessian;
-    mpm_transfer.ComputeHessianP2G(particles, &grid, &hessian);
-
 
     Eigen::VectorX<AutoDiffXd> gf= grid.get_force(0);
     MatrixX<AutoDiffXd> xxx = gf(0).derivatives();

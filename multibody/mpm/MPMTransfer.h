@@ -72,11 +72,13 @@ class MPMTransfer {
     // write grid velocities
 
 
-    T computeEnergyForceHessian(Particles<T>* particles, SparseGrid<T>* grid, T dt){
+    T computeEnergyForceHessian(Particles<T>* particles, SparseGrid<T>* grid, MatrixX<T>* hessian, T dt){
         ComputeWeightsAndWeightsGradients(*particles, *grid);
-        ComputeParticleFnewG2P(*grid, dt, particles); //Fnew(vi*) write to particles
+        ComputeParticleFnewG2P(*grid, dt, particles); //Fnew(vi*, dt) write to particles
         T energy = ComputeParticleEnergy(*particles);
         ComputeForceP2G(*particles, grid); // write grid force and hessian onto grid
+        ComputeHessianP2G(*particles, grid, hessian);
+
         return energy;
     } 
 
@@ -131,7 +133,6 @@ class MPMTransfer {
         return energy;
     }
 
-    // Hessian TBD
     void ComputeForceP2G(const Particles<T>& particles, SparseGrid<T>* grid) {
         int p_start, p_end, idx_local;
         int num_active_gridpts = grid->get_num_active_gridpt();
@@ -177,14 +178,13 @@ class MPMTransfer {
     }
 
     void ComputeHessianP2G(Particles<T>& particles, SparseGrid<T>* grid, MatrixX<T>* hessian) {
-        
         hessian->resize(grid->get_num_active_gridpt()*3, grid->get_num_active_gridpt()*3);
         hessian->setZero();
         particles.resize_stress_derivatives(particles.get_num_particles());
         particles.resize_stress_derivatives_contractF_contractF(particles.get_num_particles());
         particles.ComputePiolaDerivatives();
         particles.ContractPiolaDerivativesWithFWithF();
-        int p_start, p_end;// idx_local;
+        int p_start, p_end;
         int num_active_gridpts = grid->get_num_active_gridpt();
         Vector3<int> batch_index_3d;
         
@@ -192,40 +192,29 @@ class MPMTransfer {
         p_start = 0;
         for (int i_star = 0; i_star < num_active_gridpts; ++i_star) {
             if (batch_sizes_[i_star] != 0) {
-                
                 MatrixX<T> pad_hessian; pad_hessian.resize(27*3, 27*3); pad_hessian.setZero();
                 p_end = p_start + batch_sizes_[i_star];
                 // Preallocate positions at grid points in the current batch on a local array
                 batch_index_3d = grid->Expand1DIndex(i_star);
                 // For each particle in the batch, 
                 for (int p = p_start; p < p_end; ++p) {
-                    // loop over each i of 27 nodes in the numerator
-                    for (size_t i = 0; i < 27; ++i){
-                        // loop over three dimensions α
-                        for (size_t alpha = 0; alpha < 3; ++alpha){
-                            // loop over each j of 27 nodes in the denominator
-                            for (size_t j = 0; j < 27; ++j){
-                                // loop over three dimensions τ
-                                for (size_t tau = 0; tau < 3; ++tau){
-
-                                    const Vector3<T>& gradNi_p = bases_grad_particles_[p][i];
-                                    const Vector3<T>& gradNj_p = bases_grad_particles_[p][j];
-                                    Eigen::Matrix<T, 9, 9>& A_alphabeta_taulambda = particles.get_stress_derivatives_contractF_contractF_(p);
-                                    // for the 9by9 matrix A_alphabeta_taulambda, we set the convention to be A(alpha*3+beta, tau*3+lambda)
-                                    for (size_t beta = 0; beta<3; ++beta) {
-                                        for (size_t lambda = 0; lambda<3; ++lambda) {
-                                            pad_hessian(3*i+alpha, 3*j+tau) += gradNi_p(beta) * A_alphabeta_taulambda(beta*3+alpha, lambda*3+tau) * gradNj_p(lambda);
-                                        }
-                                    }
+                    // loop over each i of 27 neighboring nodes in the numerator and each dimension α
+                    for (size_t i = 0; i < 27; ++i){ for (size_t alpha = 0; alpha < 3; ++alpha) {
+                        // loop over each j of 27 neighboring nodes in the denominator and each dimension rho
+                        for (size_t j = 0; j < 27; ++j){ for (size_t rho = 0; rho < 3; ++rho){
+                            const Vector3<T>& gradNi_p = bases_grad_particles_[p][i];
+                            const Vector3<T>& gradNj_p = bases_grad_particles_[p][j];
+                            Eigen::Matrix<T, 9, 9>& A_alphabeta_rhogamma = particles.get_stress_derivatives_contractF_contractF_(p); //A(3β+α, 3γ+ρ)
+                            // compute ∑ᵦᵧ A(3β+α, 3γ+ρ) ⋅ ∇Nᵢ(xₚ)[β] ⋅ ∇Nⱼ(xₚ)[γ]
+                            for (size_t beta = 0; beta<3; ++beta) {
+                                for (size_t gamma = 0; gamma<3; ++gamma) {
+                                    pad_hessian(3*i+alpha, 3*j+rho) += gradNi_p(beta) * A_alphabeta_rhogamma(beta*3+alpha, gamma*3+rho) * gradNj_p(gamma);
                                 }
                             }
-                        }
-                    }
+                        }}
+                    }}
                 }
-                p_start = p_end;
-
-                // print_matrix(pad_hessian);
-            
+                p_start = p_end;            
                 // assign local hessian to global, local hessian is (27*3) by (27*3)
                 for (int ic = -1; ic <= 1; ++ic) {
                 for (int ib = -1; ib <= 1; ++ib) {
@@ -238,13 +227,10 @@ class MPMTransfer {
                     for (int ja = -1; ja <= 1; ++ja) {
                         int idx_local_j = (ja + 1) + 3 * (jb + 1) + 9 * (jc + 1); // local index 0-26
                         Vector3<int> node_j_index_3d = batch_index_3d + Vector3<int>(ja, jb, jc); // global 3d index of node i
-
-                        MatrixX<T> dfi_dvj_block = pad_hessian.block(idx_local_i*3, idx_local_j*3, 3, 3);
-
+                        MatrixX<T> dfi_dvj_block = pad_hessian.block(idx_local_i*3, idx_local_j*3, 3, 3); // get the local dfi_dvj block
                         (*hessian).block(grid->Reduce3DIndex(node_i_index_3d)*3, grid->Reduce3DIndex(node_j_index_3d)*3, 3, 3) += dfi_dvj_block;
                     }}}
                 }}}
-                
             }
         }
     }
