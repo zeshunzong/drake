@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 #include <iostream>
-
+#include <iomanip> // For setprecision
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/mpm/BSpline.h"
 #include "drake/multibody/mpm/Particles.h"
@@ -122,6 +122,7 @@ class MPMTransfer {
     }
     // compute energy = sum_p V0 psi(F(v*)), the energy will be a function of v*
     T ComputeParticleEnergy(const Particles<T>& particles){
+        // static_cast<int>(size);
         T energy = 0;
         for (int p = 0; p < particles.get_num_particles(); ++p) {
             T volp = particles.get_reference_volume(p);
@@ -183,29 +184,19 @@ class MPMTransfer {
         particles.resize_stress_derivatives_contractF_contractF(particles.get_num_particles());
         particles.ComputePiolaDerivatives();
         particles.ContractPiolaDerivativesWithFWithF();
-        int p_start, p_end, idx_local;
+        int p_start, p_end;// idx_local;
         int num_active_gridpts = grid->get_num_active_gridpt();
-        // Local sum of states m_i v_i f_i on the grid points
-        // std::vector<std::array<GridState, 27>> local_pads(num_active_gridpts);
-        // Positions of grid points in the batch
-        std::array<Vector3<T>, 27> batch_positions;
         Vector3<int> batch_index_3d;
         
         // For each batch i*
         p_start = 0;
         for (int i_star = 0; i_star < num_active_gridpts; ++i_star) {
             if (batch_sizes_[i_star] != 0) {
+                
                 MatrixX<T> pad_hessian; pad_hessian.resize(27*3, 27*3); pad_hessian.setZero();
                 p_end = p_start + batch_sizes_[i_star];
                 // Preallocate positions at grid points in the current batch on a local array
                 batch_index_3d = grid->Expand1DIndex(i_star);
-                for (int c = -1; c <= 1; ++c) {
-                for (int b = -1; b <= 1; ++b) {
-                for (int a = -1; a <= 1; ++a) {
-                    idx_local = (a + 1) + 3 * (b + 1) + 9 * (c + 1);
-                    batch_positions[idx_local] = grid->get_position(batch_index_3d + Vector3<int>(a, b, c));
-                }}}
-                // for (auto& s : local_pads[i]) {s.reset();}  // Clear local scratch pad
                 // For each particle in the batch, 
                 for (int p = p_start; p < p_end; ++p) {
                     // loop over each i of 27 nodes in the numerator
@@ -223,7 +214,7 @@ class MPMTransfer {
                                     // for the 9by9 matrix A_alphabeta_taulambda, we set the convention to be A(alpha*3+beta, tau*3+lambda)
                                     for (size_t beta = 0; beta<3; ++beta) {
                                         for (size_t lambda = 0; lambda<3; ++lambda) {
-                                            pad_hessian(3*i+alpha, 3*j+tau) += gradNi_p(beta) * A_alphabeta_taulambda(alpha*3+beta, tau*3+lambda) * gradNj_p(alpha);
+                                            pad_hessian(3*i+alpha, 3*j+tau) += gradNi_p(beta) * A_alphabeta_taulambda(beta*3+alpha, lambda*3+tau) * gradNj_p(lambda);
                                         }
                                     }
                                 }
@@ -232,6 +223,8 @@ class MPMTransfer {
                     }
                 }
                 p_start = p_end;
+
+                // print_matrix(pad_hessian);
             
                 // assign local hessian to global, local hessian is (27*3) by (27*3)
                 for (int ic = -1; ic <= 1; ++ic) {
@@ -251,6 +244,7 @@ class MPMTransfer {
                         (*hessian).block(grid->Reduce3DIndex(node_i_index_3d)*3, grid->Reduce3DIndex(node_j_index_3d)*3, 3, 3) += dfi_dvj_block;
                     }}}
                 }}}
+                
             }
         }
     }
@@ -301,6 +295,18 @@ class MPMTransfer {
             }
             p_start = p_end;
         }
+    }
+
+    void print_matrix(MatrixX<T>& M) {
+        std::cout << std::fixed << std::setprecision(4);
+        std::cout << "begin printing matrix ---------------\n";
+        for (int i = 0; i < 1; ++i) {
+            for (int j = 0; j < M.cols(); ++j) {
+                std::cout << M(i,j) << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "end printing matrix ---------------\n";
     }
     // compute energy = sum_p V0 psi(F(v*)), the energy will be a function of v*
     T DerivativeTest4(const Particles<T>& particles) {

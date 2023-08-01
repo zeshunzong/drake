@@ -269,25 +269,25 @@ void TestDummyDerivative() {
 
 
 
-// GTEST_TEST(Dummy_derivative_test, dummy_test) {
-//     TestDummyDerivative();
+GTEST_TEST(Dummy_derivative_test, dummy_test) {
+    TestDummyDerivative();
 
-//     TestPIsDerivativeOfPsi();
-//     TestdPdFIsDerivativeOfP();
-//     TestTauIsPFT();
+    TestPIsDerivativeOfPsi();
+    TestdPdFIsDerivativeOfP();
+    TestTauIsPFT();
 
-//     TestPIsDerivativeOfPsi2();
-//     TestTauIsPFT2();
-//     TestdPdFIsDerivativeOfP2();
+    TestPIsDerivativeOfPsi2();
+    TestTauIsPFT2();
+    TestdPdFIsDerivativeOfP2();
 
-//     TestEnergyAndForce();
+    // TestEnergyAndForce();
 
 
-// }
-
-GTEST_TEST(Dummy_derivative_test, energy_test) {
-        xx();
 }
+
+// GTEST_TEST(Dummy_derivative_test, energy_test) {
+//         xx();
+// }
 
 
 
