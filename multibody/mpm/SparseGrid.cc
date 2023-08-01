@@ -178,9 +178,9 @@ void SparseGrid<T>::RescaleVelocities() {
 
 template <typename T>
 void SparseGrid<T>::ResetStates() {
-    DRAKE_ASSERT(masses_.size() == num_active_gridpts_);
-    DRAKE_ASSERT(velocities_.size() == num_active_gridpts_);
-    DRAKE_ASSERT(forces_.size() == num_active_gridpts_);
+    DRAKE_ASSERT(masses_.size() == static_cast<size_t>(num_active_gridpts_));
+    DRAKE_ASSERT(velocities_.size() == static_cast<size_t>(num_active_gridpts_));
+    DRAKE_ASSERT(forces_.size() == static_cast<size_t>(num_active_gridpts_));
     std::fill(masses_.begin(), masses_.begin()+num_active_gridpts_, 0.0);
     std::fill(velocities_.begin(), velocities_.begin()+num_active_gridpts_,
               Vector3<T>::Zero());

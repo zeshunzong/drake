@@ -35,6 +35,7 @@ void CorotatedElasticModel<T>::CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix
 
 template <typename T>
 void CorotatedElasticModel<T>::CalcFirstPiolaStressDerivative(const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF) const {
+      dPdF->setZero();
       const T Jm1 = this->computeJm1(FE);
       Matrix3<T> R, S, JFinvT;
       this->computePolarDecomp(FE, &R, &S);

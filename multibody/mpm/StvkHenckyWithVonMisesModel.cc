@@ -51,6 +51,7 @@ void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStress(const Matrix3<T>& FE, 
 
 template <typename T>
 void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStressDerivative(const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF) const {
+    dPdF->setZero();
     PsiSigmaDerivative psi_derivatives = CalcPsiSigmaDerivative(FE);
     StrainData strain_data = CalcStrainData(FE);
     for (int ij = 0; ij < 9; ++ij) {

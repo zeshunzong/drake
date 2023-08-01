@@ -116,8 +116,8 @@ class SparseGrid {
     std::vector<T> masses_{};
     std::vector<Vector3<T>> forces_{};
 
+    // std::vector<Matrix3<T>> hessians_{};
 
-    std::vector<Vector3<T>> dedxi_{};
 };  // class Grid
 
 }  // namespace mpm

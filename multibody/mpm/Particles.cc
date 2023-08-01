@@ -60,6 +60,12 @@ const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient_tmp(int index)
 }
 
 template <typename T>
+const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient_new(int index)
+                                                                        const {
+    return elastic_deformation_gradients_new_[index];
+}
+
+template <typename T>
 const Matrix3<T>& Particles<T>::get_kirchhoff_stress(int index) const {
     return kirchhoff_stresses_[index];
 }
@@ -148,6 +154,12 @@ template <typename T>
 void Particles<T>::set_elastic_deformation_gradient_tmp(int index,
                         const Matrix3<T>& elastic_deformation_gradient_tmp) {
     elastic_deformation_gradients_tmp_[index] = elastic_deformation_gradient_tmp;
+}
+
+template <typename T>
+void Particles<T>::set_elastic_deformation_gradient_new(int index,
+                        const Matrix3<T>& elastic_deformation_gradient_new) {
+    elastic_deformation_gradients_new_[index] = elastic_deformation_gradient_new;
 }
 
 template <typename T>
@@ -297,6 +309,71 @@ template <typename T>
 void Particles<T>::AdvectParticles(T dt) {
     for (int p = 0; p < num_particles_; ++p) {
         positions_[p] += dt*velocities_[p];
+    }
+}
+
+template <typename T>
+void Particles<T>::ComputePiolaDerivatives() {
+    // DRAKE_DEMAND(stress_derivatives_.size() == num_particles_);
+    for (int p = 0; p < num_particles_; ++p) {
+        elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(elastic_deformation_gradients_new_[p], &stress_derivatives_[p]);
+    }
+}
+
+// to be checked
+template <typename T>
+void Particles<T>::ContractPiolaDerivativesWithFWithF() {
+    //DRAKE_DEMAND(stress_derivatives_contractF_contractF_.size() == num_particles_);
+    for (int index = 0; index < num_particles_; ++index) {
+        stress_derivatives_contractF_contractF_[index].setZero();
+        Eigen::Matrix3<T> Fp0T = elastic_deformation_gradients_[index].transpose();
+        for (int u = 0; u < 3; ++u){
+            for (int v = 0; v < 3; ++v){
+                for (int x = 0; x < 3; ++x) {
+                    for (int p = 0; p < 3; ++p) {
+                        for (int q = 0; q < 3; ++q) {
+                            for (int y = 0; y < 3; ++y) {
+                                stress_derivatives_contractF_contractF_[index](u + x * 3, p + y * 3) +=  stress_derivatives_[index](u + v * 3, p + q * 3) * Fp0T(v, x) * Fp0T(q, y) * get_reference_volume(index);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // for (int alpha = 0; alpha < 3; ++alpha) {
+        //     for (int theta = 0; theta < 3; ++theta) {
+        //         for (int tau = 0; tau < 3; ++tau) {
+        //             for (int phi = 0; phi < 3; ++phi) {
+        //                 for (int beta = 0; beta < 3; ++beta) {
+        //                     for (int lambda = 0; lambda < 3; ++lambda) {
+        //                         stress_derivatives_contractF_contractF_[index](lambda + tau * 3, beta + alpha * 3) += stress_derivatives_[index](theta + alpha * 3, phi + tau * 3) * Fp0T(phi, lambda) * Fp0T(theta, beta);
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+        std::cout << "printe dpdf" << std::endl;
+        for (int ii = 0; ii < 9; ++ii) {
+            for (int jj = 0; jj < 9; ++jj) {
+                std::cout << stress_derivatives_[0](ii,jj) << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << std::endl;
+        std::cout << std::endl;
+        std::cout << std::endl;
+        std::cout << "printe dpdf * F * F" << std::endl;
+        for (int ii = 0; ii < 9; ++ii) {
+            for (int jj = 0; jj < 9; ++jj) {
+                std::cout << stress_derivatives_contractF_contractF_[0](ii,jj) << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << std::endl;
+        std::cout << std::endl;
+        std::cout << std::endl;
+        getchar();
     }
 }
 

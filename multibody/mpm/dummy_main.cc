@@ -54,30 +54,48 @@ int DoMain() {
     particles.AddParticle(Eigen::Vector3<AutoDiffXd>{0.5,0.5,0.5}, Eigen::Vector3<AutoDiffXd>{0,0,0}, 1.0, 10.0,
             Eigen::Matrix3<AutoDiffXd>::Identity(), Eigen::Matrix3<AutoDiffXd>::Identity(), 
             Eigen::Matrix3<AutoDiffXd>::Identity(),Eigen::Matrix3<AutoDiffXd>::Zero(), std::move(elastoplastic_model_p));
+ 
     
-    int num_active_grids = mpm_transfer.DerivativeTest1(&grid, &particles);
-    // EXPECT_EQ(num_active_grids, 27);
+    // int num_active_grids = 
+    mpm_transfer.MakeGridCompatibleWithParticles(&particles, &grid);
+    // // EXPECT_EQ(num_active_grids, 27);
 
+    // Temporary----Manually set up vi*
     Eigen::Matrix3X<AutoDiffXd> Vi = MakeMatrix3XWithDerivatives();
     std::vector<Eigen::Vector3<AutoDiffXd>> grid_velocities_input{};
-
     for (size_t i = 0; i < 27; i++){
         grid_velocities_input.push_back(Vi.col(i));
     }
-
     mpm_transfer.DerivativeTest2(&grid, grid_velocities_input);
-    mpm_transfer.DerivativeTest3(grid, 0.02, &particles);
-    AutoDiffXd energy = mpm_transfer.DerivativeTest4(particles);
-    std::cout << "energy is " << energy << std::endl;
+    // Temporary----Manually set up vi*
 
-    mpm_transfer.DerivativeTest5(particles, &grid);
 
-    //std::cout << energy.derivatives().size() << std::endl;
+    AutoDiffXd dt = 0.1;
+    AutoDiffXd energy = mpm_transfer.computeEnergyForceHessian(&particles, &grid, dt);
+
     Eigen::VectorX<AutoDiffXd> ddd = energy.derivatives();
-    //std::cout << energy.derivatives()
-    std::cout << ddd(0) << " " << " " << ddd(1) << " " << ddd(2) << std::endl;
+    std::cout << ddd(0) << " " << ddd(1) << " " << ddd(2) << " " << ddd(3) << std::endl;
 
-    std::cout << grid.get_force(0)[0] * 0.02 << " " << grid.get_force(0)[1] * 0.02 << std::endl;
+    std::cout << grid.get_force(0)[0] * dt << " " << grid.get_force(0)[1] * dt << " " << grid.get_force(0)[2] * dt << " " << grid.get_force(1)[0] * dt <<std::endl;
+
+
+    MatrixX<AutoDiffXd> hessian;
+    mpm_transfer.ComputeHessianP2G(particles, &grid, &hessian);
+
+
+    Eigen::VectorX<AutoDiffXd> gf= grid.get_force(0);
+    MatrixX<AutoDiffXd> xxx = gf(0).derivatives();
+    for (int i = 0; i < 5; ++i) {
+        std::cout << xxx(i) << " ";
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < 1; ++i) {
+        std::cout << hessian(0,i) * dt << " ";
+    }
+    std::cout << hessian(3,3) * dt << std::endl;
+    Eigen::VectorX<AutoDiffXd> gf1= grid.get_force(1);
+    MatrixX<AutoDiffXd> xxx1 = gf1(0).derivatives();
+    std::cout << xxx1(3) << std::endl;
     return 0;
 
 

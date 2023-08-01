@@ -31,6 +31,8 @@ class ElastoPlasticModel {
 
     virtual void CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix3<T>* P) const = 0;
 
+    virtual void CalcFirstPiolaStressDerivative(const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF) const = 0;
+
     T dummy_function(const Matrix3<T>& FE) const {
       return FE(0,0) * FE(0,0) + FE(0,1) * FE(0,1) + 3.0 * FE(0,2);
     }

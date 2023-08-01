@@ -41,13 +41,228 @@ class MPMTransfer {
     void TransferGridToParticles(const SparseGrid<T>& grid, T dt,
                                  Particles<T>* particles);
 
+
+    // reserve sparse grid, find active grid points, sort particles
+    int MakeGridCompatibleWithParticles(Particles<T>* particles, SparseGrid<T>* grid) {
+        int num_particles = particles->get_num_particles(); 
+        std::vector<Vector3<int>> batch_indices(
+            num_particles);  // batch_indices is the 3Dindex of batch that each particle belongs to
+        // Preallocate the indices of batches
+        for (int p = 0; p < num_particles; ++p) {
+            batch_indices[p] =
+                CalcBatchIndex(particles->get_position(p), grid->get_h());
+            // batch_indices at particle p is the (3-integer) index of the closet grid node
+        }
+        // If the sparse grid is uninitialized, reserve the space
+        if (grid->get_num_active_gridpt() == 0) {
+            grid->reserve(3 * particles->get_num_particles()); // TODO(yiminlin.tri): Magic number
+        }
+        // TODO(yiminlin.tri): expensive... To optimize
+        // TODO(simon): batch indices has the same size as particles, can only use
+        // batch_indices but not particles simon:
+        grid->UpdateActiveGridPoints(batch_indices, *particles);
+
+        SortParticles(batch_indices, *grid,
+                        particles);  // sort particles based on sorted grid nodes above
+        UpdateBasisAndGradientParticles(*grid, *particles);
+
+        return grid->get_num_active_gridpt(); 
+    }
+
+    // write grid velocities
+
+
+    T computeEnergyForceHessian(Particles<T>* particles, SparseGrid<T>* grid, T dt){
+        ComputeWeightsAndWeightsGradients(*particles, *grid);
+        ComputeParticleFnewG2P(*grid, dt, particles); //Fnew(vi*) write to particles
+        T energy = ComputeParticleEnergy(*particles);
+        ComputeForceP2G(*particles, grid); // write grid force and hessian onto grid
+        return energy;
+    } 
+
+    void ComputeWeightsAndWeightsGradients(const Particles<T>& particles, const SparseGrid<T>& grid) {
+        UpdateBasisAndGradientParticles(grid, particles);
+        // TODO(yiminlin.tri): Dp_inv_ is hardcoded for quadratic B-Spline
+        Dp_inv_ = 4.0 / (grid.get_h() * grid.get_h());
+    }
+
+    // g2p way to compute particle Fnew(vi*, Fp0, dt)
+    // Fp_new = Fₚ(vᵢ*) = [I + ∑ᵢ (xᵢ*−xᵢ⁰) ∇ Nᵢ(xₚ⁰)ᵀ]F⁰ₚ
+    void ComputeParticleFnewG2P(const SparseGrid<T>& grid, T dt, Particles<T>* particles) {
+        particles->resize_elastic_deformation_gradient_new(particles->get_num_particles());
+        int bi, bj, bk, idx_local; int p_start, p_end;
+        // A local array holding positions and velocities x^{n+1}_i, v^{n+1}_i at a batch
+        std::array<BatchState, 27> batch_states;
+        Vector3<int> batch_index_3d;
+        // For each batch of particles
+        p_start = 0;
+        for (int i = 0; i < grid.get_num_active_gridpt(); ++i) {
+            int batch_size = batch_sizes_[i];
+            if (batch_size == 0) {continue;} // Skip empty batches
+            p_end = p_start + batch_size;
+            // Preallocate positions and velocities at grid points in the current
+            // batch on a local array
+            batch_index_3d = grid.Expand1DIndex(i);
+            bi = batch_index_3d[0]; bj = batch_index_3d[1]; bk = batch_index_3d[2];
+            for (int c = -1; c <= 1; ++c) {
+            for (int b = -1; b <= 1; ++b) {
+            for (int a = -1; a <= 1; ++a) {
+                idx_local = (a+1) + 3*(b+1) + 9*(c+1);
+                Vector3<int> index_3d = Vector3<int>(bi+a, bj+b, bk+c);
+                batch_states[idx_local].position = grid.get_position(index_3d);
+                batch_states[idx_local].velocity = grid.get_velocity(index_3d);
+            }}}
+            // For each particle in the batch (Assume particles are sorted with
+            // respect to the batch index), update the particles' Fnew(v*)
+            for (int p = p_start; p < p_end; ++p) {
+                UpdateParticlesFnew(batch_states, dt, p, particles);
+            }
+            p_start = p_end;
+        }
+    }
+    // compute energy = sum_p V0 psi(F(v*)), the energy will be a function of v*
+    T ComputeParticleEnergy(const Particles<T>& particles){
+        T energy = 0;
+        for (int p = 0; p < particles.get_num_particles(); ++p) {
+            T volp = particles.get_reference_volume(p);
+            energy = energy + volp* particles.CalcParticleEnergyDensity(p, particles.get_elastic_deformation_gradient_new(p));
+        }
+        return energy;
+    }
+
+    // Hessian TBD
+    void ComputeForceP2G(const Particles<T>& particles, SparseGrid<T>* grid) {
+        int p_start, p_end, idx_local;
+        int num_active_gridpts = grid->get_num_active_gridpt();
+        // Local sum of states m_i v_i f_i on the grid points
+        std::vector<std::array<GridState, 27>> local_pads(num_active_gridpts);
+        // Positions of grid points in the batch
+        std::array<Vector3<T>, 27> batch_positions;
+        Vector3<int> batch_index_3d;
+        // Clear grid states
+        grid->ResetStates();
+        // For each batch of particles
+        p_start = 0;
+        for (int i = 0; i < num_active_gridpts; ++i) {
+            if (batch_sizes_[i] != 0) {
+                p_end = p_start + batch_sizes_[i];
+            // Preallocate positions at grid points in the current batch on a local array
+                batch_index_3d = grid->Expand1DIndex(i);
+                for (int c = -1; c <= 1; ++c) {
+                for (int b = -1; b <= 1; ++b) {
+                for (int a = -1; a <= 1; ++a) {
+                    idx_local = (a + 1) + 3 * (b + 1) + 9 * (c + 1);
+                    batch_positions[idx_local] = grid->get_position(batch_index_3d + Vector3<int>(a, b, c));
+                }}}
+                for (auto& s : local_pads[i]) {s.reset();}  // Clear local scratch pad
+                // For each particle in the batch, accumulate force
+                for (int p = p_start; p < p_end; ++p) {
+                    // set first PK stress as computed using F(v*)
+                    Matrix3<T> PK_stress_new;
+                    particles.compute_first_PK_stress(p, particles.get_elastic_deformation_gradient_new(p), &PK_stress_new);
+                    // update force via first PK stress
+                    AccumulateGridForcesOnBatch(p, particles.get_reference_volume(p), PK_stress_new,
+                        particles.get_elastic_deformation_gradient(p), &local_pads[i]);
+                }
+                p_start = p_end;
+            }
+        }
+        for (int i = 0; i < num_active_gridpts; ++i) {
+            if (batch_sizes_[i] != 0) {
+            batch_index_3d = grid->Expand1DIndex(i);
+            WriteBatchForceToGrid(batch_index_3d, local_pads[i], grid);
+            }
+        }
+    }
+
+    void ComputeHessianP2G(Particles<T>& particles, SparseGrid<T>* grid, MatrixX<T>* hessian) {
+        
+        hessian->resize(grid->get_num_active_gridpt()*3, grid->get_num_active_gridpt()*3);
+        hessian->setZero();
+        particles.resize_stress_derivatives(particles.get_num_particles());
+        particles.resize_stress_derivatives_contractF_contractF(particles.get_num_particles());
+        particles.ComputePiolaDerivatives();
+        particles.ContractPiolaDerivativesWithFWithF();
+        int p_start, p_end, idx_local;
+        int num_active_gridpts = grid->get_num_active_gridpt();
+        // Local sum of states m_i v_i f_i on the grid points
+        // std::vector<std::array<GridState, 27>> local_pads(num_active_gridpts);
+        // Positions of grid points in the batch
+        std::array<Vector3<T>, 27> batch_positions;
+        Vector3<int> batch_index_3d;
+        
+        // For each batch i*
+        p_start = 0;
+        for (int i_star = 0; i_star < num_active_gridpts; ++i_star) {
+            if (batch_sizes_[i_star] != 0) {
+                MatrixX<T> pad_hessian; pad_hessian.resize(27*3, 27*3); pad_hessian.setZero();
+                p_end = p_start + batch_sizes_[i_star];
+                // Preallocate positions at grid points in the current batch on a local array
+                batch_index_3d = grid->Expand1DIndex(i_star);
+                for (int c = -1; c <= 1; ++c) {
+                for (int b = -1; b <= 1; ++b) {
+                for (int a = -1; a <= 1; ++a) {
+                    idx_local = (a + 1) + 3 * (b + 1) + 9 * (c + 1);
+                    batch_positions[idx_local] = grid->get_position(batch_index_3d + Vector3<int>(a, b, c));
+                }}}
+                // for (auto& s : local_pads[i]) {s.reset();}  // Clear local scratch pad
+                // For each particle in the batch, 
+                for (int p = p_start; p < p_end; ++p) {
+                    // loop over each i of 27 nodes in the numerator
+                    for (size_t i = 0; i < 27; ++i){
+                        // loop over three dimensions α
+                        for (size_t alpha = 0; alpha < 3; ++alpha){
+                            // loop over each j of 27 nodes in the denominator
+                            for (size_t j = 0; j < 27; ++j){
+                                // loop over three dimensions τ
+                                for (size_t tau = 0; tau < 3; ++tau){
+
+                                    const Vector3<T>& gradNi_p = bases_grad_particles_[p][i];
+                                    const Vector3<T>& gradNj_p = bases_grad_particles_[p][j];
+                                    Eigen::Matrix<T, 9, 9>& A_alphabeta_taulambda = particles.get_stress_derivatives_contractF_contractF_(p);
+                                    // for the 9by9 matrix A_alphabeta_taulambda, we set the convention to be A(alpha*3+beta, tau*3+lambda)
+                                    for (size_t beta = 0; beta<3; ++beta) {
+                                        for (size_t lambda = 0; lambda<3; ++lambda) {
+                                            pad_hessian(3*i+alpha, 3*j+tau) += gradNi_p(beta) * A_alphabeta_taulambda(alpha*3+beta, tau*3+lambda) * gradNj_p(alpha);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                p_start = p_end;
+            
+                // assign local hessian to global, local hessian is (27*3) by (27*3)
+                for (int ic = -1; ic <= 1; ++ic) {
+                for (int ib = -1; ib <= 1; ++ib) {
+                for (int ia = -1; ia <= 1; ++ia) {
+                    int idx_local_i = (ia + 1) + 3 * (ib + 1) + 9 * (ic + 1); // local index 0-26
+                    Vector3<int> node_i_index_3d = batch_index_3d + Vector3<int>(ia, ib, ic); // global 3d index of node i
+
+                    for (int jc = -1; jc <= 1; ++jc) {
+                    for (int jb = -1; jb <= 1; ++jb) {
+                    for (int ja = -1; ja <= 1; ++ja) {
+                        int idx_local_j = (ja + 1) + 3 * (jb + 1) + 9 * (jc + 1); // local index 0-26
+                        Vector3<int> node_j_index_3d = batch_index_3d + Vector3<int>(ja, jb, jc); // global 3d index of node i
+
+                        MatrixX<T> dfi_dvj_block = pad_hessian.block(idx_local_i*3, idx_local_j*3, 3, 3);
+
+                        (*hessian).block(grid->Reduce3DIndex(node_i_index_3d)*3, grid->Reduce3DIndex(node_j_index_3d)*3, 3, 3) += dfi_dvj_block;
+                    }}}
+                }}}
+            }
+        }
+    }
+
+
     int DerivativeTest1(SparseGrid<T>* grid, Particles<T>* particles) {
         SetUpTransfer(grid, particles); // wip should also be computed here
         return grid->get_num_active_gridpt();                        
     }
 
     void DerivativeTest2(SparseGrid<T>* grid, const std::vector<Vector3<T>>& grid_velocities_input) {
-        DRAKE_DEMAND(grid_velocities_input.size() == grid->get_num_active_gridpt());
+        // DRAKE_DEMAND(grid_velocities_input.size() == grid->get_num_active_gridpt());
         for (size_t i = 0; i < grid_velocities_input.size(); i++) {
             grid->set_velocity(i, grid_velocities_input[i]);
         }
@@ -99,7 +314,6 @@ class MPMTransfer {
 
     void DerivativeTest5(const Particles<T>& particles, SparseGrid<T>* grid){
         int p_start, p_end, idx_local;
-        T mass_p, ref_volume_p;
         int num_active_gridpts = grid->get_num_active_gridpt();
         // Local sum of states m_i v_i f_i on the grid points
         std::vector<std::array<GridState, 27>> local_pads(num_active_gridpts);
@@ -127,14 +341,13 @@ class MPMTransfer {
 
                 // For each particle in the batch, accumulate force
                 for (int p = p_start; p < p_end; ++p) {
-                    ref_volume_p = particles.get_reference_volume(p);
                     // set first PK stress as computed using F(v*)
                     Matrix3<T> PK_stress_new;
                     particles.compute_first_PK_stress(p, particles.get_elastic_deformation_gradient_tmp(p), &PK_stress_new);
                     // update force via first PK stress
                     AccumulateGridForcesOnBatchFirstPKTest(p, particles.get_reference_volume(p),
                         particles.get_elastic_deformation_gradient(p),
-                        PK_stress_new, batch_positions, &local_pads[i]);
+                        PK_stress_new, &local_pads[i]);
                 }
                 p_start = p_end;
             }
@@ -261,7 +474,7 @@ class MPMTransfer {
                                      std::array<GridState, 27>* local_pad);
 
     void AccumulateGridForcesOnBatchFirstPKTest(int p, T reference_volume_p, const Matrix3<T>& FE_p, const Matrix3<T>& P_p,
-                                     const std::array<Vector3<T>, 27>& batch_positions, std::array<GridState, 27>* local_pad){
+                                      std::array<GridState, 27>* local_pad){
          // mostly copy from p2g, but we only compute grid force, using Fp(v*) for first PK stress                               
             int idx_local;
             // Accumulate on local scratch pads
@@ -274,6 +487,22 @@ class MPMTransfer {
                         GridState& state_i = (*local_pad)[idx_local];
                         state_i.force += -reference_volume_p * P_p * FE_p.transpose() * gradNi_p;
             }}}                   
+    }
+
+    //fᵢ += -V^0_p \cdot PKstress \cdot  F_p^T \cdot \nabla N_i(x_p)
+    void AccumulateGridForcesOnBatch(int p, T reference_volume_p, const Matrix3<T>& PK_stress, const Matrix3<T>& FE,
+                                     std::array<GridState, 27>* local_pad){
+        int idx_local;
+        // Accumulate on local scratch pads
+        for (int c = -1; c <= 1; ++c) {
+            for (int b = -1; b <= 1; ++b) {
+                for (int a = -1; a <= 1; ++a) {
+                    idx_local = (a + 1) + 3 * (b + 1) + 9 * (c + 1);
+                    const Vector3<T>& gradNi_p = bases_grad_particles_[p][idx_local];
+                    // For each particle in the batch
+                    GridState& state_i = (*local_pad)[idx_local];
+                    state_i.force += -reference_volume_p * PK_stress * FE.transpose() * gradNi_p;
+        }}}                   
     }
 
     void WriteBatchStateToGrid(const Vector3<int>& batch_index_3d,
@@ -292,6 +521,26 @@ class MPMTransfer {
     // Given the position of a particle xp, calculate the index of the batch
     // this particle is in.
     Vector3<int> CalcBatchIndex(const Vector3<T>& xp, T h) const;
+
+
+    // like a regular F update, but store in Fnew, since we want to keep the original F
+    void UpdateParticlesFnew(const std::array<BatchState, 27>& batch_states, T dt, int p, Particles<T>* particles) {
+        int idx_local;
+        Matrix3<T> grad_vp_new = Matrix3<T>::Zero();
+        // For each grid node affecting the current particle
+        for (int c = -1; c <= 1; ++c) {
+        for (int b = -1; b <= 1; ++b) {
+        for (int a = -1; a <= 1; ++a) {
+            idx_local = (a+1) + 3*(b+1) + 9*(c+1);
+            const Vector3<T>& gradNi_p = bases_grad_particles_[p][idx_local];
+            const Vector3<T>& vi_new = batch_states[idx_local].velocity;
+            // Accumulate grad_vp_new
+            grad_vp_new += vi_new*gradNi_p.transpose();
+        }}}
+        // F_p^{v*} = (I + dt*grad_vp_new)*F_p^n
+        particles->set_elastic_deformation_gradient_new(p,
+                            (Matrix3<T>::Identity() + dt*grad_vp_new)*particles->get_elastic_deformation_gradient(p));
+    }
 
 
     // // like a regular F update, but store in Ftmp, since we want to keep the original F

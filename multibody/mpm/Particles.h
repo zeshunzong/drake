@@ -15,6 +15,7 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
+
 // A particles class holding vectors of particles' state
 template <typename T>
 class Particles {
@@ -33,6 +34,7 @@ class Particles {
     const T& get_reference_volume(int index) const;
     const Matrix3<T>& get_elastic_deformation_gradient(int index) const;
     const Matrix3<T>& get_elastic_deformation_gradient_tmp(int index) const;
+    const Matrix3<T>& get_elastic_deformation_gradient_new(int index) const;
     const Matrix3<T>& get_kirchhoff_stress(int index) const;
     const Matrix3<T>& get_first_PK_stress(int index) const;
     const Matrix3<T>& get_B_matrix(int index) const;
@@ -48,13 +50,6 @@ class Particles {
     // Get the matrix B_p, who composes the affine matrix C_p in APIC:
     // v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p),
     const std::vector<Matrix3<T>>& get_B_matrices() const;
-
-    void advect_x_coord(){
-      std::cout << "in advect x coord " << num_particles_ << std::endl;
-      for (int ind = 0; ind < num_particles_; ++ind){
-         positions_[ind][0] = positions_[ind][0] + 0.002;
-      }
-    }
 
     void print_info() const {
       for (int ind = 0; ind < num_particles_; ++ind){
@@ -77,9 +72,26 @@ class Particles {
     void resize_elastic_deformation_gradient_tmp(size_t s) {
       elastic_deformation_gradients_tmp_.resize(s);
     }
+
+   void resize_elastic_deformation_gradient_new(size_t s) {
+      elastic_deformation_gradients_new_.resize(s);
+    }
+
+
     void set_elastic_deformation_gradient_tmp(int index,
                         const Matrix3<T>& elastic_deformation_gradient_tmp);
-   
+
+   void set_elastic_deformation_gradient_new(int index,
+                        const Matrix3<T>& elastic_deformation_gradient_new);
+
+   void resize_stress_derivatives(size_t s) {
+      stress_derivatives_.resize(s);
+    }
+
+   void resize_stress_derivatives_contractF_contractF(size_t s) {
+      stress_derivatives_contractF_contractF_.resize(s);
+    }
+
     T CalcParticleEnergyDensity(int index, const Matrix3<T>& Fp) const {
       return elastoplastic_models_[index]->CalcStrainEnergyDensity(Fp);
     }
@@ -143,6 +155,17 @@ class Particles {
     // already updated in the member variables.
     void AdvectParticles(T dt);
 
+
+    void ComputePiolaDerivatives();
+
+    void ContractPiolaDerivativesWithFWithF();
+      ///CalcFirstPiolaStressDerivative(const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF)
+
+    Eigen::Matrix<T, 9, 9>& get_stress_derivatives_contractF_contractF_(int index) {
+      return stress_derivatives_contractF_contractF_[index];
+    }
+
+
     // Return the sum of mass, momentum and angular momentum of all particles.
     // The sum of particles' angular momentums is ∑ mp xp×vp + Bp^T:ϵ
     // by https://math.ucdavis.edu/~jteran/papers/JST17.pdf section 5.3.1
@@ -156,11 +179,15 @@ class Particles {
     std::vector<T> reference_volumes_{};
     std::vector<Matrix3<T>> elastic_deformation_gradients_{};
     std::vector<Matrix3<T>> elastic_deformation_gradients_tmp_{}; // as a function of grid v
+    std::vector<Matrix3<T>> elastic_deformation_gradients_new_{}; // as a function of grid v
     std::vector<Matrix3<T>> kirchhoff_stresses_{};
     std::vector<Matrix3<T>> first_PK_stresses_{};
     // The affine matrix B_p in APIC
     std::vector<Matrix3<T>> B_matrices_{};
     std::vector<copyable_unique_ptr<ElastoPlasticModel<T>>> elastoplastic_models_{};
+
+    std::vector<Eigen::Matrix<T, 9, 9>> stress_derivatives_{};
+    std::vector<Eigen::Matrix<T, 9, 9>> stress_derivatives_contractF_contractF_{};
 
 
     
