@@ -22,7 +22,7 @@ namespace mpm {
 // A implementation of MPM's Particles to Grid (P2G) and Grid to Particles (G2P)
 // operations
 template <typename T>
-class MPMTransfer {
+class MPMTransfer { 
  public:
     MPMTransfer() {}
 
@@ -40,6 +40,33 @@ class MPMTransfer {
     // gradients on the particles
     void TransferGridToParticles(const SparseGrid<T>& grid, T dt,
                                  Particles<T>* particles);
+
+    // reserve sparse grid, find active grid points, sort particles, etc
+    int MakeGridCompatibleWithParticles(Particles<T>* particles, SparseGrid<T>* grid);
+
+    // need to make sure grid is compatible with particles,
+    // Compute Energy(vi*; F⁰ₚ, dt), Force(vi*; F⁰ₚ, dt), Hessian(vi*; F⁰ₚ, dt).
+    // It is assumed that vi* has already been set in grid 
+    T CalcEnergyForceHessian(Particles<T>* particles, SparseGrid<T>* grid, MatrixX<T>* hessian, T dt);
+
+    // g2p way to compute particle Fnew(vi*, Fp0, dt)
+    // Fp_new = Fₚ(vᵢ*) = [I + ∑ᵢ (xᵢ*−xᵢ⁰) ∇ Nᵢ(xₚ⁰)ᵀ]F⁰ₚ
+    void CalcParticleFnewG2P(const SparseGrid<T>& grid, T dt, Particles<T>* particles);
+
+    // compute energy = sum_p V0 psi(F(v*)), the energy will be a function of v*
+    T CalcTotalParticleEnergy(const Particles<T>& particles);
+
+    // Compute fi(v*) for each grid node i, this is also -de/dxi
+    // see accompanied ElasticEnergyDerivatives.md for formula
+    // The computation is down in a p2g fashion. Implicitly depends on dt 
+    void CalcGridForceP2G(const Particles<T>& particles, SparseGrid<T>* grid);
+
+    // Compute d²energy(v*)/d(x*)². The final answer is written as
+    // hessian(i*3+alpha, j*3+rho) = d²energy(v*)/d(x*)ᵢₐd(x*)ⱼᵨ
+    // Note that this is a symmetric matrix
+    // see accompanied ElasticEnergyDerivatives.md for formula
+    // The computation is down in a p2g fashion. Implicitly depends on dt 
+    void CalcHessianP2G(Particles<T>* particles, SparseGrid<T>* grid, MatrixX<T>* hessian);
 
 
  private:
@@ -147,8 +174,16 @@ class MPMTransfer {
                                      std::array<GridState, 27>* local_pad);
 
     
-   
+    // given particle p, write its contribution to grid forces to all nearby grid nodes
+    //fᵢ += -V^0_p \cdot PKstress \cdot  F_p^T \cdot \nabla N_i(x_p) 
+    void AccumulateGridForcesOnBatch(int p, T reference_volume_p, const Matrix3<T>& PK_stress, const Matrix3<T>& FE,
+                                     std::array<GridState, 27>* local_pad);
     
+    // like a regular F update, but store in Fnew, since we want to keep the original F⁰ₚ
+    void UpdateParticlesFnew(const std::array<BatchState, 27>& batch_states, 
+                              T dt, int p, 
+                              Particles<T>* particles);
+                              
 
     void WriteBatchStateToGrid(const Vector3<int>& batch_index_3d,
                                const std::array<GridState, 27>& sum_local,
