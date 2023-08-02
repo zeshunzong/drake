@@ -53,11 +53,7 @@ const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient(int index)
     return elastic_deformation_gradients_[index];
 }
 
-template <typename T>
-const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient_new(int index)
-                                                                        const {
-    return elastic_deformation_gradients_new_[index];
-}
+
 
 template <typename T>
 const Matrix3<T>& Particles<T>::get_kirchhoff_stress(int index) const {
@@ -144,11 +140,6 @@ void Particles<T>::set_elastic_deformation_gradient(int index,
     elastic_deformation_gradients_[index] = elastic_deformation_gradient;
 }
 
-template <typename T>
-void Particles<T>::set_elastic_deformation_gradient_new(int index,
-                        const Matrix3<T>& elastic_deformation_gradient_new) {
-    elastic_deformation_gradients_new_[index] = elastic_deformation_gradient_new;
-}
 
 template <typename T>
 void Particles<T>::set_kirchhoff_stress(int index,
@@ -300,39 +291,6 @@ void Particles<T>::AdvectParticles(T dt) {
     }
 }
 
-template <typename T>
-void Particles<T>::ComputePiolaDerivatives() {
-    DRAKE_DEMAND(static_cast<int>(elastic_deformation_gradients_new_.size()) == num_particles_);    
-    for (int p = 0; p < num_particles_; ++p) {
-        elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(elastic_deformation_gradients_new_[p], &stress_derivatives_[p]);
-    }
-}
-
-/* 
-For each particle p, compute and store Result(3β+α, 3γ+ρ) = [∑ᵢⱼ (dPₐᵢ/dFᵨⱼ) * Fᵧⱼ * Fᵦᵢ] * Vₚ⁰
-i and j are θ and ϕ in accompanied ElasticEnergyDerivatives.md
-*/
-template <typename T>
-void Particles<T>::ContractPiolaDerivativesWithFWithF() {
-    DRAKE_DEMAND(static_cast<int>(stress_derivatives_contractF_contractF_.size()) == num_particles_);
-    for (int index = 0; index < num_particles_; ++index) {
-        stress_derivatives_contractF_contractF_[index].setZero();
-        Eigen::Matrix3<T> Fp0 = elastic_deformation_gradients_[index];
-        for (int i = 0; i < 3; ++i){
-            for (int j = 0; j < 3; ++j){
-                for (int alpha = 0; alpha < 3; ++alpha) {
-                    for (int beta = 0; beta < 3; ++beta) {
-                        for (int gamma = 0; gamma < 3; ++gamma) {
-                            for (int rho = 0; rho < 3; ++rho) {
-                                stress_derivatives_contractF_contractF_[index](3*beta+alpha, 3*gamma+rho) +=  stress_derivatives_[index](3*i+alpha, 3*j+rho) * Fp0(gamma,j) * Fp0(beta,i) * get_reference_volume(index);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 template <typename T>
 TotalMassEnergyMomentum<T> Particles<T>::GetTotalMassEnergyMomentum(T g) const {

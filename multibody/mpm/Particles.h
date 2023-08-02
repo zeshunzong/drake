@@ -68,34 +68,16 @@ class Particles {
     void set_elastic_deformation_gradient(int index,
                            const Matrix3<T>& elastic_deformation_gradient);
    
-   void resize_elastic_deformation_gradient_new(size_t s) {
-      elastic_deformation_gradients_new_.resize(s);
-    }
+   
+   
 
-   void set_elastic_deformation_gradient_new(int index,
-                        const Matrix3<T>& elastic_deformation_gradient_new);
-
-   void resize_stress_derivatives(size_t s) {
-      stress_derivatives_.resize(s);
-    }
-
-   void resize_stress_derivatives_contractF_contractF(size_t s) {
-      stress_derivatives_contractF_contractF_.resize(s);
-    }
-
-    T CalcParticleEnergyDensity(int index, const Matrix3<T>& Fp) const {
-      return elastoplastic_models_[index]->CalcStrainEnergyDensity(Fp);
-    }
 
     void set_kirchhoff_stress(int index,
                               const Matrix3<T>& kirchhoff_stress);
     void set_first_PK_stress(int index,
                               const Matrix3<T>& first_PK_stress);
                               
-    void compute_first_PK_stress(int index, const Matrix3<T>& FE, Matrix3<T>* PK_stress) const {
-      elastoplastic_models_[index]->CalcFirstPiolaStress(FE, PK_stress);
-    }         
-
+   
 
     void set_B_matrix(int index, const Matrix3<T>& B_matrix);
     void set_elastoplastic_model(int index,
@@ -146,17 +128,7 @@ class Particles {
     // already updated in the member variables.
     void AdvectParticles(T dt);
 
-    // For each particle p, after elastic_deformation_gradients_new_[p] is computed, compute dPdF and store it.
-    void ComputePiolaDerivatives();
-
-
-    // For each particle p, after dPdF is computed, compute dPdF contract F⁰ₚ contract F⁰ₚ * Vₚ⁰ and store it.
-    void ContractPiolaDerivativesWithFWithF();
-
-    Eigen::Matrix<T, 9, 9>& get_stress_derivatives_contractF_contractF_(int index) {
-      return stress_derivatives_contractF_contractF_[index];
-    }
-
+  
 
     // Return the sum of mass, momentum and angular momentum of all particles.
     // The sum of particles' angular momentums is ∑ mp xp×vp + Bp^T:ϵ
