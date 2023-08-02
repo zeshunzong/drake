@@ -29,7 +29,7 @@ class MPMTransfer {
     // Sort the particles according to the batch number, and preallocate
     // bases' evaluations for transfer routines. This routine has to be called
     // at the beginning of each time step (before P2G and G2P transfers),
-    // otherwise the results will be incorrect.
+    // otherwise the results will be incorrect. 
     void SetUpTransfer(SparseGrid<T>* grid, Particles<T>* particles);
 
     // Transfer masses, velocities, and Kirchhoff stresses on the particles
