@@ -173,21 +173,12 @@ class MPMTransfer {
                                                             batch_positions,
                                      std::array<GridState, 27>* local_pad);
 
-    //fᵢ += -V^0_p \cdot PKstress \cdot  F_p^T \cdot \nabla N_i(x_p)
+    
+   
+    // given particle p, write its contribution to grid forces to all nearby grid nodes
+    //fᵢ += -V^0_p \cdot PKstress \cdot  F_p^T \cdot \nabla N_i(x_p) 
     void AccumulateGridForcesOnBatch(int p, T reference_volume_p, const Matrix3<T>& PK_stress, const Matrix3<T>& FE,
-                                     std::array<GridState, 27>* local_pad){
-        int idx_local;
-        // Accumulate on local scratch pads
-        for (int c = -1; c <= 1; ++c) {
-            for (int b = -1; b <= 1; ++b) {
-                for (int a = -1; a <= 1; ++a) {
-                    idx_local = (a + 1) + 3 * (b + 1) + 9 * (c + 1);
-                    const Vector3<T>& gradNi_p = bases_grad_particles_[p][idx_local];
-                    // For each particle in the batch
-                    GridState& state_i = (*local_pad)[idx_local];
-                    state_i.force += -reference_volume_p * PK_stress * FE.transpose() * gradNi_p;
-        }}}                   
-    }
+                                     std::array<GridState, 27>* local_pad);
 
     void WriteBatchStateToGrid(const Vector3<int>& batch_index_3d,
                                const std::array<GridState, 27>& sum_local,
