@@ -33,7 +33,6 @@ class Particles {
     const T& get_mass(int index) const;
     const T& get_reference_volume(int index) const;
     const Matrix3<T>& get_elastic_deformation_gradient(int index) const;
-    const Matrix3<T>& get_elastic_deformation_gradient_tmp(int index) const;
     const Matrix3<T>& get_elastic_deformation_gradient_new(int index) const;
     const Matrix3<T>& get_kirchhoff_stress(int index) const;
     const Matrix3<T>& get_first_PK_stress(int index) const;
@@ -69,17 +68,9 @@ class Particles {
     void set_elastic_deformation_gradient(int index,
                            const Matrix3<T>& elastic_deformation_gradient);
    
-    void resize_elastic_deformation_gradient_tmp(size_t s) {
-      elastic_deformation_gradients_tmp_.resize(s);
-    }
-
    void resize_elastic_deformation_gradient_new(size_t s) {
       elastic_deformation_gradients_new_.resize(s);
     }
-
-
-    void set_elastic_deformation_gradient_tmp(int index,
-                        const Matrix3<T>& elastic_deformation_gradient_tmp);
 
    void set_elastic_deformation_gradient_new(int index,
                         const Matrix3<T>& elastic_deformation_gradient_new);
@@ -179,7 +170,6 @@ class Particles {
     std::vector<T> masses_{};
     std::vector<T> reference_volumes_{};
     std::vector<Matrix3<T>> elastic_deformation_gradients_{};
-    std::vector<Matrix3<T>> elastic_deformation_gradients_tmp_{}; // as a function of grid v
     std::vector<Matrix3<T>> elastic_deformation_gradients_new_{}; // as a function of grid v
     std::vector<Matrix3<T>> kirchhoff_stresses_{};
     std::vector<Matrix3<T>> first_PK_stresses_{};

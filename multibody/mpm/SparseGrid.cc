@@ -217,6 +217,14 @@ void SparseGrid<T>::OverwriteGridVelocity(std::function<void(Vector3<T>,
 }
 
 template <typename T>
+void SparseGrid<T>::OverwriteGridVelocity(const std::vector<Vector3<T>>& all_grid_velocities) {
+    DRAKE_DEMAND(static_cast<int>(all_grid_velocities.size()) == num_active_gridpts_);
+    for (size_t i = 0; i < all_grid_velocities.size(); i++) {
+        set_velocity(i, all_grid_velocities[i]);
+    }
+}
+
+template <typename T>
 TotalMassEnergyMomentum<T> SparseGrid<T>::GetTotalMassAndMomentum() const {
     TotalMassEnergyMomentum<T> sum_state;
     sum_state.sum_mass             = 0.0;

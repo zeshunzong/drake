@@ -54,12 +54,6 @@ const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient(int index)
 }
 
 template <typename T>
-const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient_tmp(int index)
-                                                                        const {
-    return elastic_deformation_gradients_tmp_[index];
-}
-
-template <typename T>
 const Matrix3<T>& Particles<T>::get_elastic_deformation_gradient_new(int index)
                                                                         const {
     return elastic_deformation_gradients_new_[index];
@@ -148,12 +142,6 @@ template <typename T>
 void Particles<T>::set_elastic_deformation_gradient(int index,
                         const Matrix3<T>& elastic_deformation_gradient) {
     elastic_deformation_gradients_[index] = elastic_deformation_gradient;
-}
-
-template <typename T>
-void Particles<T>::set_elastic_deformation_gradient_tmp(int index,
-                        const Matrix3<T>& elastic_deformation_gradient_tmp) {
-    elastic_deformation_gradients_tmp_[index] = elastic_deformation_gradient_tmp;
 }
 
 template <typename T>
@@ -322,6 +310,7 @@ void Particles<T>::ComputePiolaDerivatives() {
 
 /* 
 For each particle p, compute and store Result(3β+α, 3γ+ρ) = [∑ᵢⱼ (dPₐᵢ/dFᵨⱼ) * Fᵧⱼ * Fᵦᵢ] * Vₚ⁰
+i and j are θ and ϕ in accompanied ElasticEnergyDerivatives.md
 */
 template <typename T>
 void Particles<T>::ContractPiolaDerivativesWithFWithF() {

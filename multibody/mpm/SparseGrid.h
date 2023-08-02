@@ -101,6 +101,9 @@ class SparseGrid {
                                                   Vector3<T>*)>
                                update_velocity, T t);
 
+    // directly setting all grid velocities by inputting a list of velocities
+    void OverwriteGridVelocity(const std::vector<Vector3<T>>& all_grid_velocities);
+
     // Return the sum of mass, momentum and angular momentum of all grid points
     TotalMassEnergyMomentum<T> GetTotalMassAndMomentum() const;
 

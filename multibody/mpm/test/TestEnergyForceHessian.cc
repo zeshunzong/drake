@@ -93,12 +93,12 @@ void TestEnergyAndForceAndHessian(){
     for (int i = 0; i < num_active_grids; i++){
         grid_velocities_input.push_back(Vi.col(i));
     }
-    mpm_transfer.DerivativeTest2(&grid, grid_velocities_input); // this is just a temporary setter
+    grid.OverwriteGridVelocity(grid_velocities_input); // feed in indep autodiff vars in grid v
     // Temporary----Manually set up vi*
 
     AutoDiffXd dt = 0.1;
     MatrixX<AutoDiffXd> hessian;
-    AutoDiffXd energy = mpm_transfer.computeEnergyForceHessian(&particles, &grid, &hessian, dt);
+    AutoDiffXd energy = mpm_transfer.CalcEnergyForceHessian(&particles, &grid, &hessian, dt);
     Eigen::VectorX<AutoDiffXd> dEnergydV = energy.derivatives(); // this should be num_active_nodes * 3
 
     Eigen::VectorX<AutoDiffXd> dEnergydX = dEnergydV/dt; // chain rule
