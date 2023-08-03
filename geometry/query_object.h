@@ -432,6 +432,7 @@ class QueryObject {
   ComputeDeformableContact(
       internal::DeformableContact<T>* deformable_contact) const;
 
+
   /** Applies a conservative culling mechanism to create a subset of all
    possible geometry pairs based on non-zero intersections. A geometry pair
    that is *absent* from the results is either a) culled by collision filters or

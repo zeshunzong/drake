@@ -20,6 +20,8 @@
 #include "drake/multibody/fem/velocity_newmark_scheme.h"
 #include "drake/multibody/plant/contact_properties.h"
 #include "drake/systems/framework/context.h"
+#include "drake/geometry/query_results/signed_distance_pair.h"
+#include "drake/geometry/query_results/signed_distance_to_point.h"
 
 
 using drake::geometry::GeometryId;
@@ -373,11 +375,47 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
 }
 
 template <typename T>
+void DeformableDriver<T>::AppendDiscreteContactPairsMpm(const systems::Context<T>& context,std::vector<DiscreteContactPair<T>>* result) const {
+    DRAKE_DEMAND(result != nullptr);
+    std::vector<DiscreteContactPair<T>>& contact_pairs = *result;
+    const geometry::QueryObject<T>& query_object = manager_->plant().get_geometry_query_input_port()
+          .template Eval<geometry::QueryObject<T>>(context);
+    // don't know how to use this one
+    const GeometryId mpm_geometry_id_temp = GeometryId::get_new_id(); 
+    const std::vector<Vector3<double>>& mpm_data = query_object.GetMpmPositions(); 
+    for (size_t num_particles = 0; num_particles < mpm_data.size(); num_particles++) {
+        std::vector<geometry::SignedDistanceToPoint<T>> point_to_geometry = query_object.ComputeSignedDistanceToPoint(mpm_data[num_particles]);
+        for (size_t num_geometries = 0; num_geometries < point_to_geometry.size(); num_geometries++) {
+            const T signed_distance = point_to_geometry[num_geometries].distance;
+            if (signed_distance < 0) {
+                // if mpm particle is inside rigid geometry
+                const GeometryId& id_rigid = point_to_geometry[num_geometries].id_G;
+                const Vector3<T>& normal = point_to_geometry[num_geometries].grad_W; // normal direction ( <---- p      )
+                const T fn0 = NAN; const T d = NAN;  // not used.
+                const T k = std::numeric_limits<double>::infinity();
+                const T tau = 0.5; const T mu = 0.5;
+                contact_pairs.push_back({mpm_geometry_id_temp, id_rigid, mpm_data[num_particles], normal,
+                                signed_distance, fn0, k, d, tau, mu});
+            }
+        }
+    }
+}
+
+
+template <typename T>
 void DeformableDriver<T>::AppendContactKinematics(
     const systems::Context<T>& context,
     std::vector<ContactPairKinematics<T>>* result) const {
   DRAKE_DEMAND(result != nullptr);
-  /* Since v_AcBc_W = v_WBc - v_WAc the relative velocity Jacobian will be:
+  /* 
+  
+  
+  
+  
+  
+  
+  
+  Since v_AcBc_W = v_WBc - v_WAc the relative velocity Jacobian will be:
      Jv_v_AcBc_W = Jv_v_WBc_W - Jv_v_WAc_W.
    That is the relative velocity at C is v_AcBc_W = Jv_v_AcBc_W * v.
    Finally Jv_v_AcBc_C = R_WC.transpose() * Jv_v_AcBc_W.

@@ -76,6 +76,20 @@ int do_main() {
   plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
                                "ground_visual", std::move(illustration_props));
 
+  /* Minimum required proximity properties for rigid bodies to interact with
+   deformable bodies.
+   1. A valid Coulomb friction coefficient, and
+   2. A resolution hint. (Rigid bodies need to be tessellated so that collision
+   queries can be performed against deformable geometries.) */
+  ProximityProperties rigid_proximity_props;
+  /* Set the friction coefficient close to that of rubber against rubber. */
+  const CoulombFriction<double> surface_friction(1.15, 1.15);
+  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
+  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
+                                    geometry::internal::kRezHint, 1.0);
+  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
+                                  "ground_collision", rigid_proximity_props);
+
 
   /* Set up a deformable model. */
   auto owned_deformable_model =

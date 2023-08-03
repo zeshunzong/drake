@@ -141,6 +141,13 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context,
       std::vector<DiscreteContactPair<T>>* pairs) const;
 
+    /* Given the configuration stored in `context`, appends discrete pairs in
+   which one of the body in contact is deformable to the given `pairs`.
+   @pre pairs != nullptr. */
+  void AppendDiscreteContactPairsMpm(
+      const systems::Context<T>& context,
+      std::vector<DiscreteContactPair<T>>* pairs) const;
+
   /* Appends the contact kinematics information for each contact pair where at
    least one of the body in contact is deformable.
    @pre result != nullptr. */

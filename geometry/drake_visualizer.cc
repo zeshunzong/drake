@@ -629,8 +629,10 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
   std::cout << "num geometries : " << query_object.inspector().num_geometries() << std::endl; getchar();
   // std::vector<SignedDistanceToPoint<T>> point_to_geometry =  
   Vector3<T> pos{0.5,0.5,0.5};
-  query_object.ComputeSignedDistanceToPoint(pos);
-  // std::cout << "signed distance: " << xx[0].distance << std::endl; getchar();
+  std::vector<SignedDistanceToPoint<T>> point_to_geometry = query_object.ComputeSignedDistanceToPoint(pos);
+
+  std::cout << "size of computed distances vector " << point_to_geometry.size() << std::endl;
+
   SendMPMGeometriesMessage(
       mpm_data, params_,
       ExtractDoubleOrThrow(context.get_time()), lcm_);
