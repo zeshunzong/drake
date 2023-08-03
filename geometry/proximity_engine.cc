@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include <drake_vendor/fcl/fcl.h>
 #include <fmt/format.h>
@@ -656,6 +657,8 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
 
     // Perform query of point vs anchored objects.
     anchored_tree_.distance(&query_point, &data, point_distance::Callback<T>);
+
+    std::cout << distances.size() << std::endl; getchar();
 
     return distances;
   }

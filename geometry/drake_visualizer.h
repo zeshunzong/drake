@@ -22,6 +22,8 @@
 #include "drake/lcmt_point_cloud.hpp"
 #include <iostream>
 #include "drake/perception/point_cloud_to_lcm.h"
+#include "drake/geometry/query_results/signed_distance_pair.h"
+#include "drake/geometry/query_results/signed_distance_to_point.h"
 
 namespace drake {
 namespace geometry {

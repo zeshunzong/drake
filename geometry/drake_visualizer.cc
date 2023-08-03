@@ -626,6 +626,11 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
   // // ADD a call to MPM one here 
   // don't need to connect mbp to sg now. can get mpm position (for visualization) via queryobject
   const std::vector<Vector3<double>>& mpm_data = query_object.GetMpmPositions(); 
+  std::cout << "num geometries : " << query_object.inspector().num_geometries() << std::endl; getchar();
+  // std::vector<SignedDistanceToPoint<T>> point_to_geometry =  
+  Vector3<T> pos{0.5,0.5,0.5};
+  query_object.ComputeSignedDistanceToPoint(pos);
+  // std::cout << "signed distance: " << xx[0].distance << std::endl; getchar();
   SendMPMGeometriesMessage(
       mpm_data, params_,
       ExtractDoubleOrThrow(context.get_time()), lcm_);
