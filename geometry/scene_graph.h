@@ -945,6 +945,12 @@ class SceneGraph final : public systems::LeafSystem<T> {
       systems::Context<T>* context) const;
   //@}
 
+  // -------------------------------newly added for MPM-------------------------
+  const systems::InputPort<T>& mpm_data_input_port() const {
+    return this->get_input_port(mpm_data_input_port_);
+  }
+  // -------------------------------newly added for MPM-------------------------
+
  private:
   // Friend class to facilitate testing.
   friend class SceneGraphTester;
@@ -1025,6 +1031,10 @@ class SceneGraph final : public systems::LeafSystem<T> {
 
   // The index of the output port with the QueryObject abstract value.
   int query_port_index_{-1};
+
+  // --------------- input port for MPM
+  int mpm_data_input_port_{-1};
+  // --------------- input port for MPM
 
   // SceneGraph owns its configured model; it gets copied into the context when
   // the context is set to its "default" state. We use unique_ptr in support of

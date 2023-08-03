@@ -191,9 +191,6 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
   const systems::InputPort<T>& mpm_data_input_port() const {
     return this->get_input_port(mpm_data_input_port_);
   }
-
-
-
   // -------------------------------newly added for MPM-------------------------
 
   /** @name Utility functions for instantiating and connecting a visualizer

@@ -111,13 +111,13 @@ void TestEnergyAndForceAndHessian(){
     }
 
     // check hessian = -dfdx
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 52; i++) {
         for (int j = 0; j < 3; j++) {
             Eigen::VectorX<AutoDiffXd> grid_force_i = grid.get_force(i);
             MatrixX<AutoDiffXd> d_grid_force_ij_d_V = grid_force_i(j).derivatives(); // 1 by 3*num_active_grids
             MatrixX<AutoDiffXd> d_grid_force_ij_d_X = d_grid_force_ij_d_V/dt; // chain rule
             Eigen::VectorX<AutoDiffXd> hessian_slice = hessian.col(i*3+j); //.col or .row should be the same, since it is symmetric
-            EXPECT_TRUE(CompareMatrices(-d_grid_force_ij_d_X, hessian_slice, 1e-10));
+            EXPECT_TRUE(CompareMatrices(-d_grid_force_ij_d_X, hessian_slice, 1e-12));
         }
     }
 

@@ -94,6 +94,12 @@ SceneGraph<T>::SceneGraph()
       this->DeclareAbstractOutputPort("query", &SceneGraph::CalcQueryObject)
           .get_index();
 
+  // -------------------------------newly added for MPM-------------------------
+  mpm_data_input_port_ = 
+      this->DeclareAbstractInputPort("mpm", Value<std::vector<Vector3<double>>>())
+          .get_index();
+  // -------------------------------newly added for MPM-------------------------
+
   auto& pose_update_cache_entry = this->DeclareCacheEntry(
       "Cache guard for pose updates", &SceneGraph::CalcPoseUpdate,
       {this->all_input_ports_ticket()});

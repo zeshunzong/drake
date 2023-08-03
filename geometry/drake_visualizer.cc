@@ -576,7 +576,6 @@ DrakeVisualizer<T>::DrakeVisualizer(lcm::DrakeLcmInterface* lcm,
   mpm_data_input_port_ = 
       this->DeclareAbstractInputPort("mpm", Value<std::vector<Vector3<double>>>())
           .get_index();
-
   // -------------------------------newly added for MPM-------------------------
 
   // These cache entries depend on *nothing*.
@@ -625,8 +624,8 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
       ExtractDoubleOrThrow(context.get_time()), lcm_);
 
   // // ADD a call to MPM one here 
-  const systems::InputPort<T>& mpm_intput_port = this->get_input_port(mpm_data_input_port_); 
-  const std::vector<Vector3<double>>& mpm_data = mpm_intput_port.template Eval<std::vector<Vector3<double>>>(context);
+  // don't need to connect mbp to sg now. can get mpm position (for visualization) via queryobject
+  const std::vector<Vector3<double>>& mpm_data = query_object.GetMpmPositions(); 
   SendMPMGeometriesMessage(
       mpm_data, params_,
       ExtractDoubleOrThrow(context.get_time()), lcm_);

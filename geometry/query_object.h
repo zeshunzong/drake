@@ -17,6 +17,8 @@
 #include "drake/math/rigid_transform.h"
 #include "drake/systems/framework/context.h"
 #include "drake/systems/sensors/image.h"
+#include "drake/systems/framework/input_port.h"
+#include "drake/systems/framework/output_port.h"
 
 namespace drake {
 namespace geometry {
@@ -127,6 +129,13 @@ class QueryObject {
   QueryObject& operator=(const QueryObject&);
   QueryObject(QueryObject&&) = default;
   QueryObject& operator=(QueryObject&&) = default;
+
+
+  const std::vector<Vector3<double>>& GetMpmPositions() const {
+    const systems::InputPort<T>& mpm_intput_port = scene_graph_->mpm_data_input_port();
+    const std::vector<Vector3<double>>& mpm_data = mpm_intput_port.template Eval<std::vector<Vector3<double>>>(*context_);
+    return mpm_data;
+  }
 
   //@}
 

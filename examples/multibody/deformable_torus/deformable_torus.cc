@@ -129,6 +129,9 @@ int do_main() {
 
   // connect mpm to output port
   builder.Connect(deformable_model->mpm_particle_positions_port(), visualizer.mpm_data_input_port());
+  builder.Connect(
+      deformable_model->mpm_particle_positions_port(),
+      scene_graph.mpm_data_input_port());
 
 
 
