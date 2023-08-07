@@ -163,6 +163,30 @@ class Particles {
     // by https://math.ucdavis.edu/~jteran/papers/JST17.pdf section 5.3.1
     TotalMassEnergyMomentum<T> GetTotalMassEnergyMomentum(T g) const;
 
+
+    // Note that the following weights and weight gradients will change if particle position changes 
+    void SetWeightAtParticle(int index_particle, int index_neighbor_node, const T& weight) {
+      DRAKE_DEMAND(index_neighbor_node>=0);
+      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
+      bases_val_particles_[index_particle][index_neighbor_node] = weight;
+    }
+    T GetWeightAtParticle(int index_particle, int index_neighbor_node) const {
+      DRAKE_DEMAND(index_neighbor_node>=0);
+      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
+      return bases_val_particles_[index_particle][index_neighbor_node];
+    }
+
+    void SetWeightGradientAtParticle(int index_particle, int index_neighbor_node, const Vector3<T>& dweight) {
+      DRAKE_DEMAND(index_neighbor_node>=0);
+      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
+      bases_grad_particles_[index_particle][index_neighbor_node] = dweight;
+    }
+    void GetWeightGradientAtParticle(int index_particle, int index_neighbor_node, Vector3<T>* dweight) {
+      DRAKE_DEMAND(index_neighbor_node>=0);
+      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
+      *dweight = bases_grad_particles_[index_particle][index_neighbor_node];
+    }
+
  private:
     int num_particles_;
     std::vector<Vector3<T>> positions_{};
@@ -179,6 +203,13 @@ class Particles {
 
     std::vector<Eigen::Matrix<T, 9, 9>> stress_derivatives_{};
     std::vector<Eigen::Matrix<T, 9, 9>> stress_derivatives_contractF_contractF_{};
+
+    // each particle p is related to its 27 neighbor grid nodes. This stores the corresponding weights
+    // wip. This is the same as the one in MPMTransfer. Should consider deprecate one of them in the future.
+    std::vector<std::array<T, 27>> bases_val_particles_{};
+    std::vector<std::array<Vector3<T>, 27>> bases_grad_particles_{};
+    std::array<T, 27> weights_ip_{};
+
 
 
     

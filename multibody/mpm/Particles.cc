@@ -18,7 +18,9 @@ Particles<T>::Particles(int num_particles): num_particles_(num_particles),
                                          kirchhoff_stresses_(num_particles),
                                          first_PK_stresses_(num_particles),
                                          B_matrices_(num_particles),
-                                         elastoplastic_models_(num_particles) {
+                                         elastoplastic_models_(num_particles),
+                                         bases_val_particles_(num_particles),
+                                         bases_grad_particles_(num_particles) {
     DRAKE_ASSERT(num_particles >= 0);
 }
 
@@ -275,6 +277,8 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
     first_PK_stresses_.emplace_back(first_PK_stress);
     B_matrices_.emplace_back(B_matrix);
     elastoplastic_models_.emplace_back(std::move(elastoplastic_model));
+    bases_val_particles_.emplace_back(std::array<T, 27>{});
+    bases_grad_particles_.emplace_back(std::array<Vector3<T>, 27>{});
     num_particles_++;
 }
 

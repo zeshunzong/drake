@@ -15,6 +15,8 @@
 #include "drake/systems/framework/context.h"
 #include "drake/multibody/mpm/mpm_solver.h"
 
+#include "drake/geometry/query_results/mpm_contact.h"
+
 
 namespace drake {
 namespace multibody {
@@ -141,8 +143,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context,
       std::vector<DiscreteContactPair<T>>* pairs) const;
 
-    /* Given the configuration stored in `context`, appends discrete pairs in
-   which one of the body in contact is deformable to the given `pairs`.
+    /* Given the configuration stored in `context`, appends the mpm part. 
+    This function should be called by the above function
    @pre pairs != nullptr. */
   void AppendDiscreteContactPairsMpm(
       const systems::Context<T>& context,
@@ -152,6 +154,13 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
    least one of the body in contact is deformable.
    @pre result != nullptr. */
   void AppendContactKinematics(
+      const systems::Context<T>& context,
+      std::vector<ContactPairKinematics<T>>* result) const;
+
+/* Appends the contact kinematics information for each contact pair where at
+   least one of the body in contact is deformable.
+   @pre result != nullptr. */
+  void AppendContactKinematicsMpm(
       const systems::Context<T>& context,
       std::vector<ContactPairKinematics<T>>* result) const;
 
@@ -276,6 +285,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context,
       geometry::internal::DeformableContact<T>* result) const;
 
+  void CalcMpmContact(
+      const systems::Context<T>& context,
+      geometry::internal::MpmContact<T>* result) const;
+
   /* Eval version of CalcDeformableContact(). */
   const geometry::internal::DeformableContact<T>& EvalDeformableContact(
       const systems::Context<T>& context) const;
@@ -357,7 +370,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   /* The integrator used to advance deformable body free motion states in
    time. */
   std::unique_ptr<mpm::internal::MpmSolver<T>> mpm_solver_;
-
 };
 
 }  // namespace internal

@@ -335,6 +335,7 @@ drake_cc_library(
         ":Particles",
         ":SparseGrid",
         "//common:essential",
+        "//geometry/query_results:mpm_contact",
     ],
 )
 

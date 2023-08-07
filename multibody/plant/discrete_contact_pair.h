@@ -19,6 +19,8 @@ namespace internal {
  @tparam T The underlying scalar type. Must be a valid Eigen scalar. */
 template <typename T>
 struct DiscreteContactPair {
+  int contact_particle_index{-1}; // the index of mpm particle participating in contact, -1 if not MPM
+
   /* The id of the first geometry in the contact. */
   geometry::GeometryId id_A;
   /* The id of the second geometry in the contact. */
@@ -54,6 +56,8 @@ struct DiscreteContactPair {
    * not correspond to mesh contact. */
   std::optional<int> face_index{};
 };
+
+
 
 }  // namespace internal
 }  // namespace multibody

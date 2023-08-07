@@ -350,6 +350,9 @@ void CompliantContactManager<T>::CalcDiscreteContactPairs(
     if (deformable_driver_ != nullptr && deformable_driver_->num_deformable_bodies()>0) {
       deformable_driver_->AppendDiscreteContactPairs(context, contact_pairs);
     }
+    if (deformable_driver_ != nullptr) {
+      deformable_driver_->AppendDiscreteContactPairsMpm(context, contact_pairs);
+    }
   }
 }
 
@@ -421,7 +424,7 @@ void CompliantContactManager<T>::AppendDiscreteContactPairsForPointContact(
       const T phi0 = -pair.depth;
       const T fn0 = k * pair.depth;  // Used by TAMSI, ignored by SAP.
 
-      contact_pairs.push_back({pair.id_A, pair.id_B, p_WC, pair.nhat_BA_W, phi0,
+      contact_pairs.push_back({-1, pair.id_A, pair.id_B, p_WC, pair.nhat_BA_W, phi0,
                               fn0, k, d, tau, mu, {} /* no surface index */,
                               {} /* no face index */});
     }
@@ -589,7 +592,7 @@ void CompliantContactManager<T>::
           const T phi0 = -p0 / g;
 
           if (k > 0) {
-            contact_pairs.push_back({s.id_M(), s.id_N(), p_WQ, nhat_W, phi0,
+            contact_pairs.push_back({-1, s.id_M(), s.id_N(), p_WQ, nhat_W, phi0,
                                      fn0, k, d, tau, mu, surface_index, face});
           }
         }

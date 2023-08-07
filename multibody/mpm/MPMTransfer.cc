@@ -33,7 +33,7 @@ void MPMTransfer<T>::SetUpTransfer(SparseGrid<T>* grid,
   SortParticles(batch_indices, *grid,
                 particles);  // sort particles based on sorted grid nodes above
   // TODO(yiminlin.tri): expensive... To optimize
-  UpdateBasisAndGradientParticles(*grid, *particles);
+  UpdateBasisAndGradientParticles(*grid, particles);
   
   // TODO(yiminlin.tri): Dp_inv_ is hardcoded for quadratic B-Spline
   // The values of Dp_inv_ are different for different B-Spline bases
@@ -60,7 +60,7 @@ int MPMTransfer<T>::MakeGridCompatibleWithParticles(Particles<T>* particles, Spa
   // batch_indices but not particles simon:
   grid->UpdateActiveGridPoints(batch_indices, *particles);
   SortParticles(batch_indices, *grid, particles);  // sort particles based on sorted grid nodes above
-  UpdateBasisAndGradientParticles(*grid, *particles);
+  UpdateBasisAndGradientParticles(*grid, particles);
   return grid->get_num_active_gridpt(); 
 }
 
@@ -230,7 +230,7 @@ void MPMTransfer<T>::CalcHessianP2G(Particles<T>* particles, SparseGrid<T>* grid
 
 template <typename T>
 T MPMTransfer<T>::CalcEnergyForceHessian(Particles<T>* particles, SparseGrid<T>* grid, MatrixX<T>* hessian, T dt) {
-    UpdateBasisAndGradientParticles(*grid, *particles); // compute weights and weight gradients
+    UpdateBasisAndGradientParticles(*grid, particles); // compute weights and weight gradients
     CalcParticleFnewG2P(*grid, dt, particles); //Fnew(vi*, dt) write to particles
     T energy = CalcTotalParticleEnergy(*particles);
     CalcGridForceP2G(*particles, grid); // write grid force and hessian onto grid
@@ -405,10 +405,10 @@ void MPMTransfer<T>::SortParticles(
 
 template <typename T>
 void MPMTransfer<T>::UpdateBasisAndGradientParticles(
-    const SparseGrid<T>& grid, const Particles<T>& particles) {
+    const SparseGrid<T>& grid, Particles<T>* particles) {
   int num_particles, p_start, p_end;
   Vector3<int> batch_index_3d;
-  num_particles = particles.get_num_particles();
+  num_particles = particles->get_num_particles();
 
   bases_val_particles_.reserve(num_particles);
   bases_grad_particles_.reserve(num_particles);
@@ -430,8 +430,8 @@ void MPMTransfer<T>::UpdateBasisAndGradientParticles(
     // For each particle in the batch (Assume particles are sorted with
     // respect to the batch index), update basis evaluations
     for (int p = p_start; p < p_end; ++p) {
-      const Vector3<T>& xp = particles.get_position(p);
-      EvalBasisOnBatch(p, xp, grid, batch_index_3d);
+      const Vector3<T>& xp = particles->get_position(p);
+      EvalBasisOnBatch(p, xp, grid, batch_index_3d, particles);
     }
     p_start = p_end;
   }
@@ -440,7 +440,8 @@ void MPMTransfer<T>::UpdateBasisAndGradientParticles(
 template <typename T>
 void MPMTransfer<T>::EvalBasisOnBatch(int p, const Vector3<T>& xp,
                                       const SparseGrid<T>& grid,
-                                      const Vector3<int>& batch_index_3d) {
+                                      const Vector3<int>& batch_index_3d,
+                                      Particles<T>* particles) {
   int bi = batch_index_3d[0];
   int bj = batch_index_3d[1];
   int bk = batch_index_3d[2];
@@ -461,6 +462,10 @@ void MPMTransfer<T>::EvalBasisOnBatch(int p, const Vector3<T>& xp,
         std::tie(bases_val_particles_[p][idx_local],
                  bases_grad_particles_[p][idx_local]) =
             basis.EvalBasisAndGradient(xp);
+
+        // also store the result in Particles
+        particles->SetWeightAtParticle(p, idx_local, bases_val_particles_[p][idx_local]);
+        particles->SetWeightGradientAtParticle(p, idx_local, bases_grad_particles_[p][idx_local]);
       }
     }
   }

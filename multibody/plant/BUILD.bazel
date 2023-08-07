@@ -144,6 +144,7 @@ drake_cc_library(
         "//multibody/tree",
         "//systems/framework:diagram_builder",
         "//systems/framework:leaf_system",
+        "//geometry/query_results:mpm_contact",
     ],
 )
 

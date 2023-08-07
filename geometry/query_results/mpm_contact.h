@@ -33,10 +33,6 @@ Rigid body with id A
 *: particles in contact
 `: particles not in contact
 
-std::vector<int> particles_in_contact_:                      8             9                12
-std::vector<GeometryId> participating_rigid_bodies_:        id B          id A             id B
-std::vector<T> penetration_distances_:                   -dist(8, B)    -dist(9, A)      -dist(12, B)
-std::vector<Vector3<T>> normal_vectors_:               unit vectors in the above directions
 
 
 
@@ -47,68 +43,101 @@ std::unordered_map<int, std::vector3<T>> map_particle_index_to_normal_
 template <typename T>
 class MpmContact {
  public:
+
+
+  struct MpmParticleContactPair{
+
+   int particle_in_contact_index_{};
+   GeometryId non_mpm_id_{};
+   T penetration_distance_{};
+   Vector3<T> normal_{};
+   Vector3<T> particle_in_contact_position_{};
+
+   MpmParticleContactPair(const int particle_in_contact_index, const GeometryId& non_mpm_id, const T penetration_distance, const Vector3<T>& normal, const Vector3<T>& position){
+      particle_in_contact_index_ = particle_in_contact_index;
+      non_mpm_id_ = non_mpm_id;
+      penetration_distance_ = penetration_distance;
+      normal_ = normal;
+      particle_in_contact_position_ = position;
+   }
+
+
+  };
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(MpmContact)
 
   MpmContact() = default;
 
 
   void Reset() {
-   map_geometries_to_contact_particles_.clear();
-   map_particle_index_to_distance_.clear();
-   map_particle_index_to_normal_.clear();
+   mpm_contact_pairs_.clear();
+   particles_in_contact_.clear();
   }
 
-  void AddContactParticle(int particle_index, GeometryId geometry_in_contact, T distance, const Vector3<T> contact_normal){
-
-      AddContactParticleToGeometryMap(particle_index, geometry_in_contact);
-      map_particle_index_to_distance_.insert({particle_index, distance});
-      // map_particle_index_to_normal_.insert()
-  }
-
+  void AddMpmContactPair(const int particle_index, const GeometryId& nonmpm_geometry, const T distance, const Vector3<T>& contact_normal, const Vector3<T>& position) {
+   MpmParticleContactPair new_pair(particle_index, nonmpm_geometry, distance, contact_normal, position);
+   mpm_contact_pairs_.push_back(new_pair);
    
+   particles_in_contact_.insert(particle_index); // mark this particle as a contact particle
+  }
 
-//   const std::vector<DeformableContactSurface<T>>& contact_surfaces() const {
-//     return contact_surfaces_;
-//   }
+  size_t GetNumContactPairs() const {
+   return mpm_contact_pairs_.size();
+  }
 
-//   /* Returns the contact participating information of the deformable geometry
-//    with the given id.
-//    @pre A geometry with `deformable_id` has been registered via
-//    RegisterDeformableGeometry(). */
-//   const ContactParticipation& contact_participation(
-//       GeometryId deformable_id) const {
-//     return contact_participations_.at(deformable_id);
-//   }
+  int GetParticleIndexAt(size_t contact_pair_index) {
+   return mpm_contact_pairs_[contact_pair_index].particle_in_contact_index_;
+  }
 
+  GeometryId& GetNonMpmIdAt(size_t contact_pair_index) {
+   return mpm_contact_pairs_[contact_pair_index].non_mpm_id_;
+  }
 
+  T GetPenetrationDistanceAt(size_t contact_pair_index) {
+   return mpm_contact_pairs_[contact_pair_index].penetration_distance_;
+  }
 
+  Vector3<T>& GetNormalAt(size_t contact_pair_index) {
+   return mpm_contact_pairs_[contact_pair_index].normal_;
+  }
 
+  Vector3<T>& GetContactPositionAt(size_t contact_pair_index) {
+   return mpm_contact_pairs_[contact_pair_index].particle_in_contact_position_;
+  }
+
+  bool ParticleIsInContact(int particle_index) const {
+   auto it = particles_in_contact_.find(particle_index);
+   if (it != particles_in_contact_.end()){
+      return true;
+   }
+   return false;
+  }
 
 
   
 
  private:
 
-   void AddContactParticleToGeometryMap(int particle_index, GeometryId geometry_in_contact){
-      if (map_geometries_to_contact_particles_.count(geometry_in_contact) == 0) {
-         std::vector<int> particles_in_contact_with_this_geometry{};
-         particles_in_contact_with_this_geometry.push_back(particle_index);
-         map_geometries_to_contact_particles_.insert({geometry_in_contact, particles_in_contact_with_this_geometry});
-      }
-      else {
-         std::vector<int>& particles_in_contact_with_this_geometry = map_geometries_to_contact_particles_[geometry_in_contact];
-         particles_in_contact_with_this_geometry.push_back(particle_index);
-      }
-   }
+   // void AddContactParticleToGeometryMap(int particle_index, GeometryId geometry_in_contact){
+   //    if (map_geometries_to_contact_particles_.count(geometry_in_contact) == 0) {
+   //       std::vector<int> particles_in_contact_with_this_geometry{};
+   //       particles_in_contact_with_this_geometry.push_back(particle_index);
+   //       map_geometries_to_contact_particles_.insert({geometry_in_contact, particles_in_contact_with_this_geometry});
+   //    }
+   //    else {
+   //       std::vector<int>& particles_in_contact_with_this_geometry = map_geometries_to_contact_particles_[geometry_in_contact];
+   //       particles_in_contact_with_this_geometry.push_back(particle_index);
+   //    }
+   // }
 
-   std::unordered_map<GeometryId, std::vector<int>> map_geometries_to_contact_particles_{};
-   std::unordered_map<int, T> map_particle_index_to_distance_{};
-   std::unordered_map<int, Vector3<T>> map_particle_index_to_normal_{};
+   // std::unordered_map<GeometryId, std::vector<int>> map_geometries_to_contact_particles_{};
+   // std::unordered_map<int, T> map_particle_index_to_distance_{};
+   // std::unordered_map<int, Vector3<T>> map_particle_index_to_normal_{};
 
-//   std::vector<int> particles_in_contact_;
-//   std::vector<GeometryId> participating_rigid_bodies_;
-//   std::vector<Vector3<T>> normal_vectors_;
-//   std::vector<T> penetration_distances_;
+
+   std::vector<MpmParticleContactPair> mpm_contact_pairs_{};
+
+   std::unordered_set<int> particles_in_contact_{};
+
   
 };
 
