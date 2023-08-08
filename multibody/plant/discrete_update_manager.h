@@ -144,9 +144,6 @@ class DiscreteUpdateManager : public ScalarConvertibleComponent<T> {
    update in discrete timestep. */
   void CalcAbstractValues(const systems::Context<T>& context,
                           systems::State<T>* update) const {
-    // The discrete sampling of input ports needs to be the first step of a
-    // discrete update.
-    // SampleDiscreteInputPortForces(context);
     DRAKE_DEMAND(update != nullptr);
     DoCalcAbstractValues(context, update);
   }

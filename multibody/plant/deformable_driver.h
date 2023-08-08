@@ -181,6 +181,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   const Multiplexer<T>& EvalParticipatingVelocityMultiplexer(
       const systems::Context<T>& context) const;
 
+  void DummyCheckContext(const systems::Context<T>& context) const;
+
  private:
   friend class DeformableDriverTest;
   friend class DeformableDriverContactTest;

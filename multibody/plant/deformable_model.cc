@@ -197,6 +197,7 @@ void DeformableModel<T>::InitializeParticles(const mpm::AnalyticLevelSet<double>
       std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p = m_param.elastoplastic_model->Clone();
       particles.AddParticle(xp, vp, init_m, reference_volume_p,
                               elastic_deformation_grad_p,kirchhoff_stress_p, first_PK_stress_p, B_p, std::move(elastoplastic_model_p));
+      std::cout << "particle #" << p << " posiion: " << xp[0] << " " << xp[1] <<" " << xp[2] <<"\n";
   }
   std::cout << "num particles genearted: " << num_particles << std::endl; getchar();                         
 }

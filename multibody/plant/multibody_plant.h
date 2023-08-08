@@ -605,6 +605,10 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MultibodyPlant)
 
+  const internal::DiscreteUpdateManager<T>& GetDiscreteUpdateManager(){
+      return *discrete_update_manager_;
+    }
+
   /// @anchor mbp_input_and_output_ports
   /// @name                 Input and output ports
   /// These methods provide access to the Drake
@@ -5201,6 +5205,7 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
     /// It returns a negative value when the stiction tolerance has not been set
     /// previously with set_stiction_tolerance().
     double stiction_tolerance() const { return v_stiction_tolerance_; }
+      
 
    private:
     // Stiction velocity tolerance for the Stribeck model.

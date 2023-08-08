@@ -112,6 +112,10 @@ class CompliantContactManager final
   // @returns `true`.
   bool is_cloneable_to_symbolic() const final;
 
+  const DeformableDriver<double>& GetDeformableDriver() const {
+    return *deformable_driver_;
+  }
+
  private:
   // TODO(amcastro-tri): Instead of friendship consider another set of class(es)
   // with tighter functionality. For instance, a class that takes care of

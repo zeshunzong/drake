@@ -56,6 +56,13 @@ namespace multibody {
 namespace internal {
 
 template <typename T>
+void DeformableDriver<T>::DummyCheckContext(const systems::Context<T>& context) const {
+    const MpmState<T>& current_mpm_state = EvalMpmState(context);
+    const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
+    std::cout << "num particles in context " << current_particles.get_num_particles() << std::endl;
+}
+
+template <typename T>
 DeformableDriver<T>::DeformableDriver(
     const DeformableModel<T>* deformable_model,
     const DiscreteUpdateManager<T>* manager)
@@ -409,35 +416,77 @@ void DeformableDriver<T>::AppendContactKinematicsMpm(
     const systems::Context<T>& context,
     std::vector<ContactPairKinematics<T>>* result) const {
 
+    const MultibodyTreeTopology& tree_topology = manager_->internal_tree().get_topology();
+    const TreeIndex clique_index_mpm(tree_topology.num_trees() + num_deformable_bodies() + 1);
 
+    /* Retrieve (or compute) all mpm contact, and compute Jmpm */
     MpmContact<T> mpm_contact;
     CalcMpmContact(context, &mpm_contact); // TBD: make this an eval
 
     const MpmState<T>& current_mpm_state = EvalMpmState(context);
     MpmSolverScratchData<T>& scratch =
-     manager_->plant()
-         .get_cache_entry(cache_indexes_.mpm_solver_scratch)
-         .get_mutable_cache_entry_value(context)
-         .template GetMutableValueOrThrow<MpmSolverScratchData<T>>();
-
+    manager_->plant()
+        .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+        .get_mutable_cache_entry_value(context)
+        .template GetMutableValueOrThrow<MpmSolverScratchData<T>>();
     std::unordered_map<int, MatrixX<T>> map_contact_particle_to_Jacobian;
-
     mpm_solver_->ComputeJacobianMpm(current_mpm_state, mpm_contact,
                      scratch, &map_contact_particle_to_Jacobian); 
     // if a particle is a contact particle, this will give Jmpm s.t. vc_mpm_W = Jmpm * v_mpm. Jmpm has dimension 3 by num_grid_nodes*3
 
     constexpr int kZAxis = 2;
+    const int nv = manager_->plant().num_velocities();
 
 
-    for (size_t i = 0; i < mpm_contact.GetNumContactPairs(); i++) {
+    for (size_t i = 0; i < mpm_contact.GetNumContactPairs(); ++i) {
+        // for each contact pair, want J = R_CW * [-Jmpm | Jrigid]
 
-
-        // for each contact pair, want J = R_CW * [Jmpm | -Jrigid]
-        // below gives R_CW
+        /* Compute the rotation matrix R_CW */
         math::RotationMatrix<T> R_WC = math::RotationMatrix<T>::MakeFromOneUnitVector(mpm_contact.GetNormalAt(i), kZAxis);
         const math::RotationMatrix<T> R_CW = R_WC.transpose();
-        // map_contact_particle_to_Jacobian.at(GetParticleIndexAt(i)) gives Jmpm
 
+        /* We have at most two blocks per contact. */
+        std::vector<typename ContactPairKinematics<T>::JacobianTreeBlock> jacobian_blocks;
+        jacobian_blocks.reserve(2);
+
+        /* MPM part of Jacobian */
+        MatrixX<T> J_mpm = map_contact_particle_to_Jacobian.at(mpm_contact.GetParticleIndexAt(i));
+        jacobian_blocks.emplace_back(clique_index_mpm, MatrixBlock<T>(std::move(J_mpm)));
+
+        /* Non-MPM (rigid) part of Jacobian */
+        const BodyIndex index_B = manager_->geometry_id_to_body_index().at(mpm_contact.GetNonMpmIdAt(i));
+        const TreeIndex tree_index_rigid = tree_topology.body_to_tree_index(index_B);
+        if (tree_index_rigid.is_valid()) {
+            Matrix3X<T> Jv_v_WBc_W(3, nv);
+            const Body<T>& rigid_body = manager_->plant().get_body(index_B);
+            const Frame<T>& frame_W = manager_->plant().world_frame();
+            manager_->internal_tree().CalcJacobianTranslationalVelocity(
+                context, JacobianWrtVariable::kV, rigid_body.body_frame(), frame_W,
+                mpm_contact.GetContactPositionAt(i), frame_W, frame_W, &Jv_v_WBc_W);
+            Matrix3X<T> J_rigid = R_CW.matrix() * Jv_v_WBc_W.middleCols(
+                                    tree_topology.tree_velocities_start(tree_index_rigid),
+                                    tree_topology.num_tree_velocities(tree_index_rigid));
+            jacobian_blocks.emplace_back(tree_index_rigid, MatrixBlock<T>(std::move(J_rigid)));
+        }
+
+        // configuration part
+        const int objectA = tree_topology.num_trees() + num_deformable_bodies() + 1; // not really used
+        const int objectB = index_B; // not really used
+        const Vector3<T> p_ApC_W{0,0,0}; // TODO: change this. it will be used in SapFrictionConeConstraint<T>::DoAccumulateSpatialImpulses
+        // Contact point position relative to rigid body B, same as in FEM-rigid
+        const math::RigidTransform<T>& X_WB = manager_->plant().EvalBodyPoseInWorld(context, manager_->plant().get_body(index_B));
+        const Vector3<T>& p_WB = X_WB.translation();
+        const Vector3<T> p_BC_W = mpm_contact.GetContactPositionAt(i) - p_WB;
+
+        ContactConfiguration<T> configuration{
+          .objectA = objectA, // not really used
+          .p_ApC_W = p_ApC_W, // to be changed, see above
+          .objectB = objectB, // not really used
+          .p_BqC_W = p_BC_W,
+          .phi = mpm_contact.GetPenetrationDistanceAt(i),
+          .R_WC = R_WC};
+
+        result->emplace_back(std::move(jacobian_blocks), std::move(configuration));
     }
 
 
@@ -893,10 +942,8 @@ void DeformableDriver<T>::CalcMpmContact(
     const Context<T>& context, MpmContact<T>* result) const {
 
     result->Reset();
-
     const geometry::QueryObject<T>& query_object = manager_->plant().get_geometry_query_input_port()
           .template Eval<geometry::QueryObject<T>>(context);
-
     const MpmState<T>& current_mpm_state = EvalMpmState(context);
     const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
     for (int i = 0; i < current_particles.get_num_particles(); i++) {
