@@ -5,8 +5,6 @@
 #include "drake/multibody/mpm/CorotatedElasticModel.h"
 #include "drake/multibody/mpm/StvkHenckyWithVonMisesModel.h"
 #include <gtest/gtest.h>
-#include "drake/common/autodiff.h"
-#include "drake/math/autodiff_gradient.h"
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
 #include <iostream>
 #include <vector>
@@ -116,38 +114,25 @@ void CreateScene(){
     double nu = 0.4;
     std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model
             = std::make_unique<multibody::mpm::CorotatedElasticModel<double>>(E, nu);
-
     multibody::SpatialVelocity<double> geometry_initial_veolocity;
     geometry_initial_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.0};//{0.1, 0.1, 0.1};
     geometry_initial_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};//{M_PI/2, M_PI/2, M_PI/2};
 
     Vector3<double> geometry_translation = {0.0, 0.0, 0.05};
     math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
-
     double density = 1000.0; double grid_h = 0.2;
     int min_num_particles_per_cell = 1;
-
     std::unique_ptr<multibody::mpm::AnalyticLevelSet<double>> mpm_geometry_level_set = 
                                     std::make_unique<multibody::mpm::SphereLevelSet<double>>(0.2);
-
     owned_deformable_model->RegisterMpmBody(
       std::move(mpm_geometry_level_set), std::move(constitutive_model), geometry_initial_veolocity,
       geometry_pose, density, grid_h, min_num_particles_per_cell);
-
-    /* 
-    Four particles should be below z=0
-    particle #1 posiion: -0.113647 -0.0631355 -0.051133
-    particle #10 posiion: -0.011385 0.0588435 -0.074056
-    particle #15 posiion: 0.0799938 -0.090995 -0.0950756
-    particle #17 posiion: -0.00799091 -0.0601236 -0.0492368
-    */ 
+    // this part does not really matter. We will create a separate particles
+    
 
     const DeformableModel<double>* deformable_model = owned_deformable_model.get();
     plant.AddPhysicalModel(std::move(owned_deformable_model));
     plant.Finalize();
-
-
-
     builder.Connect(
       deformable_model->vertex_positions_port(),
       scene_graph.get_source_configuration_port(plant.get_source_id().value()));
@@ -162,12 +147,70 @@ void CreateScene(){
     const multibody::internal::DiscreteUpdateManager<double>& discrete_update_manager = plant.GetDiscreteUpdateManager();
     const multibody::internal::CompliantContactManager<double>& compliant_contact_manager = reinterpret_cast<const CompliantContactManager<double>&>(discrete_update_manager);
     const multibody::internal::DeformableDriver<double>& deformable_driver = compliant_contact_manager.GetDeformableDriver();
+
+
+    // the whole point above is to get deformable_driver, nothing else is meaningful
+
+
+    // consider a real particles object to be tested
+    mpm::Particles<double> particles(0);
+    SparseGrid<double> grid{0.2};
+    MPMTransfer<double> mpm_transfer{};
+
+
+    // add particle #1
+    Eigen::Matrix3<double> F_in;
+    F_in.setIdentity(); 
+    CorotatedElasticModel<double> model(1.0,0.3);
+    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p = model.Clone();
+    particles.AddParticle(Eigen::Vector3<double>{0.1,-0.37,0.22}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
+            F_in, Eigen::Matrix3<double>::Identity(), 
+            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p));
+
+    // add particle #2
+    Eigen::Matrix3<double> F_in2;
+    F_in2.setIdentity(); 
+    CorotatedElasticModel<double> model2(1.0,0.3);
+    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p2 = model2.Clone();
+    particles.AddParticle(Eigen::Vector3<double>{0.07,-0.07,-0.12}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
+            F_in2, Eigen::Matrix3<double>::Identity(), 
+            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p2));
+
+    // add particle #3
+    Eigen::Matrix3<double> F_in3;
+    F_in3.setIdentity();
+    CorotatedElasticModel<double> model3(1.0, 0.3);
+    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p3 = model3.Clone();
+    particles.AddParticle(Eigen::Vector3<double>{0.2,-0.4,0.25}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
+            F_in3, Eigen::Matrix3<double>::Identity(), 
+            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p3));
+
+    particles.print_info();
+    /* before ordering
+    particle 0 position 0.1 -0.37 0.22
+    particle 1 position 0.07 -0.07 -0.12
+    particle 2 position 0.2 -0.4 0.25
+    */
+
+    int num_active_grids = mpm_transfer.MakeGridCompatibleWithParticles(&particles, &grid);
+
+    particles.print_info();
+    /* after ordering
+    particle 0 position 0.07 -0.07 -0.12
+    particle 1 position 0.1 -0.37 0.22
+    particle 2 position 0.2 -0.4 0.25
+    */
+
+    const geometry::QueryObject<double>& query_object = discrete_update_manager.plant().get_geometry_query_input_port()
+            .template Eval<geometry::QueryObject<double>>(plant_context);
     
-    deformable_driver.DummyCheckContext(plant_context);
+    // deformable_driver.DummyCheckContext(plant_context);
 
     std::vector<DiscreteContactPair<double>> result{};
 
-    deformable_driver.AppendDiscreteContactPairsMpm(plant_context, &result);
+    // in reality, what is really being called is AppendDiscreteContactPairsMpm(mbp's context, &result)
+    // here we assume that the particles will be the same as evaluating from mbp's context
+    deformable_driver.AppendDiscreteContactPairsMpm(query_object, particles, &result);
 
     std::cout << "ssss " << result.size() << std::endl;
     std::cout << result[0].p_WC[0] << " " <<result[0].p_WC[1] << " " << result[0].p_WC[2] <<std::endl;

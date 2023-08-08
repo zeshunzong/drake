@@ -47,6 +47,15 @@ class MpmSolver {
   }
 
 
+  // int MakeGridCompatibleWithParticles(MpmState<T>* current_state, MpmSolverScratchData<T>* scratch) {
+  //   scratch->mpm_transfer_ = MPMTransfer<T>();
+
+  //   const Particles<T> particles = current_state.GetParticles(); 
+  //   scratch->mpm_transfer_.SetUpTransfer(&(scratch->grid_), &p_new);
+  // }
+ 
+
+
   /* Returns the FEM model that this solver solves for. */
   const MpmModel<T>& model() const { return *model_; }
 

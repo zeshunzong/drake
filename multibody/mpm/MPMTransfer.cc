@@ -466,6 +466,7 @@ void MPMTransfer<T>::EvalBasisOnBatch(int p, const Vector3<T>& xp,
         // also store the result in Particles
         particles->SetWeightAtParticle(p, idx_local, bases_val_particles_[p][idx_local]);
         particles->SetWeightGradientAtParticle(p, idx_local, bases_grad_particles_[p][idx_local]);
+        particles->SetNeighborGridGlobalIndex(p, idx_local, grid.Reduce3DIndex(grid_index));
       }
     }
   }

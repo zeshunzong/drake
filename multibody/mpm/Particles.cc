@@ -279,6 +279,7 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
     elastoplastic_models_.emplace_back(std::move(elastoplastic_model));
     bases_val_particles_.emplace_back(std::array<T, 27>{});
     bases_grad_particles_.emplace_back(std::array<Vector3<T>, 27>{});
+    neighbor_grid_nodes_global_indices_.emplace_back(std::array<size_t, 27>{});
     num_particles_++;
 }
 

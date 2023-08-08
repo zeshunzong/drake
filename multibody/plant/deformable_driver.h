@@ -105,6 +105,13 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
   ~DeformableDriver();
 
+  // it should be that contact detection happens after free motion mpm solve
+  // so in contact detection, we have already had ordered particles and grid nodes.
+  // here we just do the ordering and compute weights, for testing purpose
+  void MakeGridCompatibleWithParticleTestPurpose(systems::Context<T>* context) {
+    
+  }
+
   int num_deformable_bodies() const { return deformable_model_->num_bodies(); }
 
   // TODO(xuchenhan-tri): Implement CloneToDouble() and allow cloning to double.
@@ -149,6 +156,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void AppendDiscreteContactPairsMpm(
       const systems::Context<T>& context,
       std::vector<DiscreteContactPair<T>>* pairs) const;
+
+  void AppendDiscreteContactPairsMpm(
+        const geometry::QueryObject<T>& query_object, 
+        const drake::multibody::mpm::Particles<T>& particles, 
+        std::vector<DiscreteContactPair<T>>* result) const;
 
   /* Appends the contact kinematics information for each contact pair where at
    least one of the body in contact is deformable.
@@ -290,6 +302,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void CalcMpmContact(
       const systems::Context<T>& context,
       geometry::internal::MpmContact<T>* result) const;
+
+  void CalcMpmContact(
+    const geometry::QueryObject<T>& query_object, 
+    const drake::multibody::mpm::Particles<T>& current_particles, 
+    geometry::internal::MpmContact<T>* result) const;
 
   /* Eval version of CalcDeformableContact(). */
   const geometry::internal::DeformableContact<T>& EvalDeformableContact(

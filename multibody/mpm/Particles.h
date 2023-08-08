@@ -52,8 +52,8 @@ class Particles {
 
     void print_info() const {
       for (int ind = 0; ind < num_particles_; ++ind){
-         if (ind < 5){
-            std::cout << "particle " << ind << " position " << positions_[ind][0] << std::endl;
+         if (ind < 10){
+            std::cout << "particle " << ind << " position " << positions_[ind][0] << " " << positions_[ind][1] << " " << positions_[ind][2]<< std::endl;
          }
       }
     }
@@ -176,6 +176,12 @@ class Particles {
       return bases_val_particles_[index_particle][index_neighbor_node];
     }
 
+    void SetNeighborGridGlobalIndex(int index_particle, int index_neighbor_node_local, size_t index_neighbor_node_global) {
+      DRAKE_DEMAND(index_neighbor_node_local>=0);
+      DRAKE_DEMAND(index_neighbor_node_local<27); // each particle has 27 neighbor grid nodes
+      neighbor_grid_nodes_global_indices_[index_particle][index_neighbor_node_local] = index_neighbor_node_global;
+    }
+
     void SetWeightGradientAtParticle(int index_particle, int index_neighbor_node, const Vector3<T>& dweight) {
       DRAKE_DEMAND(index_neighbor_node>=0);
       DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
@@ -208,7 +214,7 @@ class Particles {
     // wip. This is the same as the one in MPMTransfer. Should consider deprecate one of them in the future.
     std::vector<std::array<T, 27>> bases_val_particles_{};
     std::vector<std::array<Vector3<T>, 27>> bases_grad_particles_{};
-    std::array<T, 27> weights_ip_{};
+    std::vector<std::array<size_t, 27>> neighbor_grid_nodes_global_indices_{};
 
 
 
