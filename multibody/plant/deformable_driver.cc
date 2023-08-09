@@ -429,30 +429,34 @@ void DeformableDriver<T>::AppendContactKinematicsMpm(
     const systems::Context<T>& context,
     std::vector<ContactPairKinematics<T>>* result) const {
 
+    const geometry::QueryObject<T>& query_object = manager_->plant().get_geometry_query_input_port()
+        .template Eval<geometry::QueryObject<T>>(context);
+    const MpmState<T>& current_mpm_state = EvalMpmState(context);
+    const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
+
+    AppendContactKinematicsMpm(context, query_object, current_particles, result);
+
+}
+
+
+template <typename T>
+void DeformableDriver<T>::AppendContactKinematicsMpm(const systems::Context<T>& context,
+    const geometry::QueryObject<T>& query_object, 
+    const Particles<T>& particles, 
+    std::vector<ContactPairKinematics<T>>* result) const {
+
+    DRAKE_DEMAND(result != nullptr);
     const MultibodyTreeTopology& tree_topology = manager_->internal_tree().get_topology();
     const TreeIndex clique_index_mpm(tree_topology.num_trees() + num_deformable_bodies() + 1);
 
-    /* Retrieve (or compute) all mpm contact, and compute Jmpm */
     MpmContact<T> mpm_contact;
-    CalcMpmContact(context, &mpm_contact); // TBD: make this an eval
-
-    const MpmState<T>& current_mpm_state = EvalMpmState(context);
-    MpmSolverScratchData<T>& scratch =
-    manager_->plant()
-        .get_cache_entry(cache_indexes_.mpm_solver_scratch)
-        .get_mutable_cache_entry_value(context)
-        .template GetMutableValueOrThrow<MpmSolverScratchData<T>>();
-    std::unordered_map<int, MatrixX<T>> map_contact_particle_to_Jacobian;
-    mpm_solver_->ComputeJacobianMpm(current_mpm_state, mpm_contact,
-                     scratch, &map_contact_particle_to_Jacobian); 
-    // if a particle is a contact particle, this will give Jmpm s.t. vc_mpm_W = Jmpm * v_mpm. Jmpm has dimension 3 by num_grid_nodes*3
+    CalcMpmContact(query_object, particles, &mpm_contact); // TODO: this may have been calculated before. cache it?
 
     constexpr int kZAxis = 2;
     const int nv = manager_->plant().num_velocities();
 
-
     for (size_t i = 0; i < mpm_contact.GetNumContactPairs(); ++i) {
-        // for each contact pair, want J = R_CW * [-Jmpm | Jrigid]
+        // for each contact pair, want J = R_CW * Jacobian_block = R_CW * [-Jmpm | Jrigid]
 
         /* Compute the rotation matrix R_CW */
         math::RotationMatrix<T> R_WC = math::RotationMatrix<T>::MakeFromOneUnitVector(mpm_contact.GetNormalAt(i), kZAxis);
@@ -462,8 +466,10 @@ void DeformableDriver<T>::AppendContactKinematicsMpm(
         std::vector<typename ContactPairKinematics<T>::JacobianTreeBlock> jacobian_blocks;
         jacobian_blocks.reserve(2);
 
-        /* MPM part of Jacobian */
-        MatrixX<T> J_mpm = map_contact_particle_to_Jacobian.at(mpm_contact.GetParticleIndexAt(i));
+        /* MPM part of Jacobian, note this is -J_mpm */
+        MatrixX<T> J_mpm;
+        particles.FormJacobianGridVToParticleVAt(mpm_contact.GetParticleIndexAt(i), &J_mpm);
+        J_mpm = - R_CW.matrix() * J_mpm;
         jacobian_blocks.emplace_back(clique_index_mpm, MatrixBlock<T>(std::move(J_mpm)));
 
         /* Non-MPM (rigid) part of Jacobian */
@@ -501,17 +507,6 @@ void DeformableDriver<T>::AppendContactKinematicsMpm(
 
         result->emplace_back(std::move(jacobian_blocks), std::move(configuration));
     }
-
-
-    
-
-
-
-
-    
-    
-
-
 }
 
 
@@ -521,20 +516,6 @@ void DeformableDriver<T>::AppendContactKinematics(
     std::vector<ContactPairKinematics<T>>* result) const {
   DRAKE_DEMAND(result != nullptr);
   /* 
-  
-  
-  
-  Sap needs Jc such that vc_C = Jc * v where v is the generalized velocities for participating dofs.
-    `vc_C` is defined with C frame being the contact frame, centered at the contact point,
-  with Cz parallel to the contact normal.  vc_C = R_CW * vc_W. We can get R_CW from the contact normal.
-  Need vc_W.
-  vc_W = v_ApBq_W = v_WBq - v_WAp where Bq is point on B incident to the contact point,
-  and Ap is the point on A incident to the contact point.
-  CalcJacobianTranslationalVelocity gives Jb such that v_WBq = Jb * vb where vb is the generalized velocity
-  for rigid dofs.
-  
-  
-  
   Since v_AcBc_W = v_WBc - v_WAc the relative velocity Jacobian will be:
      Jv_v_AcBc_W = Jv_v_WBc_W - Jv_v_WAc_W.
    That is the relative velocity at C is v_AcBc_W = Jv_v_AcBc_W * v.

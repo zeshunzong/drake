@@ -499,4 +499,26 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_googletest(
+    name = "TestMpmContactPairExternalParticlesWithTransform",
+    deps = [
+        ":BSpline",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common:autodiff",
+        "//math:gradient",
+        ":CorotatedElasticModel",
+        ":StvkHenckyWithVonMisesModel",
+        ":SparseGrid",
+        ":MPMTransfer",
+        "//multibody/plant",
+        "//geometry:drake_visualizer",
+        "//geometry:scene_graph",
+        "//multibody/parsing",
+        "//systems/analysis:simulator",
+        "//systems/framework:diagram",
+        "@gflags",
+
+    ],
+)
+
 add_lint_tests()

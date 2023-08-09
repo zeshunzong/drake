@@ -193,6 +193,27 @@ class Particles {
       *dweight = bases_grad_particles_[index_particle][index_neighbor_node];
     }
 
+    void FormJacobianGridVToParticleVAt(int index_particle, MatrixX<T>* Jmpm) const {
+      // here we require wip have already been computed and stored in bases_val_particles_
+      // also require neighbor_grid_nodes_global_indices_ is updated
+      // this will be satisfied if we have made grid compatible with particles
+      (*Jmpm) = MatrixX<T>::Zero(3, 3 * num_active_grid_nodes_);
+
+      for (int node_local_index = 0; node_local_index < 27; node_local_index++) {
+        MatrixX<T> local_J = MatrixX<T>::Zero(3,3); 
+        local_J.diagonal().setConstant(bases_val_particles_[index_particle][node_local_index]);
+        (*Jmpm).block(0, neighbor_grid_nodes_global_indices_[index_particle][node_local_index]*3, 3, 3) = local_J;
+      }
+    }
+
+    void set_num_active_grid_nodes(int n) {
+      num_active_grid_nodes_ = n;
+    }
+
+    int get_num_active_grid_nodes() const {
+      return num_active_grid_nodes_;
+    }
+
  private:
     int num_particles_;
     std::vector<Vector3<T>> positions_{};
@@ -215,6 +236,7 @@ class Particles {
     std::vector<std::array<T, 27>> bases_val_particles_{};
     std::vector<std::array<Vector3<T>, 27>> bases_grad_particles_{};
     std::vector<std::array<size_t, 27>> neighbor_grid_nodes_global_indices_{};
+    int num_active_grid_nodes_;
 
 
 

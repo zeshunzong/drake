@@ -169,12 +169,18 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context,
       std::vector<ContactPairKinematics<T>>* result) const;
 
-/* Appends the contact kinematics information for each contact pair where at
-   least one of the body in contact is deformable.
-   @pre result != nullptr. */
+  // note: the particles that join the computation comes directly from evaluating the context
   void AppendContactKinematicsMpm(
       const systems::Context<T>& context,
       std::vector<ContactPairKinematics<T>>* result) const;
+
+  // note: in this implementation, mpm data are directly obtained via particles
+  // context is used for the rigid part
+  // this allows external manipulation of particles
+  void AppendContactKinematicsMpm(const systems::Context<T>& context,
+    const geometry::QueryObject<T>& query_object, 
+    const drake::multibody::mpm::Particles<T>& particles,
+    std::vector<ContactPairKinematics<T>>* result) const;
 
   /* Evaluates FemState at the next time step for each deformable body and
    copies the them into the corresponding DiscreteValues.

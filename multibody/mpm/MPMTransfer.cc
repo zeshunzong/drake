@@ -39,6 +39,7 @@ void MPMTransfer<T>::SetUpTransfer(SparseGrid<T>* grid,
   // The values of Dp_inv_ are different for different B-Spline bases
   // https://www.math.ucla.edu/~jteran/papers/JSSTS15.pdf
   Dp_inv_ = 4.0 / (grid->get_h() * grid->get_h());
+  particles->set_num_active_grid_nodes(grid->get_num_active_gridpt());
 }
 
 template <typename T>
@@ -61,6 +62,7 @@ int MPMTransfer<T>::MakeGridCompatibleWithParticles(Particles<T>* particles, Spa
   grid->UpdateActiveGridPoints(batch_indices, *particles);
   SortParticles(batch_indices, *grid, particles);  // sort particles based on sorted grid nodes above
   UpdateBasisAndGradientParticles(*grid, particles);
+  particles->set_num_active_grid_nodes(grid->get_num_active_gridpt());
   return grid->get_num_active_gridpt(); 
 }
 
