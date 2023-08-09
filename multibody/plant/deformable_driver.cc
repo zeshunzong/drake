@@ -57,6 +57,8 @@ namespace internal {
 
 template <typename T>
 void DeformableDriver<T>::DummyCheckContext(const systems::Context<T>& context) const {
+    // for testing purpose only. 
+    // maybe needed to check that we get correct particles info from context
     const MpmState<T>& current_mpm_state = EvalMpmState(context);
     const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
     std::cout << "num particles in context " << current_particles.get_num_particles() << std::endl;
@@ -400,7 +402,7 @@ void DeformableDriver<T>::AppendDiscreteContactPairsMpm(const geometry::QueryObj
     DRAKE_DEMAND(result != nullptr);
     MpmContact<T> mpm_contact;
     CalcMpmContact(query_object, particles, &mpm_contact);
-    GeometryId mpm_id = GeometryId::get_new_id(); // don't know how to use
+    GeometryId mpm_id = GeometryId::get_new_id(); // don't know how to use !!!!!
 
     DRAKE_DEMAND(result != nullptr);
     std::vector<DiscreteContactPair<T>>& contact_pairs = *result;

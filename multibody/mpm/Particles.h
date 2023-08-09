@@ -52,7 +52,7 @@ class Particles {
 
     void print_info() const {
       for (int ind = 0; ind < num_particles_; ++ind){
-         if (ind < 10){
+         if (ind < 5){
             std::cout << "particle " << ind << " position " << positions_[ind][0] << " " << positions_[ind][1] << " " << positions_[ind][2]<< std::endl;
          }
       }

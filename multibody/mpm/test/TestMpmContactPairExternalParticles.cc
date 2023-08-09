@@ -38,8 +38,6 @@ namespace mpm {
 namespace internal {
 namespace {
 
-// constexpr double kEps = 4.0 * std::numeric_limits<double>::epsilon();
-
 using Eigen::Matrix3d;
 using Eigen::Matrix3Xd;
 using drake::geometry::AddContactMaterial;
@@ -70,7 +68,7 @@ using drake::multibody::internal::DiscreteContactPair;
 using drake::multibody::internal::ContactPairKinematics;
 
 void CreateScene(){
-    bool dynamic_rigid_body = true;
+    bool dynamic_rigid_body = false;
     
     GeometryId rigid_geometry_id_;
     BodyIndex rigid_body_index_;
@@ -108,7 +106,7 @@ void CreateScene(){
     /* register a mpm body here */
     auto owned_deformable_model =
       std::make_unique<DeformableModel<double>>(&plant);
-
+    /* ---------------------------------- Does not matter ---------------------------------- */
     double E = 5e4;
     double nu = 0.4;
     std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model
@@ -126,7 +124,8 @@ void CreateScene(){
     owned_deformable_model->RegisterMpmBody(
       std::move(mpm_geometry_level_set), std::move(constitutive_model), geometry_initial_veolocity,
       geometry_pose, density, grid_h, min_num_particles_per_cell);
-    // this part does not really matter. We will create a separate particles
+    /* ---------------------------------- Does not matter ---------------------------------- */
+    // We will create a separate particles
     
 
     const DeformableModel<double>* deformable_model = owned_deformable_model.get();
@@ -152,8 +151,8 @@ void CreateScene(){
       Context<double>& mutable_plant_context =
           plant.GetMyMutableContextFromRoot(diagram_context.get());
       multibody::SpatialVelocity<double> rigid_veolocity;
-      rigid_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.888};//{0.1, 0.1, 0.1};
-      rigid_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};//{M_PI/2, M_PI/2, M_PI/2};
+      rigid_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.888};
+      rigid_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};
       plant.SetFreeBodySpatialVelocity(
           &mutable_plant_context, plant.get_body(rigid_body_index_), rigid_veolocity);
     }
@@ -220,6 +219,8 @@ void CreateScene(){
     particle 0 position 0.07 -0.07 -0.12
     particle 1 position 0.1 -0.37 0.22
     particle 2 position 0.2 -0.4 0.25
+
+    Note that particle 0 should be the contact particle
     */
 
     const geometry::QueryObject<double>& query_object = discrete_update_manager.plant().get_geometry_query_input_port()
@@ -228,10 +229,10 @@ void CreateScene(){
     std::vector<DiscreteContactPair<double>> result{};
 
     // in reality, what is really being called is AppendDiscreteContactPairsMpm(mbp's context, &result)
-    // here we assume that the particles will be the same as evaluating from mbp's context
+    // here we assume that the particles will be the same as evaluating from mbp's context!!!
     deformable_driver.AppendDiscreteContactPairsMpm(query_object, particles, &result);
 
-    // expect 1 contact pair
+    // expect one contact pair
     EXPECT_TRUE(result.size() == static_cast<size_t>(1));
     // expect contact particle index is 0
     EXPECT_TRUE(result[0].contact_particle_index == 0);
@@ -250,10 +251,11 @@ void CreateScene(){
     EXPECT_TRUE(result_kinematics.size() == static_cast<size_t>(1));
     // get that contactKinematics
     std::vector<drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock> jacobian_block = result_kinematics[0].jacobian;
-    contact_solvers::internal::ContactConfiguration<double> configuration = result_kinematics[0].configuration;
+    // contact_solvers::internal::ContactConfiguration<double> configuration = result_kinematics[0].configuration;
 
 
     if (dynamic_rigid_body) {
+      // since the rigid body is moving, Jacobian block should contain two parts
       EXPECT_TRUE(jacobian_block.size() == static_cast<size_t>(2));
       drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jmpm = jacobian_block[0];
       drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jrigid = jacobian_block[1];
@@ -267,6 +269,7 @@ void CreateScene(){
       VectorX<double> VC_mpm_C = Jmpm.J.MakeDenseMatrix() * grid_velocities_vec;
 
       // vc_C = Jc * v = [Jrigid | Jmpm] * [v_rigid_W | v_grid_W] = VC_rigid_C + VC_mpm_C
+      // note: both velocities are in contact frame
       EXPECT_TRUE(CompareMatrices((VC_rigid_C + VC_mpm_C), Eigen::Vector3<double>{0,0,0.888+0.666}, 1e-12));
       
 
@@ -274,6 +277,15 @@ void CreateScene(){
       // only one block if there is only anchored rigid body
       EXPECT_TRUE(jacobian_block.size() == static_cast<size_t>(1));
       drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jmpm = jacobian_block[0];
+
+      // grid velocities are -0.666, moving downwards in world frame
+      VectorX<double> VC_mpm_C = Jmpm.J.MakeDenseMatrix() * grid_velocities_vec;
+
+      // vc_C = Jc * v = [ O | Jmpm] * [v_rigid_W | v_grid_W] = VC_mpm_C
+      // note: both velocities are in contact frame
+      EXPECT_TRUE(CompareMatrices((VC_mpm_C), Eigen::Vector3<double>{0,0,0.666}, 1e-12));
+
+
     }
 
 }

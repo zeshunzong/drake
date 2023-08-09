@@ -1,23 +1,20 @@
-## Compute the Jacobian that transforms all dofs to contact velocity
+## Compute Jacobian_mpm
 
-Say we have already identified a particle 
-$$x_{pC}, v_{pC}$$
-that penetrates a rigid body A.
 
-Let's first compute the Jacobian J s.t.
-$$ v_{pC} = J \cdot v_i$$
-where we have n grid nodes.
+Given n grid velocites v_i, and a particular particle p, we want to find J such that v_p = J * v_i.
+All velocites are in world frame.
+Here v_p has dimension 3by1, J has dimension 3by(3n), v_i has dimension (3n)by1
 
-J will have dimension 3 by 3n. (Confirm that?)
+implementation:
 
-Since the computation of ``AppendContactKinematics`` is called after we have computed the free motion state, we can assume that we have already had sorted grid nodes and sorted particles, the weights 
-$$w_{ip}$$
-have also been computed.
+given particle x_p^0
+sort particles and grid nodes, compute weights(x_p^0)
 
-Nevertheless, since we only have access to ``Context`` and we only have ``MpmState`` which is just ``Particles``, those info are lost.
+for each of the 27 neighbor grid node j, form a 3by3 matrix 
+[ w_jp 0     0]
+[ 0   w_jp   0]
+[ 0   0   w_jp]
 
-So here we need to redo the grid and setup transfer thing (to sort the grid nodes and get weights) -- possible issue here tbd
+Insert this matrix into corresponding spot, using grid node j's global index.
 
-Anyways let's say we have the transfer setup now.
-
-To compute the J, we loop over all 27 neighboring grid nodes, denoted its index among all grid nodes to be j. The 3by3 block ``J.block<3,3>(0, 3*j)`` is a diagonal matrix with wjp on the diagonal.
+TBD: cache in CalcMpmContact. Schur complement??

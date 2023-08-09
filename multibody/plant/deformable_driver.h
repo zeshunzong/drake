@@ -105,13 +105,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
   ~DeformableDriver();
 
-  // it should be that contact detection happens after free motion mpm solve
-  // so in contact detection, we have already had ordered particles and grid nodes.
-  // here we just do the ordering and compute weights, for testing purpose
-  void MakeGridCompatibleWithParticleTestPurpose(systems::Context<T>* context) {
-    
-  }
-
   int num_deformable_bodies() const { return deformable_model_->num_bodies(); }
 
   // TODO(xuchenhan-tri): Implement CloneToDouble() and allow cloning to double.

@@ -70,6 +70,13 @@ using drake::multibody::internal::DiscreteUpdateManager;
 using drake::multibody::internal::CompliantContactManager;
 using drake::multibody::internal::DiscreteContactPair;
 
+
+// Omit this file!!!
+// Omit this file!!!
+// Omit this file!!!
+// Omit this file!!!
+// Omit this file!!!
+// Maybe recover this if we see inconsistency between particles evaluated from context and external particles
 void CreateScene(){
     bool dynamic_rigid_body = false;
     

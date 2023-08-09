@@ -9,7 +9,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 #include <drake_vendor/fcl/fcl.h>
 #include <fmt/format.h>
