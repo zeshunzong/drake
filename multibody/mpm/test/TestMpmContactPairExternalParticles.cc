@@ -267,7 +267,7 @@ void CreateScene(){
       VectorX<double> VC_mpm_C = Jmpm.J.MakeDenseMatrix() * grid_velocities_vec;
 
       // vc_C = Jc * v = [Jrigid | Jmpm] * [v_rigid_W | v_grid_W] = VC_rigid_C + VC_mpm_C
-      EXPECT_TRUE(CompareMatrices(configuration.R_WC *(VC_rigid_C + VC_mpm_C), Eigen::Vector3<double>{0,0,0.888+0.666}, 1e-12));
+      EXPECT_TRUE(CompareMatrices((VC_rigid_C + VC_mpm_C), Eigen::Vector3<double>{0,0,0.888+0.666}, 1e-12));
       
 
     } else {
@@ -275,23 +275,12 @@ void CreateScene(){
       EXPECT_TRUE(jacobian_block.size() == static_cast<size_t>(1));
       drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jmpm = jacobian_block[0];
     }
-    // jacobian_block[0]
-
-    
-
-
-
-
-    // EXPECT_TRUE(false);
-
-
 
 }
 
 
 
 GTEST_TEST(TestMpmContactPair, testcontact) {
-    // TestEnergyAndForceAndHessian();
     CreateScene();
 
     

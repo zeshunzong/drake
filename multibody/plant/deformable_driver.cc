@@ -932,31 +932,6 @@ void DeformableDriver<T>::CalcDeformableContact(
 }
 
 template <typename T>
-void DeformableDriver<T>::CalcMpmContact(
-    const Context<T>& context, MpmContact<T>* result) const {
-
-    result->Reset();
-    const geometry::QueryObject<T>& query_object = manager_->plant().get_geometry_query_input_port()
-          .template Eval<geometry::QueryObject<T>>(context);
-    const MpmState<T>& current_mpm_state = EvalMpmState(context);
-    const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
-    for (int i = 0; i < current_particles.get_num_particles(); i++) {
-        std::vector<geometry::SignedDistanceToPoint<T>> point_to_geometry = query_object.ComputeSignedDistanceToPoint(current_particles.get_position(i));
-        for (size_t num_geometries = 0; num_geometries < point_to_geometry.size(); num_geometries++) {
-            const T signed_distance = point_to_geometry[num_geometries].distance;
-            if (signed_distance < 0) {
-                // if mpm particle is inside rigid geometry, i.e. in contact
-                const GeometryId& id_rigid = point_to_geometry[num_geometries].id_G;
-                const Vector3<T>& normal = point_to_geometry[num_geometries].grad_W; // normal direction ( <---- p      )
-                result->AddMpmContactPair(i, id_rigid, signed_distance, normal, current_particles.get_position(i));
-               
-            }
-        }
-    }
-
-}
-
-template <typename T>
 void DeformableDriver<T>::CalcMpmContact(const geometry::QueryObject<T>& query_object, 
                                     const Particles<T>& current_particles, MpmContact<T>* result) const {
 

@@ -70,47 +70,7 @@ class MPMTransfer {
     // The computation is down in a p2g fashion. Implicitly depends on dt 
     void CalcHessianP2G(Particles<T>* particles, SparseGrid<T>* grid, MatrixX<T>* hessian);
 
-    // here we require that grid is already compatible with particles.
-    // more specifically, we require the ordering of particles and grid nodes, as well as batch_sizes_ to be up-to-date
-    void ComputeJGrivVtoParticleContactV(const geometry::internal::MpmContact<T>& mpm_contact, 
-                                        const Particles<T>& particles, const SparseGrid<T>& grid, 
-                                        std::unordered_map<int, MatrixX<T>>* map_contact_particle_to_Jacobian) const {
-
-        map_contact_particle_to_Jacobian->clear();                                        
-
-        int p_start, p_end, idx_local;
-        // loop over all particles, in a batch way
-        Vector3<int> batch_index_3d; // this is used to locate the global indices of 27 neighbor nodes. They are spatially +-1 to the batch node
-        p_start = 0;
-        for (int i = 0; grid.get_num_active_gridpt(); ++i) {
-            if (batch_sizes_[i] != 0) {
-                p_end = p_start + batch_sizes_[i]; // those are the particles in this batch, i.e. share the same 27 neighbor nodes
-                for (int p = p_start; p < p_end; ++p) { // loop over those particles
-                    if (mpm_contact.ParticleIsInContact(p)) {
-                        // if this particle is in contact with another geometry
-                        MatrixX<T> J_contact_point = MatrixX<T>::Zero(3, 3 * grid.get_num_active_gridpt());
-                        batch_index_3d = grid.Expand1DIndex(i);
-                        for (int c = -1; c <= 1; ++c) { for (int b = -1; b <= 1; ++b) { for (int a = -1; a <= 1; ++a) {
-                            Vector3<int> neighbor_node_index_3d = batch_index_3d + Vector3<int>(a, b, c); // global 3d index
-                            int neighbor_node_global_index_1d = grid.Reduce3DIndex(neighbor_node_index_3d);
-                            MatrixX<T> local_J = MatrixX<T>::Zero(3,3); 
-
-                            idx_local = (a + 1) + 3 * (b + 1) + 9 * (c + 1); // 0-26
-                            //local_J.diagonal().setConstant(particles.bases_val_particles_[p][idx_local]);
-                            local_J.diagonal().setConstant(particles.GetWeightAtParticle(p,idx_local));
-                            J_contact_point.block(0, neighbor_node_global_index_1d*3, 3, 3) = local_J;
-                            // 27 3by3 diagonal matrices should be filled in, rest columns should just be zero. A pretty sparse fat matrid
-                        }}}
-                        map_contact_particle_to_Jacobian->insert({p, J_contact_point});
-                    }
-                }
-            }
-        }
-  
-    }
-
-
-
+    
  private:
     friend class MPMTransferTest;
 

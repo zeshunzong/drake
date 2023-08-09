@@ -40,22 +40,6 @@ class MpmSolver {
 
   int AdvanceOneTimeStep(const MpmState<T>& prev_state,  MpmState<T>* next_state, MpmSolverScratchData<T>* scratch) const;
 
-  void ComputeJacobianMpm(const MpmState<T>& current_state, const geometry::internal::MpmContact<T>& mpm_contact,
-                    const MpmSolverScratchData<T> scratch, std::unordered_map<int, MatrixX<T>>* map_contact_particle_to_Jacobian) {
-      const Particles<T> particles = current_state.GetParticles();
-      scratch.mpm_transfer_.ComputeJGrivVtoParticleContactV(mpm_contact, particles, scratch.grid_, map_contact_particle_to_Jacobian);                 
-  }
-
-
-  // int MakeGridCompatibleWithParticles(MpmState<T>* current_state, MpmSolverScratchData<T>* scratch) {
-  //   scratch->mpm_transfer_ = MPMTransfer<T>();
-
-  //   const Particles<T> particles = current_state.GetParticles(); 
-  //   scratch->mpm_transfer_.SetUpTransfer(&(scratch->grid_), &p_new);
-  // }
- 
-
-
   /* Returns the FEM model that this solver solves for. */
   const MpmModel<T>& model() const { return *model_; }
 

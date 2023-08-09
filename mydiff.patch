@@ -1,0 +1,3224 @@
+diff --git a/examples/multibody/computeJ/BUILD.bazel b/examples/multibody/computeJ/BUILD.bazel
+new file mode 100644
+index 0000000000..be565b3771
+--- /dev/null
++++ b/examples/multibody/computeJ/BUILD.bazel
+@@ -0,0 +1,32 @@
++load(
++    "@drake//tools/skylark:drake_cc.bzl",
++    "drake_cc_binary",
++)
++load("//tools/lint:lint.bzl", "add_lint_tests")
++
++drake_cc_binary(
++    name = "compute_J",
++    srcs = [
++        "compute_J.cc",
++    ],
++    add_test_rule = 1,
++    data = [
++        "simple_gripper.sdf",
++        "torus.vtk",
++    ],
++    test_rule_args = [
++        "-simulation_time=0.1",
++        "-realtime_rate=0.0",
++    ],
++    deps = [
++        "//geometry:drake_visualizer",
++        "//geometry:scene_graph",
++        "//multibody/parsing",
++        "//multibody/plant",
++        "//systems/analysis:simulator",
++        "//systems/framework:diagram",
++        "@gflags",
++    ],
++)
++
++add_lint_tests(enable_clang_format_lint = False)
+diff --git a/examples/multibody/computeJ/README.md b/examples/multibody/computeJ/README.md
+new file mode 100644
+index 0000000000..b2e124dbd9
+--- /dev/null
++++ b/examples/multibody/computeJ/README.md
+@@ -0,0 +1,33 @@
++# Deformable torus
++
++This is an example of simulation of deformable bodies in Drake.
++The example poses a deformable torus on the ground and uses a PD controlled
++gripper that follows a prescribed kinematics to pick up the torus, lift it up in
++the air, and then drop it back on the ground.
++This demonstrates the dynamics of deformable bodies and showcases the SAP solver
++in handling contact between deformable and rigid bodies.
++
++In the source code, this example shows how to set up deformable bodies in a 
++Drake simulation and highlights the difference between deformable and rigid
++bodies.
++
++## Run visualizer
++
++```
++bazel run //tools:meldis -- --open-window &
++```
++
++## Run the example
++
++```
++bazel run //examples/multibody/deformable_torus:deformable_torus
++```
++
++## Options
++
++There are a few command-line options that you can use to adjust the physical
++properties of the deformable body. Use `--help` to see the list.
++
++```
++bazel run //examples/multibody/deformable_torus:deformable_torus -- --help
++```
+diff --git a/examples/multibody/computeJ/compute_J.cc b/examples/multibody/computeJ/compute_J.cc
+new file mode 100644
+index 0000000000..e1755e8ab4
+--- /dev/null
++++ b/examples/multibody/computeJ/compute_J.cc
+@@ -0,0 +1,178 @@
++#include <memory>
++
++#include <gflags/gflags.h>
++
++#include "drake/common/find_resource.h"
++#include "drake/geometry/drake_visualizer.h"
++#include "drake/geometry/proximity_properties.h"
++#include "drake/geometry/scene_graph.h"
++#include "drake/math/rigid_transform.h"
++#include "drake/multibody/fem/deformable_body_config.h"
++#include "drake/multibody/parsing/parser.h"
++#include "drake/multibody/plant/deformable_model.h"
++#include "drake/multibody/plant/multibody_plant.h"
++#include "drake/multibody/plant/multibody_plant_config_functions.h"
++#include "drake/multibody/tree/prismatic_joint.h"
++#include "drake/systems/analysis/simulator.h"
++#include "drake/systems/framework/diagram.h"
++#include "drake/systems/framework/diagram_builder.h"
++
++DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
++DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
++DEFINE_double(time_step, 5e-4,
++              "Discrete time step for the system [s]. Must be positive.");
++DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
++DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
++DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
++DEFINE_double(beta, 0.01,
++              "Stiffness damping coefficient for the deformable body [1/s].");
++
++using drake::geometry::AddContactMaterial;
++using drake::geometry::Box;
++using drake::geometry::GeometryInstance;
++using drake::geometry::IllustrationProperties;
++using drake::geometry::Mesh;
++using drake::geometry::ProximityProperties;
++using drake::math::RigidTransformd;
++using drake::multibody::AddMultibodyPlant;
++using drake::multibody::Body;
++using drake::multibody::CoulombFriction;
++using drake::multibody::MultibodyPlantConfig;
++using drake::multibody::Parser;
++using drake::multibody::PrismaticJoint;
++using drake::multibody::fem::DeformableBodyConfig;
++using drake::multibody::DeformableBodyId;
++using drake::multibody::DeformableModel;
++using drake::systems::BasicVector;
++using drake::systems::Context;
++using Eigen::Vector2d;
++using Eigen::Vector4d;
++using Eigen::VectorXd;
++
++namespace drake {
++namespace examples {
++namespace {
++
++
++
++int do_main() {
++  systems::DiagramBuilder<double> builder;
++
++  MultibodyPlantConfig plant_config;
++  plant_config.time_step = FLAGS_time_step;
++  /* Deformable simulation only works with SAP solver. */
++  plant_config.discrete_contact_solver = "sap";
++
++  auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
++
++
++  /* Set up a ground visually. */
++  Box ground{4, 4, 4};
++  const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -2});
++  
++  IllustrationProperties illustration_props;
++  illustration_props.AddProperty("phong", "diffuse",
++                                 Vector4d(0.7, 0.5, 0.4, 0.8));
++  plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
++                               "ground_visual", std::move(illustration_props));
++
++  /* Minimum required proximity properties for rigid bodies to interact with
++   deformable bodies.
++   1. A valid Coulomb friction coefficient, and
++   2. A resolution hint. (Rigid bodies need to be tessellated so that collision
++   queries can be performed against deformable geometries.) */
++  ProximityProperties rigid_proximity_props;
++  /* Set the friction coefficient close to that of rubber against rubber. */
++  const CoulombFriction<double> surface_friction(1.15, 1.15);
++  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
++  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
++                                    geometry::internal::kRezHint, 1.0);
++  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
++                                  "ground_collision", rigid_proximity_props);
++
++
++  /* Set up a deformable model. */
++  auto owned_deformable_model =
++      std::make_unique<DeformableModel<double>>(&plant);
++
++
++
++  // MPM geometry ------------------
++  std::unique_ptr<multibody::mpm::AnalyticLevelSet<double>> mpm_geometry_level_set = 
++                                    std::make_unique<multibody::mpm::SphereLevelSet<double>>(0.2);
++
++  double E = 5e4;
++  double nu = 0.4;
++  std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model
++          = std::make_unique<multibody::mpm::CorotatedElasticModel<double>>(E, nu);
++
++  multibody::SpatialVelocity<double> geometry_initial_veolocity;
++    geometry_initial_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.0};//{0.1, 0.1, 0.1};
++    geometry_initial_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};//{M_PI/2, M_PI/2, M_PI/2};
++
++  Vector3<double> geometry_translation = {0.0, 0.0, 0.4};
++  math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
++
++  double density = 1000.0; double grid_h = 0.025;
++  int min_num_particles_per_cell = 1;
++  // MPM geometry ------------------
++
++  owned_deformable_model->RegisterMpmBody(
++      std::move(mpm_geometry_level_set), std::move(constitutive_model), geometry_initial_veolocity,
++      geometry_pose, density, grid_h, min_num_particles_per_cell); 
++
++  const DeformableModel<double>* deformable_model =
++      owned_deformable_model.get();
++  plant.AddPhysicalModel(std::move(owned_deformable_model));
++  std::cout<< "finish add physical model" << std::endl;
++
++
++  /* All rigid and deformable models have been added. Finalize the plant. */
++  plant.Finalize();
++  std::cout << "plant finalized" << std::endl;
++  /* It's essential to connect the vertex position port in DeformableModel to
++   the source configuration port in SceneGraph when deformable bodies are
++   present in the plant. */
++  builder.Connect(
++      deformable_model->vertex_positions_port(),
++      scene_graph.get_source_configuration_port(plant.get_source_id().value()));
++  /* Add a visualizer that emits LCM messages for visualization. */
++  geometry::DrakeVisualizerParams params;
++  params.publish_period = 1.0 / 64 / 5;
++  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph, nullptr, params);
++
++  // connect mpm to output port
++  builder.Connect(deformable_model->mpm_particle_positions_port(), visualizer.mpm_data_input_port());
++  builder.Connect(
++      deformable_model->mpm_particle_positions_port(),
++      scene_graph.mpm_data_input_port());
++
++
++
++  auto diagram = builder.Build();
++  std::unique_ptr<Context<double>> diagram_context =
++      diagram->CreateDefaultContext();
++
++  /* Build the simulator and run! */
++  systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
++  simulator.Initialize();
++  simulator.set_target_realtime_rate(FLAGS_realtime_rate);
++  simulator.AdvanceTo(FLAGS_simulation_time);
++
++  return 0;
++}
++
++}  // namespace
++}  // namespace examples
++}  // namespace drake
++
++int main(int argc, char* argv[]) {
++  gflags::SetUsageMessage(
++      "This is a demo used to showcase deformable body simulations in Drake. "
++      "A simple parallel gripper grasps a deformable torus on the ground, "
++      "lifts it up, and then drops it back on the ground. "
++      "Launch meldis before running this example. "
++      "Refer to README for instructions on meldis as well as optional flags.");
++  gflags::ParseCommandLineFlags(&argc, &argv, true);
++  return drake::examples::do_main();
++}
+diff --git a/examples/multibody/computeJ/simple_gripper.sdf b/examples/multibody/computeJ/simple_gripper.sdf
+new file mode 100644
+index 0000000000..8eabf8c8b3
+--- /dev/null
++++ b/examples/multibody/computeJ/simple_gripper.sdf
+@@ -0,0 +1,156 @@
++<?xml version="1.0"?>
++<sdf version="1.7">
++  <!-- Note: This is the accompanying SDF file for the example demo in
++       deformable_torus.cc and therefore these files must be kept in sync.
++
++       This file defines the model for a simple gripper having two fingers on
++       prismatic joints. Only the left finger is actuated. The modeler will want
++       to add a coupler constraint between the fingers (if the selected solver
++       supports it) or simply lock the right finger in place.
++
++       The frame of the gripper, G, has its x-axis pointing to the right
++       of the gripper, its y-axis pointing "forward" (towards the fingers
++       side) and, the z-axis pointing upwards. This file only defines visual
++       geometry but not contact geometry.
++
++       TODO(xuchenhan-tri): The simple_gripper.sdf should not hard-code a weld
++       joint to the world. We should be loading the gripper file using a
++       dmd.yaml file (or more likely, inline string) that postures the weld as
++       part of the example program itself.
++  -->
++  <model name="simple_gripper">
++    <!-- Pose X_WG of the gripper model frame G in the world frame W. -->
++    <pose>0.0 0.06 0.08 -1.57 0 1.57</pose>
++    <joint name="weld_base" type="fixed">
++      <parent>world</parent>
++      <child>y_translate_link</child>
++    </joint>
++    <link name="y_translate_link">
++      <inertial>
++        <mass>0.0001</mass>
++        <inertia>
++          <ixx>0.0001</ixx>
++          <ixy>0</ixy>
++          <ixz>0</ixz>
++          <iyy>0.0001</iyy>
++          <iyz>0</iyz>
++          <izz>0.0001</izz>
++        </inertia>
++      </inertial>
++    </link>
++    <joint name="translate_joint" type="prismatic">
++      <parent>y_translate_link</parent>
++      <child>body</child>
++      <axis>
++        <xyz expressed_in="__model__">0 -1 0</xyz>
++        <!-- Drake attaches an actuator to all joints with a non-zero effort
++             limit. We do want an actuator for this joint. -->
++        <limit>
++          <effort>500</effort>
++        </limit>
++      </axis>
++    </joint>
++    <link name="body">
++      <pose>0 -0.049133 0 0 0 0</pose>
++      <inertial>
++        <mass>0.988882</mass>
++        <inertia>
++          <ixx>0.162992</ixx>
++          <ixy>0</ixy>
++          <ixz>0</ixz>
++          <iyy>0.162992</iyy>
++          <iyz>0</iyz>
++          <izz>0.164814</izz>
++        </inertia>
++      </inertial>
++      <visual name="visual">
++        <geometry>
++          <box>
++            <size>0.146 0.0725 0.049521</size>
++          </box>
++        </geometry>
++        <material>
++          <diffuse>0.3 0.3 0.3 0.9</diffuse>
++        </material>
++      </visual>
++    </link>
++    <link name="left_finger">
++      <!-- Each finger is positioned along the x-axis such that at q=0 the pads
++      of each finger barely touch each other. See notes at the top of this
++      file. -->
++      <pose>-0.0105 0.029 0 0 0 0</pose>
++      <inertial>
++        <mass>0.05</mass>
++        <inertia>
++          <ixx>0.16</ixx>
++          <ixy>0</ixy>
++          <ixz>0</ixz>
++          <iyy>0.16</iyy>
++          <iyz>0</iyz>
++          <izz>0.16</izz>
++        </inertia>
++      </inertial>
++      <visual name="visual">
++        <geometry>
++          <box>
++            <size>0.007 0.081 0.028</size>
++          </box>
++        </geometry>
++        <material>
++          <diffuse>0.3 0.3 0.3 0.9</diffuse>
++        </material>
++      </visual>
++    </link>
++    <link name="right_finger">
++      <!-- Each finger is positioned along the x-axis such that at q=0 the pads
++      of each finger barely touch each other. See notes at the top of this
++      file. -->
++      <pose>0.0105 0.029 0 0 0 0</pose>
++      <inertial>
++        <mass>0.05</mass>
++        <inertia>
++          <ixx>0.16</ixx>
++          <ixy>0</ixy>
++          <ixz>0</ixz>
++          <iyy>0.16</iyy>
++          <iyz>0</iyz>
++          <izz>0.16</izz>
++        </inertia>
++      </inertial>
++      <visual name="visual">
++        <geometry>
++          <box>
++            <size>0.007 0.081 0.028</size>
++          </box>
++        </geometry>
++        <material>
++          <diffuse>0.3 0.3 0.3 0.9</diffuse>
++        </material>
++      </visual>
++    </link>
++    <joint name="left_slider" type="prismatic">
++      <parent>body</parent>
++      <child>left_finger</child>
++      <axis>
++        <xyz>1 0 0</xyz>
++        <!-- Drake attaches an actuator to all joints with a non-zero effort
++             limit. We do want an actuator for this joint. -->
++        <limit>
++          <effort>500</effort>
++        </limit>
++      </axis>
++    </joint>
++    <joint name="right_slider" type="prismatic">
++      <parent>body</parent>
++      <child>right_finger</child>
++      <axis>
++        <xyz>1 0 0</xyz>
++        <!-- Drake attaches an actuator to all joints with a non-zero effort
++             limit. We do NOT want an actuator for this joint. -->
++        <limit>
++          <effort>0</effort>
++        </limit>
++      </axis>
++    </joint>
++  </model>
++</sdf>
+diff --git a/examples/multibody/computeJ/torus.vtk b/examples/multibody/computeJ/torus.vtk
+new file mode 100644
+index 0000000000..f429c7772d
+--- /dev/null
++++ b/examples/multibody/computeJ/torus.vtk
+@@ -0,0 +1,696 @@
++# vtk DataFile Version 2.0
++torus_fine, Created by Gmsh
++ASCII
++DATASET UNSTRUCTURED_GRID
++POINTS 115 double
++-0.129531562 -0.0380338728 -3.93402511e-09
++-0.129531547 0.038033925 -3.93402511e-09
++-0.11943002 -0.035067793 -0.0289254505
++-0.119430006 -0.0350677893 0.028925471
++-0.119430006 0.0350678414 -0.0289254505
++-0.119429991 0.0350678377 0.028925471
++-0.09385202080000001 -0.0275574196 -0.0443163514
++-0.09385200589999999 0.0275574569 -0.0443163514
++-0.093851991 -0.0275574122 0.0443163551
++-0.0938519761 0.0275574494 0.0443163551
++-0.0884062201 -0.102026179 -3.93402511e-09
++-0.08840617539999999 0.102026224 -3.93402511e-09
++-0.0815118402 -0.0940696448 -0.0289254505
++-0.0815118328 -0.0940696374 0.028925471
++-0.08151180299999999 0.0940696821 -0.0289254505
++-0.0815117955 0.0940696746 0.028925471
++-0.0647657886 -0.0190169383 -0.0389711484
++-0.0647657812 0.0190169644 -0.0389711484
++-0.0647657588 -0.0190169308 0.0389711335
++-0.0647657514 0.0190169569 0.0389711335
++-0.0640546754 -0.0739230067 -0.0443163514
++-0.064054653 -0.07392298429999999 0.0443163551
++-0.0640546456 0.0739230365 -0.0443163514
++-0.06405462319999999 0.0739230141 0.0443163551
++-0.0457810946 -0.0134425331 -0.0153909167
++-0.0457810909 0.0134425517 -0.0153909167
++-0.0457810871 -0.0134425303 0.0153908916
++-0.0457810797 0.0134425489 0.0153908916
++-0.0442031138 -0.0510130972 -0.0389711484
++-0.0442030951 -0.0510130748 0.0389711335
++-0.0442030951 0.0510131158 -0.0389711484
++-0.0442030765 0.0510130934 0.0389711335
++-0.0312459245 -0.0360597074 -0.0153909167
++-0.0312459171 -0.0360597 0.0153908916
++-0.0312459115 0.0360597223 -0.0153909167
++-0.031245904 0.0360597149 0.0153908916
++-0.0192125197 -0.133625895 -3.93402511e-09
++-0.0192124639 0.13362591 -3.93402511e-09
++-0.0177142266 -0.123205051 -0.0289254505
++-0.0177142248 -0.123205036 0.028925471
++-0.0177141745 0.123205058 -0.0289254505
++-0.0177141726 0.123205043 0.028925471
++-0.0139204198 -0.09681856630000001 -0.0443163514
++-0.0139204152 -0.0968185365 0.0443163551
++-0.0139203789 0.0968185738 -0.0443163514
++-0.0139203742 0.09681854400000001 0.0443163551
++-0.00960626081 -0.0668129548 -0.0389711484
++-0.00960623287 0.0668129623 -0.0389711484
++-0.00960622821 0.06681293250000001 0.0389711335
++-0.00679039303 -0.0472281799 -0.0153909167
++-0.00679039117 -0.0472281687 0.0153908916
++-0.00679037301 0.0472281836 -0.0153909167
++-0.00679037115 0.0472281724 0.0153908916
++0.0198210385 -0.0434020273 0.0153908916
++0.0198210422 -0.0434020348 -0.0153909167
++0.0198210441 0.0434020236 0.0153908916
++0.0198210496 0.0434020311 -0.0153909167
++0.0280405022 -0.0614001453 0.0389711335
++0.0280405115 0.0614001416 0.0389711335
++0.0280405134 -0.0614001714 -0.0389711484
++0.0280405246 0.0614001676 -0.0389711484
++0.0401394218 0.0257960465 0.0153908916
++0.0401394255 -0.0257960428 0.0153908916
++0.040139433 -0.0257960502 -0.0153909167
++0.040139433 0.0257960521 -0.0153909167
++0.0406334586 -0.0889748782 0.0443163551
++0.0406334698 -0.0889749005 -0.0443163514
++0.0406334735 0.0889748707 0.0443163551
++0.0406334847 0.0889749005 -0.0443163514
++0.0477138273 1.44091752e-08 0.0153908916
++0.0477138385 1.44091787e-08 -0.0153909167
++0.0517075248 -0.113223702 0.028925471
++0.0517075323 -0.113223717 -0.0289254505
++0.0517075434 0.113223694 0.028925471
++0.0517075509 0.113223709 -0.0289254505
++0.0560810231 -0.122800328 -3.93402511e-09
++0.0560810417 0.12280032 -3.93402511e-09
++0.0567845926 0.0364932492 0.0389711335
++0.0567845963 -0.0364932455 0.0389711335
++0.0567846186 0.0364932641 -0.0389711484
++0.0567846224 -0.0364932604 -0.0389711484
++0.0674999803 2.03844266e-08 0.0389711335
++0.06750001009999999 2.03844372e-08 -0.0389711484
++0.08228648450000001 0.0528823249 0.0443163551
++0.082286492 -0.0528823212 0.0443163551
++0.0822865143 -0.0528823361 -0.0443163514
++0.0822865143 0.0528823398 -0.0443163514
++0.0978141427 2.95390503e-08 0.0443163551
++0.0978141725 2.95390592e-08 -0.0443163514
++0.104712486 0.0672946423 0.028925471
++0.104712494 -0.0672946349 0.028925471
++0.104712501 0.06729464979999999 -0.0289254505
++0.104712509 -0.0672946423 -0.0289254505
++0.113569222 0.0729865208 -3.93402511e-09
++0.11356923 -0.07298651339999999 -3.93402511e-09
++0.124471985 3.75894942e-08 0.028925471
++0.124472 3.75894977e-08 -0.0289254505
++0.135000005 4.07688674e-08 -3.93402511e-09
++0.001309323762966374 -0.08202817996158156 -0.001401698167332298
++-0.07994430419930573 -0.005381544591651364 -0.001060044448672946
++-0.05385358959010374 0.06023333469961908 0.007105593886719179
++-0.01186805483199698 0.07036530341629597 -0.00494755411376495
++0.0241931399541693 0.08710703252058923 0.001885043222294985
++0.0656030771348768 -0.05104244425080109 -0.00024179232534678
++0.07306613931916686 0.04305121233841768 0.0002434266578320423
++-0.009606257500432952 -0.0668129256145773 0.03897113275553142
++0.0550633179399562 -0.07647136733632959 -0.0443163514
++0.08552311858057855 -0.08402209430652588 0.02870956028666506
++0.1132449877930372 0.0382356949181648 -0.0289254505
++0.01765965581742358 -0.1283244814702912 -3.93402511e-09
++0.08077634121586827 -0.08803545017567102 -0.0289254505
++0.07852553683632962 -0.1033520462333847 -3.93402511e-09
++0.07205880135292875 0.09558922604541201 0.02892547085444466
++0.1228244713695885 -0.04146603989554602 -3.93402511e-09
++0.1217565721643647 0.04510299133309743 -3.93402511e-09
++
++CELLS 286 1430
++4 49 98 59 54
++4 79 88 104 82
++4 44 101 102 40
++4 55 102 58 104
++4 13 43 98 21
++4 36 13 98 10
++4 1 5 99 100
++4 65 43 98 39
++4 35 34 100 101
++4 34 30 100 101
++4 103 69 62 78
++4 59 98 103 54
++4 81 87 84 113
++4 10 2 0 28
++4 19 8 9 99
++4 2 0 28 99
++4 88 113 103 92
++4 11 40 100 14
++4 7 2 6 99
++4 51 101 56 60
++4 28 49 98 46
++4 29 28 33 98
++4 98 103 53 57
++4 105 29 33 98
++4 19 9 100 99
++4 21 98 28 29
++4 21 29 28 8
++4 22 100 30 40
++4 24 99 33 26
++4 52 35 100 101
++4 100 48 52 101
++4 24 32 33 99
++4 98 42 46 66
++4 11 100 41 15
++4 28 46 98 42
++4 25 27 34 100
++4 25 100 17 99
++4 48 45 101 100
++4 98 38 42 66
++4 33 32 28 99
++4 34 35 51 101
++4 35 101 52 51
++4 35 27 100 34
++4 43 57 98 105
++4 109 75 65 71
++4 57 65 98 103
++4 33 50 105 98
++4 51 56 101 52
++4 71 65 109 39
++4 58 102 48 45
++4 58 48 102 55
++4 62 63 70 103
++4 62 103 70 69
++4 100 22 17 99
++4 64 69 79 104
++4 70 69 103 82
++4 72 98 75 110
++4 73 112 102 76
++4 74 76 102 104
++4 76 102 104 112
++4 79 104 69 82
++4 78 81 103 69
++4 85 80 106 103
++4 87 113 95 84
++4 81 113 103 69
++4 87 104 113 81
++4 82 88 104 69
++4 92 113 103 94
++4 94 103 107 90
++4 94 90 113 103
++4 96 97 108 113
++4 28 3 99 0
++4 3 28 99 8
++4 28 98 10 12
++4 6 16 99 28
++4 8 29 28 99
++4 99 100 19 27
++4 10 98 28 13
++4 28 13 98 21
++4 28 33 99 29
++4 30 101 40 100
++4 98 43 13 39
++4 28 49 33 98
++4 32 33 28 49
++4 33 49 50 98
++4 105 57 98 50
++4 50 53 57 98
++4 52 101 48 55
++4 52 55 56 101
++4 109 75 98 65
++4 51 60 47 101
++4 101 45 48 102
++4 47 102 101 60
++4 53 78 103 62
++4 56 60 101 55
++4 48 101 102 55
++4 60 55 102 101
++4 98 65 75 103
++4 64 104 55 61
++4 64 61 69 104
++4 64 104 79 55
++4 61 77 104 55
++4 60 86 104 79
++4 77 104 58 83
++4 103 78 84 81
++4 61 81 104 77
++4 61 69 104 81
++4 103 107 90 84
++4 103 90 113 84
++4 84 90 113 95
++4 84 103 81 113
++4 103 88 82 69
++4 69 104 81 113
++4 86 108 91 104
++4 97 113 104 108
++4 1 99 5 0
++4 24 32 99 16
++4 25 17 100 34
++4 30 22 17 100
++4 31 9 23 100
++4 36 12 98 38
++4 37 41 100 101
++4 38 42 12 98
++4 47 51 101 34
++4 64 79 69 70
++4 71 75 65 107
++4 72 38 109 98
++4 74 40 102 76
++4 91 93 104 108
++4 92 94 103 110
++4 93 104 89 76
++4 94 103 110 111
++4 19 99 18 8
++4 11 40 37 100
++4 31 100 27 19
++4 77 104 55 58
++4 9 100 99 5
++4 99 7 17 16
++4 11 14 100 1
++4 21 13 8 28
++4 99 17 25 24
++4 26 27 99 19
++4 14 100 99 22
++4 14 40 100 22
++4 9 23 100 15
++4 99 24 25 27
++4 99 29 33 26
++4 26 18 99 29
++4 101 34 30 47
++4 9 31 19 100
++4 109 98 38 36
++4 39 36 98 109
++4 30 44 40 101
++4 45 101 100 41
++4 48 45 100 23
++4 62 54 103 53
++4 46 49 98 59
++4 54 103 53 98
++4 60 104 55 79
++4 63 62 54 103
++4 57 78 65 103
++4 103 63 80 54
++4 55 56 79 64
++4 46 59 98 66
++4 73 67 102 112
++4 73 41 102 67
++4 83 112 104 102
++4 74 68 102 40
++4 109 72 98 75
++4 106 110 98 72
++4 106 72 98 66
++4 68 74 102 104
++4 104 88 79 86
++4 63 82 103 80
++4 82 88 103 80
++4 88 104 113 108
++4 70 103 63 82
++4 83 87 81 104
++4 110 85 103 92
++4 88 96 113 92
++4 2 12 20 28
++4 2 12 28 10
++4 2 28 20 6
++4 100 15 5 9
++4 14 1 99 100
++4 15 11 100 1
++4 2 99 28 6
++4 99 25 100 27
++4 26 24 99 27
++4 42 12 98 28
++4 52 35 31 100
++4 31 48 52 100
++4 47 44 102 68
++4 102 44 40 68
++4 45 102 101 41
++4 40 101 102 37
++4 101 41 102 37
++4 76 41 102 73
++4 106 98 110 103
++4 98 59 103 106
++4 106 59 103 80
++4 68 102 60 104
++4 60 102 55 104
++4 75 110 98 103
++4 84 107 65 103
++4 75 107 103 65
++4 106 85 103 110
++4 83 67 102 58
++4 88 69 113 104
++4 95 104 89 114
++4 4 0 99 1
++4 7 6 16 99
++4 7 4 2 99
++4 16 24 17 99
++4 29 18 99 8
++4 18 26 99 19
++4 44 40 22 30
++4 28 16 99 32
++4 30 34 100 17
++4 27 31 35 100
++4 23 100 48 31
++4 47 101 102 44
++4 98 43 105 21
++4 41 23 100 45
++4 30 44 101 47
++4 50 54 98 49
++4 50 54 53 98
++4 80 103 54 59
++4 112 67 102 83
++4 104 86 60 68
++4 104 68 91 86
++4 111 107 103 75
++4 111 75 103 110
++4 58 102 83 104
++4 83 104 81 77
++4 70 69 82 79
++4 88 103 113 69
++4 76 93 104 91
++4 111 94 103 107
++4 88 108 113 96
++4 10 3 28 0
++4 0 2 4 99
++4 14 99 1 4
++4 14 4 7 99
++4 15 5 1 100
++4 3 8 99 9
++4 22 99 14 7
++4 22 17 99 7
++4 15 100 41 23
++4 11 100 37 41
++4 12 36 98 10
++4 36 98 13 39
++4 20 28 12 42
++4 29 21 98 105
++4 37 100 40 101
++4 39 65 109 98
++4 65 43 57 98
++4 68 47 60 102
++4 58 67 102 45
++4 67 41 102 45
++4 76 37 40 102
++4 37 41 102 76
++4 106 66 98 59
++4 57 103 53 78
++4 65 103 78 84
++4 85 88 80 103
++4 88 92 103 85
++4 86 108 104 88
++4 89 83 112 104
++4 112 76 89 104
++4 95 113 104 97
++4 95 104 114 97
++4 95 104 83 89
++4 87 104 83 95
++4 87 95 113 104
++4 114 104 108 97
++4 93 104 108 114
++4 93 89 104 114
++4 3 5 99 0
++4 3 9 99 5
++4 98 72 38 66
++4 8 13 3 28
++4 13 28 10 3
++4 79 60 56 55
++4 74 104 68 91
++4 74 76 104 91
++
++CELL_TYPES 286
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
++10
+diff --git a/examples/multibody/deformable_torus/deformable_torus.cc b/examples/multibody/deformable_torus/deformable_torus.cc
+index 81a37c52f3..e1755e8ab4 100644
+--- a/examples/multibody/deformable_torus/deformable_torus.cc
++++ b/examples/multibody/deformable_torus/deformable_torus.cc
+@@ -76,6 +76,20 @@ int do_main() {
+   plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
+                                "ground_visual", std::move(illustration_props));
+ 
++  /* Minimum required proximity properties for rigid bodies to interact with
++   deformable bodies.
++   1. A valid Coulomb friction coefficient, and
++   2. A resolution hint. (Rigid bodies need to be tessellated so that collision
++   queries can be performed against deformable geometries.) */
++  ProximityProperties rigid_proximity_props;
++  /* Set the friction coefficient close to that of rubber against rubber. */
++  const CoulombFriction<double> surface_friction(1.15, 1.15);
++  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
++  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
++                                    geometry::internal::kRezHint, 1.0);
++  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
++                                  "ground_collision", rigid_proximity_props);
++
+ 
+   /* Set up a deformable model. */
+   auto owned_deformable_model =
+@@ -129,6 +143,9 @@ int do_main() {
+ 
+   // connect mpm to output port
+   builder.Connect(deformable_model->mpm_particle_positions_port(), visualizer.mpm_data_input_port());
++  builder.Connect(
++      deformable_model->mpm_particle_positions_port(),
++      scene_graph.mpm_data_input_port());
+ 
+ 
+ 
+diff --git a/geometry/drake_visualizer.cc b/geometry/drake_visualizer.cc
+index c05c9a75d3..3d5477fd0f 100644
+--- a/geometry/drake_visualizer.cc
++++ b/geometry/drake_visualizer.cc
+@@ -576,7 +576,6 @@ DrakeVisualizer<T>::DrakeVisualizer(lcm::DrakeLcmInterface* lcm,
+   mpm_data_input_port_ = 
+       this->DeclareAbstractInputPort("mpm", Value<std::vector<Vector3<double>>>())
+           .get_index();
+-
+   // -------------------------------newly added for MPM-------------------------
+ 
+   // These cache entries depend on *nothing*.
+@@ -625,12 +624,19 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
+       ExtractDoubleOrThrow(context.get_time()), lcm_);
+ 
+   // // ADD a call to MPM one here 
+-  const systems::InputPort<T>& mpm_intput_port = this->get_input_port(mpm_data_input_port_); 
+-  const std::vector<Vector3<double>>& mpm_data = mpm_intput_port.template Eval<std::vector<Vector3<double>>>(context);
++  // don't need to connect mbp to sg now. can get mpm position (for visualization) via queryobject
++  const std::vector<Vector3<double>>& mpm_data = query_object.GetMpmPositions(); 
++  // std::cout << "num geometries : " << query_object.inspector().num_geometries() << std::endl; getchar();
++  // std::vector<SignedDistanceToPoint<T>> point_to_geometry =  
++  Vector3<T> pos{0.5,0.5,0.5};
++  std::vector<SignedDistanceToPoint<T>> point_to_geometry = query_object.ComputeSignedDistanceToPoint(pos);
++
++  std::cout << "size of computed distances vector " << point_to_geometry.size() << std::endl;
++
+   SendMPMGeometriesMessage(
+       mpm_data, params_,
+       ExtractDoubleOrThrow(context.get_time()), lcm_);
+-  
++  std::cout << "visualizer done"<< std::endl;
+   return EventStatus::Succeeded();
+ }
+ 
+diff --git a/geometry/drake_visualizer.h b/geometry/drake_visualizer.h
+index 4e1f6af37f..dae0cbe562 100644
+--- a/geometry/drake_visualizer.h
++++ b/geometry/drake_visualizer.h
+@@ -22,6 +22,8 @@
+ #include "drake/lcmt_point_cloud.hpp"
+ #include <iostream>
+ #include "drake/perception/point_cloud_to_lcm.h"
++#include "drake/geometry/query_results/signed_distance_pair.h"
++#include "drake/geometry/query_results/signed_distance_to_point.h"
+ 
+ namespace drake {
+ namespace geometry {
+@@ -191,9 +193,6 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
+   const systems::InputPort<T>& mpm_data_input_port() const {
+     return this->get_input_port(mpm_data_input_port_);
+   }
+-
+-
+-
+   // -------------------------------newly added for MPM-------------------------
+ 
+   /** @name Utility functions for instantiating and connecting a visualizer
+diff --git a/geometry/proximity_engine.cc b/geometry/proximity_engine.cc
+index eecceccc09..aa1d778db5 100644
+--- a/geometry/proximity_engine.cc
++++ b/geometry/proximity_engine.cc
+@@ -9,6 +9,7 @@
+ #include <unordered_map>
+ #include <utility>
+ #include <vector>
++#include <iostream>
+ 
+ #include <drake_vendor/fcl/fcl.h>
+ #include <fmt/format.h>
+diff --git a/geometry/query_object.h b/geometry/query_object.h
+index d92d9da4a5..78c2a2c94f 100644
+--- a/geometry/query_object.h
++++ b/geometry/query_object.h
+@@ -17,6 +17,8 @@
+ #include "drake/math/rigid_transform.h"
+ #include "drake/systems/framework/context.h"
+ #include "drake/systems/sensors/image.h"
++#include "drake/systems/framework/input_port.h"
++#include "drake/systems/framework/output_port.h"
+ 
+ namespace drake {
+ namespace geometry {
+@@ -128,6 +130,13 @@ class QueryObject {
+   QueryObject(QueryObject&&) = default;
+   QueryObject& operator=(QueryObject&&) = default;
+ 
++
++  const std::vector<Vector3<double>>& GetMpmPositions() const {
++    const systems::InputPort<T>& mpm_intput_port = scene_graph_->mpm_data_input_port();
++    const std::vector<Vector3<double>>& mpm_data = mpm_intput_port.template Eval<std::vector<Vector3<double>>>(*context_);
++    return mpm_data;
++  }
++
+   //@}
+ 
+   // Note to developers on adding queries:
+@@ -423,6 +432,7 @@ class QueryObject {
+   ComputeDeformableContact(
+       internal::DeformableContact<T>* deformable_contact) const;
+ 
++
+   /** Applies a conservative culling mechanism to create a subset of all
+    possible geometry pairs based on non-zero intersections. A geometry pair
+    that is *absent* from the results is either a) culled by collision filters or
+diff --git a/geometry/query_results/BUILD.bazel b/geometry/query_results/BUILD.bazel
+index 3fb12fdf17..dd2292d34f 100644
+--- a/geometry/query_results/BUILD.bazel
++++ b/geometry/query_results/BUILD.bazel
+@@ -77,6 +77,17 @@ drake_cc_library(
+     ],
+ )
+ 
++drake_cc_library(
++    name = "mpm_contact",
++    srcs = ["mpm_contact.cc"],
++    hdrs = ["mpm_contact.h"],
++    deps = [
++        "//geometry:geometry_ids",
++        "//geometry/proximity:polygon_surface_mesh",
++        "//multibody/contact_solvers/sap:partial_permutation",
++    ],
++)
++
+ drake_cc_googletest(
+     name = "deformable_contact_test",
+     deps = [
+diff --git a/geometry/query_results/mpm_contact.cc b/geometry/query_results/mpm_contact.cc
+new file mode 100644
+index 0000000000..7146983b8b
+--- /dev/null
++++ b/geometry/query_results/mpm_contact.cc
+@@ -0,0 +1,16 @@
++#include "drake/geometry/query_results/mpm_contact.h"
++
++#include <utility>
++
++namespace drake {
++namespace geometry {
++namespace internal {
++
++using multibody::contact_solvers::internal::PartialPermutation;
++
++
++template class MpmContact<double>;
++
++}  // namespace internal
++}  // namespace geometry
++}  // namespace drake
+diff --git a/geometry/query_results/mpm_contact.h b/geometry/query_results/mpm_contact.h
+new file mode 100644
+index 0000000000..b9145c3826
+--- /dev/null
++++ b/geometry/query_results/mpm_contact.h
+@@ -0,0 +1,146 @@
++#pragma once
++
++#include <optional>
++#include <unordered_map>
++#include <unordered_set>
++#include <vector>
++
++#include "drake/geometry/geometry_ids.h"
++#include "drake/geometry/proximity/polygon_surface_mesh.h"
++#include "drake/multibody/contact_solvers/sap/partial_permutation.h"
++
++namespace drake {
++namespace geometry {
++namespace internal {
++
++/* Stores all info about mpm particles that are in contact with rigid bodies (defined to be 
++particles that fall within rigid bodies).
++
++                  Mpm Particles (endowed with an ordering)
++
++            
++            `1    `2    `3    `4
++            
++                             ---------
++            `5    `6    `7   |*8
++                             |      Rigid body with id B
++      ----------             |
++            *9 |  `10   `11  |*12
++               |             ---------
++               |
++Rigid body with id A
++
++*: particles in contact
++`: particles not in contact
++
++
++
++
++std::unordered_map<GeometryId, std::vector<int>> map_geometries_to_contact_particles_: map(A) = [9], map(B) = [8,12]
++std::unordered_map<int, T> map_particle_index_to_distance_:  map(8) = -dist(8, B)
++std::unordered_map<int, std::vector3<T>> map_particle_index_to_normal_
++ */
++template <typename T>
++class MpmContact {
++ public:
++
++
++  struct MpmParticleContactPair{
++
++   int particle_in_contact_index_{};
++   GeometryId non_mpm_id_{};
++   T penetration_distance_{};
++   Vector3<T> normal_{};
++   Vector3<T> particle_in_contact_position_{};
++
++   MpmParticleContactPair(const int particle_in_contact_index, const GeometryId& non_mpm_id, const T penetration_distance, const Vector3<T>& normal, const Vector3<T>& position){
++      particle_in_contact_index_ = particle_in_contact_index;
++      non_mpm_id_ = non_mpm_id;
++      penetration_distance_ = penetration_distance;
++      normal_ = normal;
++      particle_in_contact_position_ = position;
++   }
++
++
++  };
++  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(MpmContact)
++
++  MpmContact() = default;
++
++
++  void Reset() {
++   mpm_contact_pairs_.clear();
++   particles_in_contact_.clear();
++  }
++
++  void AddMpmContactPair(const int particle_index, const GeometryId& nonmpm_geometry, const T distance, const Vector3<T>& contact_normal, const Vector3<T>& position) {
++   MpmParticleContactPair new_pair(particle_index, nonmpm_geometry, distance, contact_normal, position);
++   mpm_contact_pairs_.push_back(new_pair);
++   
++   particles_in_contact_.insert(particle_index); // mark this particle as a contact particle
++  }
++
++  size_t GetNumContactPairs() const {
++   return mpm_contact_pairs_.size();
++  }
++
++  int GetParticleIndexAt(size_t contact_pair_index) {
++   return mpm_contact_pairs_[contact_pair_index].particle_in_contact_index_;
++  }
++
++  GeometryId& GetNonMpmIdAt(size_t contact_pair_index) {
++   return mpm_contact_pairs_[contact_pair_index].non_mpm_id_;
++  }
++
++  T GetPenetrationDistanceAt(size_t contact_pair_index) {
++   return mpm_contact_pairs_[contact_pair_index].penetration_distance_;
++  }
++
++  Vector3<T>& GetNormalAt(size_t contact_pair_index) {
++   return mpm_contact_pairs_[contact_pair_index].normal_;
++  }
++
++  Vector3<T>& GetContactPositionAt(size_t contact_pair_index) {
++   return mpm_contact_pairs_[contact_pair_index].particle_in_contact_position_;
++  }
++
++  bool ParticleIsInContact(int particle_index) const {
++   auto it = particles_in_contact_.find(particle_index);
++   if (it != particles_in_contact_.end()){
++      return true;
++   }
++   return false;
++  }
++
++
++  
++
++ private:
++
++   // void AddContactParticleToGeometryMap(int particle_index, GeometryId geometry_in_contact){
++   //    if (map_geometries_to_contact_particles_.count(geometry_in_contact) == 0) {
++   //       std::vector<int> particles_in_contact_with_this_geometry{};
++   //       particles_in_contact_with_this_geometry.push_back(particle_index);
++   //       map_geometries_to_contact_particles_.insert({geometry_in_contact, particles_in_contact_with_this_geometry});
++   //    }
++   //    else {
++   //       std::vector<int>& particles_in_contact_with_this_geometry = map_geometries_to_contact_particles_[geometry_in_contact];
++   //       particles_in_contact_with_this_geometry.push_back(particle_index);
++   //    }
++   // }
++
++   // std::unordered_map<GeometryId, std::vector<int>> map_geometries_to_contact_particles_{};
++   // std::unordered_map<int, T> map_particle_index_to_distance_{};
++   // std::unordered_map<int, Vector3<T>> map_particle_index_to_normal_{};
++
++
++   std::vector<MpmParticleContactPair> mpm_contact_pairs_{};
++
++   std::unordered_set<int> particles_in_contact_{};
++
++  
++};
++
++}  // namespace internal
++}  // namespace geometry
++}  // namespace drake
+diff --git a/geometry/scene_graph.cc b/geometry/scene_graph.cc
+index 327ee13570..0153ceeb14 100644
+--- a/geometry/scene_graph.cc
++++ b/geometry/scene_graph.cc
+@@ -94,6 +94,12 @@ SceneGraph<T>::SceneGraph()
+       this->DeclareAbstractOutputPort("query", &SceneGraph::CalcQueryObject)
+           .get_index();
+ 
++  // -------------------------------newly added for MPM-------------------------
++  mpm_data_input_port_ = 
++      this->DeclareAbstractInputPort("mpm", Value<std::vector<Vector3<double>>>())
++          .get_index();
++  // -------------------------------newly added for MPM-------------------------
++
+   auto& pose_update_cache_entry = this->DeclareCacheEntry(
+       "Cache guard for pose updates", &SceneGraph::CalcPoseUpdate,
+       {this->all_input_ports_ticket()});
+diff --git a/geometry/scene_graph.h b/geometry/scene_graph.h
+index 94388449cb..695f179035 100644
+--- a/geometry/scene_graph.h
++++ b/geometry/scene_graph.h
+@@ -945,6 +945,12 @@ class SceneGraph final : public systems::LeafSystem<T> {
+       systems::Context<T>* context) const;
+   //@}
+ 
++  // -------------------------------newly added for MPM-------------------------
++  const systems::InputPort<T>& mpm_data_input_port() const {
++    return this->get_input_port(mpm_data_input_port_);
++  }
++  // -------------------------------newly added for MPM-------------------------
++
+  private:
+   // Friend class to facilitate testing.
+   friend class SceneGraphTester;
+@@ -1026,6 +1032,10 @@ class SceneGraph final : public systems::LeafSystem<T> {
+   // The index of the output port with the QueryObject abstract value.
+   int query_port_index_{-1};
+ 
++  // --------------- input port for MPM
++  int mpm_data_input_port_{-1};
++  // --------------- input port for MPM
++
+   // SceneGraph owns its configured model; it gets copied into the context when
+   // the context is set to its "default" state. We use unique_ptr in support of
+   // forward-declaring GeometryState<T> to reduce our #include footprint, but
+diff --git a/multibody/mpm/BUILD.bazel b/multibody/mpm/BUILD.bazel
+index b5aec03bf4..b3929e2d2c 100644
+--- a/multibody/mpm/BUILD.bazel
++++ b/multibody/mpm/BUILD.bazel
+@@ -335,6 +335,7 @@ drake_cc_library(
+         ":Particles",
+         ":SparseGrid",
+         "//common:essential",
++        "//geometry/query_results:mpm_contact",
+     ],
+ )
+ 
+@@ -454,5 +455,70 @@ drake_cc_googletest(
+ 
+     ],
+ )
++drake_cc_googletest(
++    name = "TestMpmContactPair",
++    deps = [
++        ":BSpline",
++        "//common/test_utilities:eigen_matrix_compare",
++        "//common:autodiff",
++        "//math:gradient",
++        ":CorotatedElasticModel",
++        ":StvkHenckyWithVonMisesModel",
++        ":SparseGrid",
++        ":MPMTransfer",
++        "//multibody/plant",
++        "//geometry:drake_visualizer",
++        "//geometry:scene_graph",
++        "//multibody/parsing",
++        "//systems/analysis:simulator",
++        "//systems/framework:diagram",
++        "@gflags",
++
++    ],
++)
++
++drake_cc_googletest(
++    name = "TestMpmContactPairExternalParticles",
++    deps = [
++        ":BSpline",
++        "//common/test_utilities:eigen_matrix_compare",
++        "//common:autodiff",
++        "//math:gradient",
++        ":CorotatedElasticModel",
++        ":StvkHenckyWithVonMisesModel",
++        ":SparseGrid",
++        ":MPMTransfer",
++        "//multibody/plant",
++        "//geometry:drake_visualizer",
++        "//geometry:scene_graph",
++        "//multibody/parsing",
++        "//systems/analysis:simulator",
++        "//systems/framework:diagram",
++        "@gflags",
++
++    ],
++)
++
++drake_cc_googletest(
++    name = "TestMpmContactPairExternalParticlesWithTransform",
++    deps = [
++        ":BSpline",
++        "//common/test_utilities:eigen_matrix_compare",
++        "//common:autodiff",
++        "//math:gradient",
++        ":CorotatedElasticModel",
++        ":StvkHenckyWithVonMisesModel",
++        ":SparseGrid",
++        ":MPMTransfer",
++        "//multibody/plant",
++        "//geometry:drake_visualizer",
++        "//geometry:scene_graph",
++        "//multibody/parsing",
++        "//systems/analysis:simulator",
++        "//systems/framework:diagram",
++        "@gflags",
++
++    ],
++)
+ 
+ add_lint_tests()
+diff --git a/multibody/mpm/MPMTransfer.cc b/multibody/mpm/MPMTransfer.cc
+index 0e7a95856d..1870cae854 100644
+--- a/multibody/mpm/MPMTransfer.cc
++++ b/multibody/mpm/MPMTransfer.cc
+@@ -33,12 +33,13 @@ void MPMTransfer<T>::SetUpTransfer(SparseGrid<T>* grid,
+   SortParticles(batch_indices, *grid,
+                 particles);  // sort particles based on sorted grid nodes above
+   // TODO(yiminlin.tri): expensive... To optimize
+-  UpdateBasisAndGradientParticles(*grid, *particles);
++  UpdateBasisAndGradientParticles(*grid, particles);
+   
+   // TODO(yiminlin.tri): Dp_inv_ is hardcoded for quadratic B-Spline
+   // The values of Dp_inv_ are different for different B-Spline bases
+   // https://www.math.ucla.edu/~jteran/papers/JSSTS15.pdf
+   Dp_inv_ = 4.0 / (grid->get_h() * grid->get_h());
++  particles->set_num_active_grid_nodes(grid->get_num_active_gridpt());
+ }
+ 
+ template <typename T>
+@@ -60,7 +61,8 @@ int MPMTransfer<T>::MakeGridCompatibleWithParticles(Particles<T>* particles, Spa
+   // batch_indices but not particles simon:
+   grid->UpdateActiveGridPoints(batch_indices, *particles);
+   SortParticles(batch_indices, *grid, particles);  // sort particles based on sorted grid nodes above
+-  UpdateBasisAndGradientParticles(*grid, *particles);
++  UpdateBasisAndGradientParticles(*grid, particles);
++  particles->set_num_active_grid_nodes(grid->get_num_active_gridpt());
+   return grid->get_num_active_gridpt(); 
+ }
+ 
+@@ -230,7 +232,7 @@ void MPMTransfer<T>::CalcHessianP2G(Particles<T>* particles, SparseGrid<T>* grid
+ 
+ template <typename T>
+ T MPMTransfer<T>::CalcEnergyForceHessian(Particles<T>* particles, SparseGrid<T>* grid, MatrixX<T>* hessian, T dt) {
+-    UpdateBasisAndGradientParticles(*grid, *particles); // compute weights and weight gradients
++    UpdateBasisAndGradientParticles(*grid, particles); // compute weights and weight gradients
+     CalcParticleFnewG2P(*grid, dt, particles); //Fnew(vi*, dt) write to particles
+     T energy = CalcTotalParticleEnergy(*particles);
+     CalcGridForceP2G(*particles, grid); // write grid force and hessian onto grid
+@@ -405,10 +407,10 @@ void MPMTransfer<T>::SortParticles(
+ 
+ template <typename T>
+ void MPMTransfer<T>::UpdateBasisAndGradientParticles(
+-    const SparseGrid<T>& grid, const Particles<T>& particles) {
++    const SparseGrid<T>& grid, Particles<T>* particles) {
+   int num_particles, p_start, p_end;
+   Vector3<int> batch_index_3d;
+-  num_particles = particles.get_num_particles();
++  num_particles = particles->get_num_particles();
+ 
+   bases_val_particles_.reserve(num_particles);
+   bases_grad_particles_.reserve(num_particles);
+@@ -430,8 +432,8 @@ void MPMTransfer<T>::UpdateBasisAndGradientParticles(
+     // For each particle in the batch (Assume particles are sorted with
+     // respect to the batch index), update basis evaluations
+     for (int p = p_start; p < p_end; ++p) {
+-      const Vector3<T>& xp = particles.get_position(p);
+-      EvalBasisOnBatch(p, xp, grid, batch_index_3d);
++      const Vector3<T>& xp = particles->get_position(p);
++      EvalBasisOnBatch(p, xp, grid, batch_index_3d, particles);
+     }
+     p_start = p_end;
+   }
+@@ -440,7 +442,8 @@ void MPMTransfer<T>::UpdateBasisAndGradientParticles(
+ template <typename T>
+ void MPMTransfer<T>::EvalBasisOnBatch(int p, const Vector3<T>& xp,
+                                       const SparseGrid<T>& grid,
+-                                      const Vector3<int>& batch_index_3d) {
++                                      const Vector3<int>& batch_index_3d,
++                                      Particles<T>* particles) {
+   int bi = batch_index_3d[0];
+   int bj = batch_index_3d[1];
+   int bk = batch_index_3d[2];
+@@ -461,6 +464,11 @@ void MPMTransfer<T>::EvalBasisOnBatch(int p, const Vector3<T>& xp,
+         std::tie(bases_val_particles_[p][idx_local],
+                  bases_grad_particles_[p][idx_local]) =
+             basis.EvalBasisAndGradient(xp);
++
++        // also store the result in Particles
++        particles->SetWeightAtParticle(p, idx_local, bases_val_particles_[p][idx_local]);
++        particles->SetWeightGradientAtParticle(p, idx_local, bases_grad_particles_[p][idx_local]);
++        particles->SetNeighborGridGlobalIndex(p, idx_local, grid.Reduce3DIndex(grid_index));
+       }
+     }
+   }
+diff --git a/multibody/mpm/MPMTransfer.h b/multibody/mpm/MPMTransfer.h
+index e90b48125e..ec14b1586e 100644
+--- a/multibody/mpm/MPMTransfer.h
++++ b/multibody/mpm/MPMTransfer.h
+@@ -15,6 +15,8 @@
+ #include "drake/multibody/mpm/Particles.h"
+ #include "drake/multibody/mpm/SparseGrid.h"
+ 
++#include "drake/geometry/query_results/mpm_contact.h"
++
+ namespace drake {
+ namespace multibody {
+ namespace mpm {
+@@ -68,6 +70,46 @@ class MPMTransfer {
+     // The computation is down in a p2g fashion. Implicitly depends on dt 
+     void CalcHessianP2G(Particles<T>* particles, SparseGrid<T>* grid, MatrixX<T>* hessian);
+ 
++    // here we require that grid is already compatible with particles.
++    // more specifically, we require the ordering of particles and grid nodes, as well as batch_sizes_ to be up-to-date
++    void ComputeJGrivVtoParticleContactV(const geometry::internal::MpmContact<T>& mpm_contact, 
++                                        const Particles<T>& particles, const SparseGrid<T>& grid, 
++                                        std::unordered_map<int, MatrixX<T>>* map_contact_particle_to_Jacobian) const {
++
++        map_contact_particle_to_Jacobian->clear();                                        
++
++        int p_start, p_end, idx_local;
++        // loop over all particles, in a batch way
++        Vector3<int> batch_index_3d; // this is used to locate the global indices of 27 neighbor nodes. They are spatially +-1 to the batch node
++        p_start = 0;
++        for (int i = 0; grid.get_num_active_gridpt(); ++i) {
++            if (batch_sizes_[i] != 0) {
++                p_end = p_start + batch_sizes_[i]; // those are the particles in this batch, i.e. share the same 27 neighbor nodes
++                for (int p = p_start; p < p_end; ++p) { // loop over those particles
++                    if (mpm_contact.ParticleIsInContact(p)) {
++                        // if this particle is in contact with another geometry
++                        MatrixX<T> J_contact_point = MatrixX<T>::Zero(3, 3 * grid.get_num_active_gridpt());
++                        batch_index_3d = grid.Expand1DIndex(i);
++                        for (int c = -1; c <= 1; ++c) { for (int b = -1; b <= 1; ++b) { for (int a = -1; a <= 1; ++a) {
++                            Vector3<int> neighbor_node_index_3d = batch_index_3d + Vector3<int>(a, b, c); // global 3d index
++                            int neighbor_node_global_index_1d = grid.Reduce3DIndex(neighbor_node_index_3d);
++                            MatrixX<T> local_J = MatrixX<T>::Zero(3,3); 
++
++                            idx_local = (a + 1) + 3 * (b + 1) + 9 * (c + 1); // 0-26
++                            //local_J.diagonal().setConstant(particles.bases_val_particles_[p][idx_local]);
++                            local_J.diagonal().setConstant(particles.GetWeightAtParticle(p,idx_local));
++                            J_contact_point.block(0, neighbor_node_global_index_1d*3, 3, 3) = local_J;
++                            // 27 3by3 diagonal matrices should be filled in, rest columns should just be zero. A pretty sparse fat matrid
++                        }}}
++                        map_contact_particle_to_Jacobian->insert({p, J_contact_point});
++                    }
++                }
++            }
++        }
++  
++    }
++
++
+ 
+  private:
+     friend class MPMTransferTest;
+@@ -132,13 +174,14 @@ class MPMTransfer {
+     // Update the evalutions and gradients of BSpline bases on each particle,
+     // and update bases_val_particles_ and bases_grad_particles_
+     void UpdateBasisAndGradientParticles(const SparseGrid<T>& grid,
+-                                         const Particles<T>& particles);
++                                        Particles<T>* particles);
+ 
+     // Evaluate (27) bases neighboring to the given batch, at the p-th particle
+     // with position xp, and put the results into preallocated vectors
+     void EvalBasisOnBatch(int p, const Vector3<T>& xp,
+                           const SparseGrid<T>& grid,
+-                          const Vector3<int>& batch_index_3d);
++                          const Vector3<int>& batch_index_3d,
++                          Particles<T>* particles);
+ 
+     // At a particular particle p in batch with batch_index_3d, transfer
+     // particle states (m, mv, tau) to (m, mv, f). Note that we temporarily
+@@ -207,6 +250,8 @@ class MPMTransfer {
+ 
+     
+ 
++    
++
+     // The inverse value of diagonal entries of the matrix D_p in APIC
+     T Dp_inv_;
+ 
+diff --git a/multibody/mpm/Particles.cc b/multibody/mpm/Particles.cc
+index cf64d93f4c..80914191f4 100644
+--- a/multibody/mpm/Particles.cc
++++ b/multibody/mpm/Particles.cc
+@@ -18,7 +18,9 @@ Particles<T>::Particles(int num_particles): num_particles_(num_particles),
+                                          kirchhoff_stresses_(num_particles),
+                                          first_PK_stresses_(num_particles),
+                                          B_matrices_(num_particles),
+-                                         elastoplastic_models_(num_particles) {
++                                         elastoplastic_models_(num_particles),
++                                         bases_val_particles_(num_particles),
++                                         bases_grad_particles_(num_particles) {
+     DRAKE_ASSERT(num_particles >= 0);
+ }
+ 
+@@ -275,6 +277,9 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
+     first_PK_stresses_.emplace_back(first_PK_stress);
+     B_matrices_.emplace_back(B_matrix);
+     elastoplastic_models_.emplace_back(std::move(elastoplastic_model));
++    bases_val_particles_.emplace_back(std::array<T, 27>{});
++    bases_grad_particles_.emplace_back(std::array<Vector3<T>, 27>{});
++    neighbor_grid_nodes_global_indices_.emplace_back(std::array<size_t, 27>{});
+     num_particles_++;
+ }
+ 
+diff --git a/multibody/mpm/Particles.h b/multibody/mpm/Particles.h
+index ec0b637ef5..c4b7a90857 100644
+--- a/multibody/mpm/Particles.h
++++ b/multibody/mpm/Particles.h
+@@ -52,8 +52,8 @@ class Particles {
+ 
+     void print_info() const {
+       for (int ind = 0; ind < num_particles_; ++ind){
+-         if (ind < 5){
+-            std::cout << "particle " << ind << " position " << positions_[ind][0] << std::endl;
++         if (ind < 10){
++            std::cout << "particle " << ind << " position " << positions_[ind][0] << " " << positions_[ind][1] << " " << positions_[ind][2]<< std::endl;
+          }
+       }
+     }
+@@ -163,6 +163,57 @@ class Particles {
+     // by https://math.ucdavis.edu/~jteran/papers/JST17.pdf section 5.3.1
+     TotalMassEnergyMomentum<T> GetTotalMassEnergyMomentum(T g) const;
+ 
++
++    // Note that the following weights and weight gradients will change if particle position changes 
++    void SetWeightAtParticle(int index_particle, int index_neighbor_node, const T& weight) {
++      DRAKE_DEMAND(index_neighbor_node>=0);
++      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
++      bases_val_particles_[index_particle][index_neighbor_node] = weight;
++    }
++    T GetWeightAtParticle(int index_particle, int index_neighbor_node) const {
++      DRAKE_DEMAND(index_neighbor_node>=0);
++      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
++      return bases_val_particles_[index_particle][index_neighbor_node];
++    }
++
++    void SetNeighborGridGlobalIndex(int index_particle, int index_neighbor_node_local, size_t index_neighbor_node_global) {
++      DRAKE_DEMAND(index_neighbor_node_local>=0);
++      DRAKE_DEMAND(index_neighbor_node_local<27); // each particle has 27 neighbor grid nodes
++      neighbor_grid_nodes_global_indices_[index_particle][index_neighbor_node_local] = index_neighbor_node_global;
++    }
++
++    void SetWeightGradientAtParticle(int index_particle, int index_neighbor_node, const Vector3<T>& dweight) {
++      DRAKE_DEMAND(index_neighbor_node>=0);
++      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
++      bases_grad_particles_[index_particle][index_neighbor_node] = dweight;
++    }
++    void GetWeightGradientAtParticle(int index_particle, int index_neighbor_node, Vector3<T>* dweight) {
++      DRAKE_DEMAND(index_neighbor_node>=0);
++      DRAKE_DEMAND(index_neighbor_node<27); // each particle has 27 neighbor grid nodes
++      *dweight = bases_grad_particles_[index_particle][index_neighbor_node];
++    }
++
++    void FormJacobianGridVToParticleVAt(int index_particle, MatrixX<T>* Jmpm) const {
++      // here we require wip have already been computed and stored in bases_val_particles_
++      // also require neighbor_grid_nodes_global_indices_ is updated
++      // this will be satisfied if we have made grid compatible with particles
++      (*Jmpm) = MatrixX<T>::Zero(3, 3 * num_active_grid_nodes_);
++
++      for (int node_local_index = 0; node_local_index < 27; node_local_index++) {
++        MatrixX<T> local_J = MatrixX<T>::Zero(3,3); 
++        local_J.diagonal().setConstant(bases_val_particles_[index_particle][node_local_index]);
++        (*Jmpm).block(0, neighbor_grid_nodes_global_indices_[index_particle][node_local_index]*3, 3, 3) = local_J;
++      }
++    }
++
++    void set_num_active_grid_nodes(int n) {
++      num_active_grid_nodes_ = n;
++    }
++
++    int get_num_active_grid_nodes() const {
++      return num_active_grid_nodes_;
++    }
++
+  private:
+     int num_particles_;
+     std::vector<Vector3<T>> positions_{};
+@@ -180,6 +231,14 @@ class Particles {
+     std::vector<Eigen::Matrix<T, 9, 9>> stress_derivatives_{};
+     std::vector<Eigen::Matrix<T, 9, 9>> stress_derivatives_contractF_contractF_{};
+ 
++    // each particle p is related to its 27 neighbor grid nodes. This stores the corresponding weights
++    // wip. This is the same as the one in MPMTransfer. Should consider deprecate one of them in the future.
++    std::vector<std::array<T, 27>> bases_val_particles_{};
++    std::vector<std::array<Vector3<T>, 27>> bases_grad_particles_{};
++    std::vector<std::array<size_t, 27>> neighbor_grid_nodes_global_indices_{};
++    int num_active_grid_nodes_;
++
++
+ 
+     
+ };  // class Particles
+diff --git a/multibody/mpm/VelocityJacobianDerivative.md b/multibody/mpm/VelocityJacobianDerivative.md
+new file mode 100644
+index 0000000000..ccc124b361
+--- /dev/null
++++ b/multibody/mpm/VelocityJacobianDerivative.md
+@@ -0,0 +1,23 @@
++## Compute the Jacobian that transforms all dofs to contact velocity
++
++Say we have already identified a particle 
++$$x_{pC}, v_{pC}$$
++that penetrates a rigid body A.
++
++Let's first compute the Jacobian J s.t.
++$$ v_{pC} = J \cdot v_i$$
++where we have n grid nodes.
++
++J will have dimension 3 by 3n. (Confirm that?)
++
++Since the computation of ``AppendContactKinematics`` is called after we have computed the free motion state, we can assume that we have already had sorted grid nodes and sorted particles, the weights 
++$$w_{ip}$$
++have also been computed.
++
++Nevertheless, since we only have access to ``Context`` and we only have ``MpmState`` which is just ``Particles``, those info are lost.
++
++So here we need to redo the grid and setup transfer thing (to sort the grid nodes and get weights) -- possible issue here tbd
++
++Anyways let's say we have the transfer setup now.
++
++To compute the J, we loop over all 27 neighboring grid nodes, denoted its index among all grid nodes to be j. The 3by3 block ``J.block<3,3>(0, 3*j)`` is a diagonal matrix with wjp on the diagonal.
+\ No newline at end of file
+diff --git a/multibody/mpm/mpm_solver.h b/multibody/mpm/mpm_solver.h
+index 47ec03ac97..60cbb1ab32 100644
+--- a/multibody/mpm/mpm_solver.h
++++ b/multibody/mpm/mpm_solver.h
+@@ -40,6 +40,22 @@ class MpmSolver {
+ 
+   int AdvanceOneTimeStep(const MpmState<T>& prev_state,  MpmState<T>* next_state, MpmSolverScratchData<T>* scratch) const;
+ 
++  void ComputeJacobianMpm(const MpmState<T>& current_state, const geometry::internal::MpmContact<T>& mpm_contact,
++                    const MpmSolverScratchData<T> scratch, std::unordered_map<int, MatrixX<T>>* map_contact_particle_to_Jacobian) {
++      const Particles<T> particles = current_state.GetParticles();
++      scratch.mpm_transfer_.ComputeJGrivVtoParticleContactV(mpm_contact, particles, scratch.grid_, map_contact_particle_to_Jacobian);                 
++  }
++
++
++  // int MakeGridCompatibleWithParticles(MpmState<T>* current_state, MpmSolverScratchData<T>* scratch) {
++  //   scratch->mpm_transfer_ = MPMTransfer<T>();
++
++  //   const Particles<T> particles = current_state.GetParticles(); 
++  //   scratch->mpm_transfer_.SetUpTransfer(&(scratch->grid_), &p_new);
++  // }
++ 
++
++
+   /* Returns the FEM model that this solver solves for. */
+   const MpmModel<T>& model() const { return *model_; }
+ 
+diff --git a/multibody/mpm/test/TestEnergyForceHessian.cc b/multibody/mpm/test/TestEnergyForceHessian.cc
+index dd053b4770..1b5ce2edf6 100644
+--- a/multibody/mpm/test/TestEnergyForceHessian.cc
++++ b/multibody/mpm/test/TestEnergyForceHessian.cc
+@@ -111,13 +111,13 @@ void TestEnergyAndForceAndHessian(){
+     }
+ 
+     // check hessian = -dfdx
+-    for (int i = 0; i < 1; i++) {
++    for (int i = 0; i < 52; i++) {
+         for (int j = 0; j < 3; j++) {
+             Eigen::VectorX<AutoDiffXd> grid_force_i = grid.get_force(i);
+             MatrixX<AutoDiffXd> d_grid_force_ij_d_V = grid_force_i(j).derivatives(); // 1 by 3*num_active_grids
+             MatrixX<AutoDiffXd> d_grid_force_ij_d_X = d_grid_force_ij_d_V/dt; // chain rule
+             Eigen::VectorX<AutoDiffXd> hessian_slice = hessian.col(i*3+j); //.col or .row should be the same, since it is symmetric
+-            EXPECT_TRUE(CompareMatrices(-d_grid_force_ij_d_X, hessian_slice, 1e-10));
++            EXPECT_TRUE(CompareMatrices(-d_grid_force_ij_d_X, hessian_slice, 1e-12));
+         }
+     }
+ 
+diff --git a/multibody/mpm/test/TestMpmContactPair.cc b/multibody/mpm/test/TestMpmContactPair.cc
+new file mode 100644
+index 0000000000..5c07eda2b1
+--- /dev/null
++++ b/multibody/mpm/test/TestMpmContactPair.cc
+@@ -0,0 +1,195 @@
++#include "drake/multibody/mpm/BSpline.h"
++#include "drake/multibody/mpm/SparseGrid.h"
++#include "drake/multibody/mpm/MPMTransfer.h"
++#include "drake/multibody/mpm/ElastoPlasticModel.h"
++#include "drake/multibody/mpm/CorotatedElasticModel.h"
++#include "drake/multibody/mpm/StvkHenckyWithVonMisesModel.h"
++#include <gtest/gtest.h>
++#include "drake/common/autodiff.h"
++#include "drake/math/autodiff_gradient.h"
++#include "drake/common/test_utilities/eigen_matrix_compare.h"
++#include <iostream>
++#include <vector>
++#include "drake/multibody/plant/deformable_model.h"
++#include <stdlib.h> 
++#include "drake/common/eigen_types.h"
++#include <vector>
++#include <memory>
++
++#include <gflags/gflags.h>
++
++#include "drake/common/find_resource.h"
++#include "drake/geometry/drake_visualizer.h"
++#include "drake/geometry/proximity_properties.h"
++#include "drake/geometry/scene_graph.h"
++#include "drake/math/rigid_transform.h"
++#include "drake/multibody/fem/deformable_body_config.h"
++#include "drake/multibody/parsing/parser.h"
++#include "drake/multibody/plant/multibody_plant.h"
++#include "drake/multibody/plant/multibody_plant_config_functions.h"
++#include "drake/multibody/tree/prismatic_joint.h"
++#include "drake/systems/analysis/simulator.h"
++#include "drake/systems/framework/diagram.h"
++#include "drake/systems/framework/diagram_builder.h"
++#include "drake/multibody/plant/compliant_contact_manager.h"
++
++
++namespace drake {
++namespace multibody {
++namespace mpm {
++namespace internal {
++namespace {
++
++// constexpr double kEps = 4.0 * std::numeric_limits<double>::epsilon();
++
++using Eigen::Matrix3d;
++using Eigen::Matrix3Xd;
++using drake::geometry::AddContactMaterial;
++using drake::geometry::Box;
++using drake::geometry::GeometryInstance;
++using drake::geometry::IllustrationProperties;
++using drake::geometry::Mesh;
++using drake::geometry::ProximityProperties;
++using drake::math::RigidTransformd;
++using drake::multibody::AddMultibodyPlant;
++using drake::multibody::Body;
++using drake::multibody::CoulombFriction;
++using drake::multibody::MultibodyPlantConfig;
++using drake::multibody::Parser;
++using drake::multibody::PrismaticJoint;
++using drake::multibody::fem::DeformableBodyConfig;
++using drake::multibody::DeformableBodyId;
++using drake::multibody::DeformableModel;
++using drake::systems::BasicVector;
++using drake::systems::Context;
++using Eigen::Vector2d;
++using Eigen::Vector4d;
++using Eigen::VectorXd;
++using drake::geometry::GeometryId;
++using drake::multibody::internal::DiscreteUpdateManager;
++using drake::multibody::internal::CompliantContactManager;
++using drake::multibody::internal::DiscreteContactPair;
++
++void CreateScene(){
++    bool dynamic_rigid_body = false;
++    
++    GeometryId rigid_geometry_id_;
++    BodyIndex rigid_body_index_;
++    systems::DiagramBuilder<double> builder;
++    MultibodyPlantConfig plant_config;
++    plant_config.discrete_contact_solver = "sap";
++    auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
++
++    Box rigid_box{4, 4, 4};
++    const RigidTransformd X_WR(Eigen::Vector3d{0, 0, -2});
++
++    ProximityProperties rigid_proximity_props;
++    geometry::AddContactMaterial({}, {}, CoulombFriction<double>(1.0, 1.0),
++                                 &rigid_proximity_props);
++    rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
++                                      geometry::internal::kRezHint, 1.0);
++    if (dynamic_rigid_body) {
++        const RigidBody<double>& rigid_body =
++          plant.AddRigidBody("rigid_body", SpatialInertia<double>());
++
++        rigid_geometry_id_ = plant.RegisterCollisionGeometry(
++          rigid_body, X_WR, rigid_box,
++          "dynamic_collision_geometry", rigid_proximity_props);
++
++        rigid_body_index_ = rigid_body.index();
++    } else {
++
++        /* Register the same rigid geometry, but static instead of dynamic. */
++        rigid_geometry_id_ = plant.RegisterCollisionGeometry(
++            plant.world_body(), X_WR, rigid_box,
++            "static_collision_geometry", rigid_proximity_props);
++
++        rigid_body_index_ = plant.world_body().index();
++        
++    }
++
++    /* register a mpm body here */
++    auto owned_deformable_model =
++      std::make_unique<DeformableModel<double>>(&plant);
++
++    double E = 5e4;
++    double nu = 0.4;
++    std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model
++            = std::make_unique<multibody::mpm::CorotatedElasticModel<double>>(E, nu);
++
++    multibody::SpatialVelocity<double> geometry_initial_veolocity;
++    geometry_initial_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.0};//{0.1, 0.1, 0.1};
++    geometry_initial_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};//{M_PI/2, M_PI/2, M_PI/2};
++
++    Vector3<double> geometry_translation = {0.0, 0.0, 0.05};
++    math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
++
++    double density = 1000.0; double grid_h = 0.2;
++    int min_num_particles_per_cell = 1;
++
++    std::unique_ptr<multibody::mpm::AnalyticLevelSet<double>> mpm_geometry_level_set = 
++                                    std::make_unique<multibody::mpm::SphereLevelSet<double>>(0.2);
++
++    owned_deformable_model->RegisterMpmBody(
++      std::move(mpm_geometry_level_set), std::move(constitutive_model), geometry_initial_veolocity,
++      geometry_pose, density, grid_h, min_num_particles_per_cell);
++
++    /* 
++    Four particles should be below z=0
++    particle #1 posiion: -0.113647 -0.0631355 -0.051133
++    particle #10 posiion: -0.011385 0.0588435 -0.074056
++    particle #15 posiion: 0.0799938 -0.090995 -0.0950756
++    particle #17 posiion: -0.00799091 -0.0601236 -0.0492368
++    */ 
++
++    const DeformableModel<double>* deformable_model = owned_deformable_model.get();
++    plant.AddPhysicalModel(std::move(owned_deformable_model));
++    plant.Finalize();
++
++
++
++    builder.Connect(
++      deformable_model->vertex_positions_port(),
++      scene_graph.get_source_configuration_port(plant.get_source_id().value()));
++    builder.Connect(
++        deformable_model->mpm_particle_positions_port(),
++        scene_graph.mpm_data_input_port());
++
++    auto diagram = builder.Build();
++
++    auto diagram_context = diagram->CreateDefaultContext();
++    const Context<double>& plant_context = plant.GetMyContextFromRoot(*diagram_context);
++    const multibody::internal::DiscreteUpdateManager<double>& discrete_update_manager = plant.GetDiscreteUpdateManager();
++    const multibody::internal::CompliantContactManager<double>& compliant_contact_manager = reinterpret_cast<const CompliantContactManager<double>&>(discrete_update_manager);
++    const multibody::internal::DeformableDriver<double>& deformable_driver = compliant_contact_manager.GetDeformableDriver();
++    
++    deformable_driver.DummyCheckContext(plant_context);
++
++    std::vector<DiscreteContactPair<double>> result{};
++
++    deformable_driver.AppendDiscreteContactPairsMpm(plant_context, &result);
++
++    std::cout << "ssss " << result.size() << std::endl;
++    std::cout << result[0].p_WC[0] << " " <<result[0].p_WC[1] << " " << result[0].p_WC[2] <<std::endl;
++    std::cout << result[0].id_A <<std::endl;
++    std::cout << result[0].id_B <<std::endl;
++    std::cout << result[0].phi0 <<std::endl;
++    
++
++    EXPECT_TRUE(false);
++}
++
++
++
++GTEST_TEST(TestMpmContactPair, testcontact) {
++    // TestEnergyAndForceAndHessian();
++    CreateScene();
++
++    
++}
++
++}  // namespace
++}  // namespace internal
++}  // namespace mpm
++}  // namespace multibody
++}  // namespace drake
+diff --git a/multibody/mpm/test/TestMpmContactPairExternalParticles.cc b/multibody/mpm/test/TestMpmContactPairExternalParticles.cc
+new file mode 100644
+index 0000000000..8866070061
+--- /dev/null
++++ b/multibody/mpm/test/TestMpmContactPairExternalParticles.cc
+@@ -0,0 +1,304 @@
++#include "drake/multibody/mpm/BSpline.h"
++#include "drake/multibody/mpm/SparseGrid.h"
++#include "drake/multibody/mpm/MPMTransfer.h"
++#include "drake/multibody/mpm/ElastoPlasticModel.h"
++#include "drake/multibody/mpm/CorotatedElasticModel.h"
++#include "drake/multibody/mpm/StvkHenckyWithVonMisesModel.h"
++#include <gtest/gtest.h>
++#include "drake/common/test_utilities/eigen_matrix_compare.h"
++#include <iostream>
++#include <vector>
++#include "drake/multibody/plant/deformable_model.h"
++#include <stdlib.h> 
++#include "drake/common/eigen_types.h"
++#include <vector>
++#include <memory>
++
++#include <gflags/gflags.h>
++
++#include "drake/common/find_resource.h"
++#include "drake/geometry/drake_visualizer.h"
++#include "drake/geometry/proximity_properties.h"
++#include "drake/geometry/scene_graph.h"
++#include "drake/math/rigid_transform.h"
++#include "drake/multibody/fem/deformable_body_config.h"
++#include "drake/multibody/parsing/parser.h"
++#include "drake/multibody/plant/multibody_plant.h"
++#include "drake/multibody/plant/multibody_plant_config_functions.h"
++#include "drake/multibody/tree/prismatic_joint.h"
++#include "drake/systems/analysis/simulator.h"
++#include "drake/systems/framework/diagram.h"
++#include "drake/systems/framework/diagram_builder.h"
++#include "drake/multibody/plant/compliant_contact_manager.h"
++
++
++namespace drake {
++namespace multibody {
++namespace mpm {
++namespace internal {
++namespace {
++
++// constexpr double kEps = 4.0 * std::numeric_limits<double>::epsilon();
++
++using Eigen::Matrix3d;
++using Eigen::Matrix3Xd;
++using drake::geometry::AddContactMaterial;
++using drake::geometry::Box;
++using drake::geometry::GeometryInstance;
++using drake::geometry::IllustrationProperties;
++using drake::geometry::Mesh;
++using drake::geometry::ProximityProperties;
++using drake::math::RigidTransformd;
++using drake::multibody::AddMultibodyPlant;
++using drake::multibody::Body;
++using drake::multibody::CoulombFriction;
++using drake::multibody::MultibodyPlantConfig;
++using drake::multibody::Parser;
++using drake::multibody::PrismaticJoint;
++using drake::multibody::fem::DeformableBodyConfig;
++using drake::multibody::DeformableBodyId;
++using drake::multibody::DeformableModel;
++using drake::systems::BasicVector;
++using drake::systems::Context;
++using Eigen::Vector2d;
++using Eigen::Vector4d;
++using Eigen::VectorXd;
++using drake::geometry::GeometryId;
++using drake::multibody::internal::DiscreteUpdateManager;
++using drake::multibody::internal::CompliantContactManager;
++using drake::multibody::internal::DiscreteContactPair;
++using drake::multibody::internal::ContactPairKinematics;
++
++void CreateScene(){
++    bool dynamic_rigid_body = true;
++    
++    GeometryId rigid_geometry_id_;
++    BodyIndex rigid_body_index_;
++    systems::DiagramBuilder<double> builder;
++    MultibodyPlantConfig plant_config;
++    plant_config.discrete_contact_solver = "sap";
++    auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
++
++    Box rigid_box{4, 4, 4};
++    const RigidTransformd X_WR(Eigen::Vector3d{0, 0, -2});
++
++    ProximityProperties rigid_proximity_props;
++    geometry::AddContactMaterial({}, {}, CoulombFriction<double>(1.0, 1.0),
++                                 &rigid_proximity_props);
++    rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
++                                      geometry::internal::kRezHint, 1.0);
++    if (dynamic_rigid_body) {
++        const RigidBody<double>& rigid_body =
++          plant.AddRigidBody("rigid_body", SpatialInertia<double>());
++
++        rigid_geometry_id_ = plant.RegisterCollisionGeometry(
++          rigid_body, X_WR, rigid_box,
++          "dynamic_collision_geometry", rigid_proximity_props);
++
++        rigid_body_index_ = rigid_body.index();
++    } else {
++        /* Register the same rigid geometry, but static instead of dynamic. */
++        rigid_geometry_id_ = plant.RegisterCollisionGeometry(
++            plant.world_body(), X_WR, rigid_box,
++            "static_collision_geometry", rigid_proximity_props);
++
++        rigid_body_index_ = plant.world_body().index();
++    }
++
++    /* register a mpm body here */
++    auto owned_deformable_model =
++      std::make_unique<DeformableModel<double>>(&plant);
++
++    double E = 5e4;
++    double nu = 0.4;
++    std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model
++            = std::make_unique<multibody::mpm::CorotatedElasticModel<double>>(E, nu);
++    multibody::SpatialVelocity<double> geometry_initial_veolocity;
++    geometry_initial_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.0};//{0.1, 0.1, 0.1};
++    geometry_initial_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};//{M_PI/2, M_PI/2, M_PI/2};
++
++    Vector3<double> geometry_translation = {0.0, 0.0, 0.05};
++    math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
++    double density = 1000.0; double grid_h = 0.2;
++    int min_num_particles_per_cell = 1;
++    std::unique_ptr<multibody::mpm::AnalyticLevelSet<double>> mpm_geometry_level_set = 
++                                    std::make_unique<multibody::mpm::SphereLevelSet<double>>(0.2);
++    owned_deformable_model->RegisterMpmBody(
++      std::move(mpm_geometry_level_set), std::move(constitutive_model), geometry_initial_veolocity,
++      geometry_pose, density, grid_h, min_num_particles_per_cell);
++    // this part does not really matter. We will create a separate particles
++    
++
++    const DeformableModel<double>* deformable_model = owned_deformable_model.get();
++    plant.AddPhysicalModel(std::move(owned_deformable_model));
++    plant.Finalize();
++    builder.Connect(
++      deformable_model->vertex_positions_port(),
++      scene_graph.get_source_configuration_port(plant.get_source_id().value()));
++    builder.Connect(
++        deformable_model->mpm_particle_positions_port(),
++        scene_graph.mpm_data_input_port());
++
++    auto diagram = builder.Build();
++
++    auto diagram_context = diagram->CreateDefaultContext();
++    const Context<double>& plant_context = plant.GetMyContextFromRoot(*diagram_context);
++    const multibody::internal::DiscreteUpdateManager<double>& discrete_update_manager = plant.GetDiscreteUpdateManager();
++    const multibody::internal::CompliantContactManager<double>& compliant_contact_manager = reinterpret_cast<const CompliantContactManager<double>&>(discrete_update_manager);
++    const multibody::internal::DeformableDriver<double>& deformable_driver = compliant_contact_manager.GetDeformableDriver();
++
++    if (dynamic_rigid_body) {
++      // if the rigid body can move, let it move
++      Context<double>& mutable_plant_context =
++          plant.GetMyMutableContextFromRoot(diagram_context.get());
++      multibody::SpatialVelocity<double> rigid_veolocity;
++      rigid_veolocity.translational() = Vector3<double>{0.0, 0.0, 0.888};//{0.1, 0.1, 0.1};
++      rigid_veolocity.rotational() = Vector3<double>{0.0, 0.0, 0.0};//{M_PI/2, M_PI/2, M_PI/2};
++      plant.SetFreeBodySpatialVelocity(
++          &mutable_plant_context, plant.get_body(rigid_body_index_), rigid_veolocity);
++    }
++    // the whole point above is to get deformable_driver with rigid body and mpm registered, nothing else is meaningful
++
++
++    // consider a real particles object to be tested
++    mpm::Particles<double> particles(0);
++    SparseGrid<double> grid{0.2};
++    MPMTransfer<double> mpm_transfer{};
++
++
++    // add particle #1
++    Eigen::Matrix3<double> F_in;
++    F_in.setIdentity(); 
++    CorotatedElasticModel<double> model(1.0,0.3);
++    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p = model.Clone();
++    particles.AddParticle(Eigen::Vector3<double>{0.1,-0.37,0.22}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
++            F_in, Eigen::Matrix3<double>::Identity(), 
++            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p));
++
++    // add particle #2
++    Eigen::Matrix3<double> F_in2;
++    F_in2.setIdentity(); 
++    CorotatedElasticModel<double> model2(1.0,0.3);
++    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p2 = model2.Clone();
++    particles.AddParticle(Eigen::Vector3<double>{0.07,-0.07,-0.12}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
++            F_in2, Eigen::Matrix3<double>::Identity(), 
++            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p2));
++
++    // add particle #3
++    Eigen::Matrix3<double> F_in3;
++    F_in3.setIdentity();
++    CorotatedElasticModel<double> model3(1.0, 0.3);
++    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p3 = model3.Clone();
++    particles.AddParticle(Eigen::Vector3<double>{0.2,-0.4,0.25}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
++            F_in3, Eigen::Matrix3<double>::Identity(), 
++            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p3));
++
++    particles.print_info();
++    /* before ordering
++    particle 0 position 0.1 -0.37 0.22
++    particle 1 position 0.07 -0.07 -0.12
++    particle 2 position 0.2 -0.4 0.25
++    */
++
++    int num_active_grids = mpm_transfer.MakeGridCompatibleWithParticles(&particles, &grid);
++    EXPECT_EQ(num_active_grids, 52); // there should be 52 grid nodes
++
++    // Temporary----Manually set up vi*
++    std::vector<Eigen::Vector3<double>> grid_velocities_input{};
++    Eigen::VectorX<double> grid_velocities_vec = Eigen::VectorX<double>::Zero(3*52);
++    for (int i = 0; i < num_active_grids; i++){
++        grid_velocities_input.push_back(Eigen::Vector3<double>{0,0,-0.666});
++
++        grid_velocities_vec(3*(i+1)-1) = -0.666;
++    }
++    grid.OverwriteGridVelocity(grid_velocities_input); 
++    // Temporary----Manually set up vi*
++
++
++    particles.print_info();
++    /* after ordering
++    particle 0 position 0.07 -0.07 -0.12
++    particle 1 position 0.1 -0.37 0.22
++    particle 2 position 0.2 -0.4 0.25
++    */
++
++    const geometry::QueryObject<double>& query_object = discrete_update_manager.plant().get_geometry_query_input_port()
++            .template Eval<geometry::QueryObject<double>>(plant_context);
++    
++    std::vector<DiscreteContactPair<double>> result{};
++
++    // in reality, what is really being called is AppendDiscreteContactPairsMpm(mbp's context, &result)
++    // here we assume that the particles will be the same as evaluating from mbp's context
++    deformable_driver.AppendDiscreteContactPairsMpm(query_object, particles, &result);
++
++    // expect 1 contact pair
++    EXPECT_TRUE(result.size() == static_cast<size_t>(1));
++    // expect contact particle index is 0
++    EXPECT_TRUE(result[0].contact_particle_index == 0);
++    // expect the only particle in contact has position Eigen::Vector3<double>{0.07,-0.07,-0.12}
++    EXPECT_TRUE(CompareMatrices(result[0].p_WC, Eigen::Vector3<double>{0.07,-0.07,-0.12}, 1e-12));
++
++    // expect normal is pointing from particle to the nearest point on the surface of rigid body, here (0,0,1)
++    EXPECT_TRUE(CompareMatrices(result[0].nhat_BA_W, Eigen::Vector3<double>{0,0,1}, 1e-12));
++    // expect penetration distance to be -0.12. It must be negative!!!
++    EXPECT_NEAR(result[0].phi0, -0.12, 1e-12);
++
++    std::vector<ContactPairKinematics<double>> result_kinematics{};
++    deformable_driver.AppendContactKinematicsMpm(plant_context, query_object, particles, &result_kinematics);
++
++    // expect 1 contact kinematics
++    EXPECT_TRUE(result_kinematics.size() == static_cast<size_t>(1));
++    // get that contactKinematics
++    std::vector<drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock> jacobian_block = result_kinematics[0].jacobian;
++    contact_solvers::internal::ContactConfiguration<double> configuration = result_kinematics[0].configuration;
++
++
++    if (dynamic_rigid_body) {
++      EXPECT_TRUE(jacobian_block.size() == static_cast<size_t>(2));
++      drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jmpm = jacobian_block[0];
++      drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jrigid = jacobian_block[1];
++
++      Eigen::VectorBlock<const VectorX<double>> rigid_generalized_velocity = plant.GetVelocities(plant_context);
++      // in the C frame, z axis is (0,0,1)
++      // rigid body is moving upwards 0.888 in world frame
++      VectorX<double> VC_rigid_C = Jrigid.J.MakeDenseMatrix() * rigid_generalized_velocity;
++      
++      // grid velocities are -0.666, moving downwards in world frame
++      VectorX<double> VC_mpm_C = Jmpm.J.MakeDenseMatrix() * grid_velocities_vec;
++
++      // vc_C = Jc * v = [Jrigid | Jmpm] * [v_rigid_W | v_grid_W] = VC_rigid_C + VC_mpm_C
++      EXPECT_TRUE(CompareMatrices(configuration.R_WC *(VC_rigid_C + VC_mpm_C), Eigen::Vector3<double>{0,0,0.888+0.666}, 1e-12));
++      
++
++    } else {
++      // only one block if there is only anchored rigid body
++      EXPECT_TRUE(jacobian_block.size() == static_cast<size_t>(1));
++      drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jmpm = jacobian_block[0];
++    }
++    // jacobian_block[0]
++
++    
++
++
++
++
++    // EXPECT_TRUE(false);
++
++
++
++}
++
++
++
++GTEST_TEST(TestMpmContactPair, testcontact) {
++    // TestEnergyAndForceAndHessian();
++    CreateScene();
++
++    
++}
++
++}  // namespace
++}  // namespace internal
++}  // namespace mpm
++}  // namespace multibody
++}  // namespace drake
+diff --git a/multibody/mpm/test/TestMpmContactPairExternalParticlesWithTransform.cc b/multibody/mpm/test/TestMpmContactPairExternalParticlesWithTransform.cc
+new file mode 100644
+index 0000000000..56c5b3f437
+--- /dev/null
++++ b/multibody/mpm/test/TestMpmContactPairExternalParticlesWithTransform.cc
+@@ -0,0 +1,304 @@
++#include "drake/multibody/mpm/BSpline.h"
++#include "drake/multibody/mpm/SparseGrid.h"
++#include "drake/multibody/mpm/MPMTransfer.h"
++#include "drake/multibody/mpm/ElastoPlasticModel.h"
++#include "drake/multibody/mpm/CorotatedElasticModel.h"
++#include "drake/multibody/mpm/StvkHenckyWithVonMisesModel.h"
++#include <gtest/gtest.h>
++#include "drake/common/test_utilities/eigen_matrix_compare.h"
++#include <iostream>
++#include <vector>
++#include "drake/multibody/plant/deformable_model.h"
++#include <stdlib.h> 
++#include "drake/common/eigen_types.h"
++#include <vector>
++#include <memory>
++
++#include <gflags/gflags.h>
++
++#include "drake/common/find_resource.h"
++#include "drake/geometry/drake_visualizer.h"
++#include "drake/geometry/proximity_properties.h"
++#include "drake/geometry/scene_graph.h"
++#include "drake/math/rigid_transform.h"
++#include "drake/multibody/fem/deformable_body_config.h"
++#include "drake/multibody/parsing/parser.h"
++#include "drake/multibody/plant/multibody_plant.h"
++#include "drake/multibody/plant/multibody_plant_config_functions.h"
++#include "drake/multibody/tree/prismatic_joint.h"
++#include "drake/systems/analysis/simulator.h"
++#include "drake/systems/framework/diagram.h"
++#include "drake/systems/framework/diagram_builder.h"
++#include "drake/multibody/plant/compliant_contact_manager.h"
++#include "drake/math/rotation_matrix.h"
++
++namespace drake {
++namespace multibody {
++namespace mpm {
++namespace internal {
++namespace {
++
++// constexpr double kEps = 4.0 * std::numeric_limits<double>::epsilon();
++
++using Eigen::Matrix3d;
++using Eigen::Matrix3Xd;
++using drake::geometry::AddContactMaterial;
++using drake::geometry::Box;
++using drake::geometry::GeometryInstance;
++using drake::geometry::IllustrationProperties;
++using drake::geometry::Mesh;
++using drake::geometry::ProximityProperties;
++using drake::math::RigidTransformd;
++using drake::multibody::AddMultibodyPlant;
++using drake::multibody::Body;
++using drake::multibody::CoulombFriction;
++using drake::multibody::MultibodyPlantConfig;
++using drake::multibody::Parser;
++using drake::multibody::PrismaticJoint;
++using drake::multibody::fem::DeformableBodyConfig;
++using drake::multibody::DeformableBodyId;
++using drake::multibody::DeformableModel;
++using drake::systems::BasicVector;
++using drake::systems::Context;
++using Eigen::Vector2d;
++using Eigen::Vector4d;
++using Eigen::VectorXd;
++using drake::geometry::GeometryId;
++using drake::multibody::internal::DiscreteUpdateManager;
++using drake::multibody::internal::CompliantContactManager;
++using drake::multibody::internal::DiscreteContactPair;
++using drake::multibody::internal::ContactPairKinematics;
++using drake::math::RotationMatrix;
++
++void CreateScene(){
++    // align to grid at F frame
++    // skew in world frame
++    RotationMatrix<double> Rot = RotationMatrix<double>::MakeFromOneVector(Eigen::Vector3d{0.2, -0.73, 0.91}, 1);
++    RigidTransformd X_WF(Rot, Eigen::Vector3d{0.1, 0.0, 0.0});
++    RigidTransformd X_FW = X_WF.inverse();
++
++    bool dynamic_rigid_body = true;
++    
++    GeometryId rigid_geometry_id_;
++    BodyIndex rigid_body_index_;
++    systems::DiagramBuilder<double> builder;
++    MultibodyPlantConfig plant_config;
++    plant_config.discrete_contact_solver = "sap";
++    auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
++
++    Box rigid_box{4, 4, 4};
++    const RigidTransformd X_FR(Eigen::Vector3d{0, 0, -2});
++
++    ProximityProperties rigid_proximity_props;
++    geometry::AddContactMaterial({}, {}, CoulombFriction<double>(1.0, 1.0),
++                                 &rigid_proximity_props);
++    rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
++                                      geometry::internal::kRezHint, 1.0);
++    if (dynamic_rigid_body) {
++        const RigidBody<double>& rigid_body =
++          plant.AddRigidBody("rigid_body", SpatialInertia<double>());
++
++        rigid_geometry_id_ = plant.RegisterCollisionGeometry(
++          rigid_body, X_WF * X_FR, rigid_box,
++          "dynamic_collision_geometry", rigid_proximity_props);
++
++        rigid_body_index_ = rigid_body.index();
++    } else {
++        /* Register the same rigid geometry, but static instead of dynamic. */
++        rigid_geometry_id_ = plant.RegisterCollisionGeometry(
++            plant.world_body(), X_WF * X_FR, rigid_box,
++            "static_collision_geometry", rigid_proximity_props);
++
++        rigid_body_index_ = plant.world_body().index();
++    }
++
++    /* register a mpm body here */
++    auto owned_deformable_model = std::make_unique<DeformableModel<double>>(&plant);
++
++    /* This part does not matter, as long as we register a mpm */
++    std::unique_ptr<multibody::mpm::ElastoPlasticModel<double>> constitutive_model = std::make_unique<multibody::mpm::CorotatedElasticModel<double>>(10, 0.4);
++    multibody::SpatialVelocity<double> geometry_initial_veolocity;
++    Vector3<double> geometry_translation = {0.0, 0.0, 0.05};
++    math::RigidTransform<double> geometry_pose = math::RigidTransform<double>(geometry_translation);
++    std::unique_ptr<multibody::mpm::AnalyticLevelSet<double>> mpm_geometry_level_set = 
++                                    std::make_unique<multibody::mpm::SphereLevelSet<double>>(0.2);
++    owned_deformable_model->RegisterMpmBody(
++      std::move(mpm_geometry_level_set), std::move(constitutive_model), geometry_initial_veolocity,
++      geometry_pose, 1000, 0.2, 1);
++    /* This part does not matter, as long as we register a mpm */
++    
++
++    const DeformableModel<double>* deformable_model = owned_deformable_model.get();
++    plant.AddPhysicalModel(std::move(owned_deformable_model));
++    plant.Finalize();
++    builder.Connect(
++      deformable_model->vertex_positions_port(),
++      scene_graph.get_source_configuration_port(plant.get_source_id().value()));
++    builder.Connect(
++        deformable_model->mpm_particle_positions_port(),
++        scene_graph.mpm_data_input_port());
++
++    auto diagram = builder.Build();
++
++    auto diagram_context = diagram->CreateDefaultContext();
++    const Context<double>& plant_context = plant.GetMyContextFromRoot(*diagram_context);
++    const multibody::internal::DiscreteUpdateManager<double>& discrete_update_manager = plant.GetDiscreteUpdateManager();
++    const multibody::internal::CompliantContactManager<double>& compliant_contact_manager = reinterpret_cast<const CompliantContactManager<double>&>(discrete_update_manager);
++    const multibody::internal::DeformableDriver<double>& deformable_driver = compliant_contact_manager.GetDeformableDriver();
++
++    if (dynamic_rigid_body) {
++      // if the rigid body can move, let it move
++      Context<double>& mutable_plant_context =
++          plant.GetMyMutableContextFromRoot(diagram_context.get());
++      multibody::SpatialVelocity<double> V_WB_F;
++      V_WB_F.translational() = Vector3<double>{0.0, 0.0, 0.888};
++      V_WB_F.rotational() = Vector3<double>{0.0, 0.0, 0.0};
++      multibody::SpatialVelocity<double> V_WB_W = X_WF.rotation() * V_WB_F;
++      plant.SetFreeBodySpatialVelocity(
++          &mutable_plant_context, plant.get_body(rigid_body_index_), V_WB_W);
++    }
++    // the whole point above is to get deformable_driver with rigid body and mpm registered, nothing else is meaningful
++
++
++    // consider a real particles object to be tested
++    mpm::Particles<double> particles(0);
++    SparseGrid<double> grid{0.2};
++    MPMTransfer<double> mpm_transfer{};
++
++
++    // add particle #1
++    Eigen::Matrix3<double> F_in;
++    F_in.setIdentity(); 
++    CorotatedElasticModel<double> model(1.0,0.3);
++    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p = model.Clone();
++    particles.AddParticle(X_WF * Eigen::Vector3<double>{0.1,-0.37,0.22}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
++            F_in, Eigen::Matrix3<double>::Identity(), 
++            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p));
++
++    // add particle #2
++    Eigen::Matrix3<double> F_in2;
++    F_in2.setIdentity(); 
++    CorotatedElasticModel<double> model2(1.0,0.3);
++    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p2 = model2.Clone();
++    particles.AddParticle(X_WF * Eigen::Vector3<double>{0.07,-0.07,-0.12}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
++            F_in2, Eigen::Matrix3<double>::Identity(), 
++            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p2));
++
++    // add particle #3
++    Eigen::Matrix3<double> F_in3;
++    F_in3.setIdentity();
++    CorotatedElasticModel<double> model3(1.0, 0.3);
++    std::unique_ptr<mpm::ElastoPlasticModel<double>> elastoplastic_model_p3 = model3.Clone();
++    particles.AddParticle(X_WF * Eigen::Vector3<double>{0.2,-0.4,0.25}, Eigen::Vector3<double>{0,0,0}, 1.0, 1.0,
++            F_in3, Eigen::Matrix3<double>::Identity(), 
++            Eigen::Matrix3<double>::Identity(),Eigen::Matrix3<double>::Zero(), std::move(elastoplastic_model_p3));
++
++    particles.print_info();
++    /* before ordering
++    particle 0 position 0.1 -0.37 0.22
++    particle 1 position 0.07 -0.07 -0.12
++    particle 2 position 0.2 -0.4 0.25
++    */
++
++    int num_active_grids = mpm_transfer.MakeGridCompatibleWithParticles(&particles, &grid);
++    // EXPECT_EQ(num_active_grids, 54); // there should be 52 grid nodes
++
++    // Temporary----Manually set up vi*
++    std::vector<Eigen::Vector3<double>> grid_velocities_input{};
++    Eigen::VectorX<double> grid_velocities_vec = Eigen::VectorX<double>::Zero(3*num_active_grids);
++    for (int i = 0; i < num_active_grids; i++){
++
++        Eigen::Vector3<double> gv = X_WF.rotation() * Eigen::Vector3<double>{0,0,-0.666};
++        grid_velocities_input.push_back(gv);
++
++        grid_velocities_vec(i*3) = gv(0);
++        grid_velocities_vec(i*3+1) = gv(1);
++        grid_velocities_vec(i*3+2) = gv(2);
++    }
++    grid.OverwriteGridVelocity(grid_velocities_input); 
++    // Temporary----Manually set up vi*
++
++
++    particles.print_info();
++    /* after ordering
++    particle 0 position 0.07 -0.07 -0.12
++    particle 1 position 0.1 -0.37 0.22
++    particle 2 position 0.2 -0.4 0.25
++    */
++
++    const geometry::QueryObject<double>& query_object = discrete_update_manager.plant().get_geometry_query_input_port()
++            .template Eval<geometry::QueryObject<double>>(plant_context);
++    
++    std::vector<DiscreteContactPair<double>> result{};
++
++    // in reality, what is really being called is AppendDiscreteContactPairsMpm(mbp's context, &result)
++    // here we assume that the particles will be the same as evaluating from mbp's context
++    deformable_driver.AppendDiscreteContactPairsMpm(query_object, particles, &result);
++
++    // expect 1 contact pair
++    EXPECT_TRUE(result.size() == static_cast<size_t>(1));
++    // expect contact particle index is 0
++    EXPECT_TRUE(result[0].contact_particle_index == 2);
++    // expect the only particle in contact has position Eigen::Vector3<double>{0.07,-0.07,-0.12}
++    EXPECT_TRUE(CompareMatrices(result[0].p_WC, X_WF * Eigen::Vector3<double>{0.07,-0.07,-0.12}, 1e-12));
++
++    // expect normal is pointing from particle to the nearest point on the surface of rigid body, here (0,0,1)
++    EXPECT_TRUE(CompareMatrices(result[0].nhat_BA_W, X_WF.rotation() * Eigen::Vector3<double>{0,0,1}, 1e-12));
++    // expect penetration distance to be -0.12. It must be negative!!!
++    EXPECT_NEAR(result[0].phi0, -0.12, 1e-12);
++
++    std::vector<ContactPairKinematics<double>> result_kinematics{};
++    deformable_driver.AppendContactKinematicsMpm(plant_context, query_object, particles, &result_kinematics);
++
++    // expect 1 contact kinematics
++    EXPECT_TRUE(result_kinematics.size() == static_cast<size_t>(1));
++    // get that contactKinematics
++    std::vector<drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock> jacobian_block = result_kinematics[0].jacobian;
++    contact_solvers::internal::ContactConfiguration<double> configuration = result_kinematics[0].configuration;
++
++    if (dynamic_rigid_body) {
++      EXPECT_TRUE(jacobian_block.size() == static_cast<size_t>(2));
++      drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jmpm = jacobian_block[0];
++      drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jrigid = jacobian_block[1];
++
++      Eigen::VectorBlock<const VectorX<double>> rigid_generalized_velocity = plant.GetVelocities(plant_context);
++      // in the C frame, z axis is (0,0,1)
++      // rigid body is moving upwards 0.888 in F frame
++      Vector3<double> v_WC_rigid_C = Jrigid.J.MakeDenseMatrix() * rigid_generalized_velocity;
++      // grid velocities are -0.666, moving downwards in F frame
++      Vector3<double> v_WC_mpm_C = Jmpm.J.MakeDenseMatrix() * grid_velocities_vec;
++      // vc_C = Jc * v = [Jrigid | Jmpm] * [v_rigid_W | v_grid_W] = VC_rigid_C + VC_mpm_C
++      EXPECT_TRUE(CompareMatrices((v_WC_rigid_C + v_WC_mpm_C), Eigen::Vector3<double>{0,0,0.888+0.666}, 1e-12));
++      
++
++    } else {
++      // only one block if there is only anchored rigid body
++      EXPECT_TRUE(jacobian_block.size() == static_cast<size_t>(1));
++      drake::multibody::internal::ContactPairKinematics<double>::JacobianTreeBlock Jmpm = jacobian_block[0];
++    }
++    // jacobian_block[0]
++
++    
++
++
++
++
++    // EXPECT_TRUE(false);
++
++
++
++}
++
++
++
++GTEST_TEST(TestMpmContactPairWithTransform, testcontact) {
++    CreateScene();
++
++    
++}
++
++}  // namespace
++}  // namespace internal
++}  // namespace mpm
++}  // namespace multibody
++}  // namespace drake
+diff --git a/multibody/plant/BUILD.bazel b/multibody/plant/BUILD.bazel
+index ae93086487..aa3e51a839 100644
+--- a/multibody/plant/BUILD.bazel
++++ b/multibody/plant/BUILD.bazel
+@@ -144,6 +144,7 @@ drake_cc_library(
+         "//multibody/tree",
+         "//systems/framework:diagram_builder",
+         "//systems/framework:leaf_system",
++        "//geometry/query_results:mpm_contact",
+     ],
+ )
+ 
+diff --git a/multibody/plant/compliant_contact_manager.cc b/multibody/plant/compliant_contact_manager.cc
+index 1e6c7bd44d..df8ad7e772 100644
+--- a/multibody/plant/compliant_contact_manager.cc
++++ b/multibody/plant/compliant_contact_manager.cc
+@@ -350,6 +350,9 @@ void CompliantContactManager<T>::CalcDiscreteContactPairs(
+     if (deformable_driver_ != nullptr && deformable_driver_->num_deformable_bodies()>0) {
+       deformable_driver_->AppendDiscreteContactPairs(context, contact_pairs);
+     }
++    if (deformable_driver_ != nullptr) {
++      deformable_driver_->AppendDiscreteContactPairsMpm(context, contact_pairs);
++    }
+   }
+ }
+ 
+@@ -421,7 +424,7 @@ void CompliantContactManager<T>::AppendDiscreteContactPairsForPointContact(
+       const T phi0 = -pair.depth;
+       const T fn0 = k * pair.depth;  // Used by TAMSI, ignored by SAP.
+ 
+-      contact_pairs.push_back({pair.id_A, pair.id_B, p_WC, pair.nhat_BA_W, phi0,
++      contact_pairs.push_back({-1, pair.id_A, pair.id_B, p_WC, pair.nhat_BA_W, phi0,
+                               fn0, k, d, tau, mu, {} /* no surface index */,
+                               {} /* no face index */});
+     }
+@@ -589,7 +592,7 @@ void CompliantContactManager<T>::
+           const T phi0 = -p0 / g;
+ 
+           if (k > 0) {
+-            contact_pairs.push_back({s.id_M(), s.id_N(), p_WQ, nhat_W, phi0,
++            contact_pairs.push_back({-1, s.id_M(), s.id_N(), p_WQ, nhat_W, phi0,
+                                      fn0, k, d, tau, mu, surface_index, face});
+           }
+         }
+diff --git a/multibody/plant/compliant_contact_manager.h b/multibody/plant/compliant_contact_manager.h
+index c8e03c8794..0b535c0d31 100644
+--- a/multibody/plant/compliant_contact_manager.h
++++ b/multibody/plant/compliant_contact_manager.h
+@@ -112,6 +112,10 @@ class CompliantContactManager final
+   // @returns `true`.
+   bool is_cloneable_to_symbolic() const final;
+ 
++  const DeformableDriver<double>& GetDeformableDriver() const {
++    return *deformable_driver_;
++  }
++
+  private:
+   // TODO(amcastro-tri): Instead of friendship consider another set of class(es)
+   // with tighter functionality. For instance, a class that takes care of
+diff --git a/multibody/plant/deformable_driver.cc b/multibody/plant/deformable_driver.cc
+index df6fd1ba23..3860196d92 100644
+--- a/multibody/plant/deformable_driver.cc
++++ b/multibody/plant/deformable_driver.cc
+@@ -20,12 +20,16 @@
+ #include "drake/multibody/fem/velocity_newmark_scheme.h"
+ #include "drake/multibody/plant/contact_properties.h"
+ #include "drake/systems/framework/context.h"
++#include "drake/geometry/query_results/signed_distance_pair.h"
++#include "drake/geometry/query_results/signed_distance_to_point.h"
++
+ 
+ 
+ using drake::geometry::GeometryId;
+ using drake::geometry::internal::ContactParticipation;
+ using drake::geometry::internal::DeformableContact;
+ using drake::geometry::internal::DeformableContactSurface;
++using drake::geometry::internal::MpmContact;
+ using drake::multibody::contact_solvers::internal::Block3x3SparseMatrix;
+ using drake::multibody::contact_solvers::internal::ContactConfiguration;
+ using drake::multibody::contact_solvers::internal::ContactSolverResults;
+@@ -51,6 +55,13 @@ namespace drake {
+ namespace multibody {
+ namespace internal {
+ 
++template <typename T>
++void DeformableDriver<T>::DummyCheckContext(const systems::Context<T>& context) const {
++    const MpmState<T>& current_mpm_state = EvalMpmState(context);
++    const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
++    std::cout << "num particles in context " << current_particles.get_num_particles() << std::endl;
++}
++
+ template <typename T>
+ DeformableDriver<T>::DeformableDriver(
+     const DeformableModel<T>* deformable_model,
+@@ -366,18 +377,146 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
+       const T& phi0 = surface.signed_distances()[i];
+       const T fn0 = NAN;  // not used.
+       const T d = NAN;    // not used.
+-      contact_pairs.push_back({surface.id_A(), surface.id_B(), p_WC, nhat_BA_W,
++      contact_pairs.push_back({-1, surface.id_A(), surface.id_B(), p_WC, nhat_BA_W,
+                                phi0, fn0, k, d, tau, mu});
+     }
+   }
+ }
+ 
++template <typename T>
++void DeformableDriver<T>::AppendDiscreteContactPairsMpm(const systems::Context<T>& context,std::vector<DiscreteContactPair<T>>* result) const {
++
++    const geometry::QueryObject<T>& query_object = manager_->plant().get_geometry_query_input_port()
++          .template Eval<geometry::QueryObject<T>>(context);
++    const MpmState<T>& current_mpm_state = EvalMpmState(context);
++    const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
++
++    AppendDiscreteContactPairsMpm(query_object, current_particles, result);
++}
++
++template <typename T>
++void DeformableDriver<T>::AppendDiscreteContactPairsMpm(const geometry::QueryObject<T>& query_object, const Particles<T>& particles, 
++                                            std::vector<DiscreteContactPair<T>>* result) const {
++    DRAKE_DEMAND(result != nullptr);
++    MpmContact<T> mpm_contact;
++    CalcMpmContact(query_object, particles, &mpm_contact);
++    GeometryId mpm_id = GeometryId::get_new_id(); // don't know how to use
++
++    DRAKE_DEMAND(result != nullptr);
++    std::vector<DiscreteContactPair<T>>& contact_pairs = *result;
++    for (size_t i = 0; i < mpm_contact.GetNumContactPairs(); i++) {
++
++        const T fn0 = NAN; const T d = NAN;  // not used.
++        const T k = std::numeric_limits<double>::infinity();
++        const T tau = 0.5; const T mu = 0.5;
++        mpm_contact.GetParticleIndexAt(i);
++        mpm_contact.GetNonMpmIdAt(i);
++        mpm_contact.GetPenetrationDistanceAt(i);
++        mpm_contact.GetNormalAt(i);
++
++        contact_pairs.push_back({mpm_contact.GetParticleIndexAt(i),
++                                 mpm_id, 
++                                 mpm_contact.GetNonMpmIdAt(i), 
++                                 mpm_contact.GetContactPositionAt(i),
++                                 mpm_contact.GetNormalAt(i),
++                                mpm_contact.GetPenetrationDistanceAt(i), fn0, k, d, tau, mu});
++    }
++}
++
++
++template <typename T>
++void DeformableDriver<T>::AppendContactKinematicsMpm(
++    const systems::Context<T>& context,
++    std::vector<ContactPairKinematics<T>>* result) const {
++
++    const geometry::QueryObject<T>& query_object = manager_->plant().get_geometry_query_input_port()
++        .template Eval<geometry::QueryObject<T>>(context);
++    const MpmState<T>& current_mpm_state = EvalMpmState(context);
++    const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
++
++    AppendContactKinematicsMpm(context, query_object, current_particles, result);
++
++}
++
++
++template <typename T>
++void DeformableDriver<T>::AppendContactKinematicsMpm(const systems::Context<T>& context,
++    const geometry::QueryObject<T>& query_object, 
++    const Particles<T>& particles, 
++    std::vector<ContactPairKinematics<T>>* result) const {
++
++    DRAKE_DEMAND(result != nullptr);
++    const MultibodyTreeTopology& tree_topology = manager_->internal_tree().get_topology();
++    const TreeIndex clique_index_mpm(tree_topology.num_trees() + num_deformable_bodies() + 1);
++
++    MpmContact<T> mpm_contact;
++    CalcMpmContact(query_object, particles, &mpm_contact); // TODO: this may have been calculated before. cache it?
++
++    constexpr int kZAxis = 2;
++    const int nv = manager_->plant().num_velocities();
++
++    for (size_t i = 0; i < mpm_contact.GetNumContactPairs(); ++i) {
++        // for each contact pair, want J = R_CW * Jacobian_block = R_CW * [-Jmpm | Jrigid]
++
++        /* Compute the rotation matrix R_CW */
++        math::RotationMatrix<T> R_WC = math::RotationMatrix<T>::MakeFromOneUnitVector(mpm_contact.GetNormalAt(i), kZAxis);
++        const math::RotationMatrix<T> R_CW = R_WC.transpose();
++
++        /* We have at most two blocks per contact. */
++        std::vector<typename ContactPairKinematics<T>::JacobianTreeBlock> jacobian_blocks;
++        jacobian_blocks.reserve(2);
++
++        /* MPM part of Jacobian, note this is -J_mpm */
++        MatrixX<T> J_mpm;
++        particles.FormJacobianGridVToParticleVAt(mpm_contact.GetParticleIndexAt(i), &J_mpm);
++        J_mpm = - R_CW.matrix() * J_mpm;
++        jacobian_blocks.emplace_back(clique_index_mpm, MatrixBlock<T>(std::move(J_mpm)));
++
++        /* Non-MPM (rigid) part of Jacobian */
++        const BodyIndex index_B = manager_->geometry_id_to_body_index().at(mpm_contact.GetNonMpmIdAt(i));
++        const TreeIndex tree_index_rigid = tree_topology.body_to_tree_index(index_B);
++        if (tree_index_rigid.is_valid()) {
++            Matrix3X<T> Jv_v_WBc_W(3, nv);
++            const Body<T>& rigid_body = manager_->plant().get_body(index_B);
++            const Frame<T>& frame_W = manager_->plant().world_frame();
++            manager_->internal_tree().CalcJacobianTranslationalVelocity(
++                context, JacobianWrtVariable::kV, rigid_body.body_frame(), frame_W,
++                mpm_contact.GetContactPositionAt(i), frame_W, frame_W, &Jv_v_WBc_W);
++            Matrix3X<T> J_rigid = R_CW.matrix() * Jv_v_WBc_W.middleCols(
++                                    tree_topology.tree_velocities_start(tree_index_rigid),
++                                    tree_topology.num_tree_velocities(tree_index_rigid));
++            jacobian_blocks.emplace_back(tree_index_rigid, MatrixBlock<T>(std::move(J_rigid)));
++        }
++
++        // configuration part
++        const int objectA = tree_topology.num_trees() + num_deformable_bodies() + 1; // not really used
++        const int objectB = index_B; // not really used
++        const Vector3<T> p_ApC_W{0,0,0}; // TODO: change this. it will be used in SapFrictionConeConstraint<T>::DoAccumulateSpatialImpulses
++        // Contact point position relative to rigid body B, same as in FEM-rigid
++        const math::RigidTransform<T>& X_WB = manager_->plant().EvalBodyPoseInWorld(context, manager_->plant().get_body(index_B));
++        const Vector3<T>& p_WB = X_WB.translation();
++        const Vector3<T> p_BC_W = mpm_contact.GetContactPositionAt(i) - p_WB;
++
++        ContactConfiguration<T> configuration{
++          .objectA = objectA, // not really used
++          .p_ApC_W = p_ApC_W, // to be changed, see above
++          .objectB = objectB, // not really used
++          .p_BqC_W = p_BC_W,
++          .phi = mpm_contact.GetPenetrationDistanceAt(i),
++          .R_WC = R_WC};
++
++        result->emplace_back(std::move(jacobian_blocks), std::move(configuration));
++    }
++}
++
++
+ template <typename T>
+ void DeformableDriver<T>::AppendContactKinematics(
+     const systems::Context<T>& context,
+     std::vector<ContactPairKinematics<T>>* result) const {
+   DRAKE_DEMAND(result != nullptr);
+-  /* Since v_AcBc_W = v_WBc - v_WAc the relative velocity Jacobian will be:
++  /* 
++  Since v_AcBc_W = v_WBc - v_WAc the relative velocity Jacobian will be:
+      Jv_v_AcBc_W = Jv_v_WBc_W - Jv_v_WAc_W.
+    That is the relative velocity at C is v_AcBc_W = Jv_v_AcBc_W * v.
+    Finally Jv_v_AcBc_C = R_WC.transpose() * Jv_v_AcBc_W.
+@@ -792,6 +931,52 @@ void DeformableDriver<T>::CalcDeformableContact(
+   query_object.ComputeDeformableContact(result);
+ }
+ 
++template <typename T>
++void DeformableDriver<T>::CalcMpmContact(
++    const Context<T>& context, MpmContact<T>* result) const {
++
++    result->Reset();
++    const geometry::QueryObject<T>& query_object = manager_->plant().get_geometry_query_input_port()
++          .template Eval<geometry::QueryObject<T>>(context);
++    const MpmState<T>& current_mpm_state = EvalMpmState(context);
++    const Particles<T>& current_particles = current_mpm_state.GetParticles(); 
++    for (int i = 0; i < current_particles.get_num_particles(); i++) {
++        std::vector<geometry::SignedDistanceToPoint<T>> point_to_geometry = query_object.ComputeSignedDistanceToPoint(current_particles.get_position(i));
++        for (size_t num_geometries = 0; num_geometries < point_to_geometry.size(); num_geometries++) {
++            const T signed_distance = point_to_geometry[num_geometries].distance;
++            if (signed_distance < 0) {
++                // if mpm particle is inside rigid geometry, i.e. in contact
++                const GeometryId& id_rigid = point_to_geometry[num_geometries].id_G;
++                const Vector3<T>& normal = point_to_geometry[num_geometries].grad_W; // normal direction ( <---- p      )
++                result->AddMpmContactPair(i, id_rigid, signed_distance, normal, current_particles.get_position(i));
++               
++            }
++        }
++    }
++
++}
++
++template <typename T>
++void DeformableDriver<T>::CalcMpmContact(const geometry::QueryObject<T>& query_object, 
++                                    const Particles<T>& current_particles, MpmContact<T>* result) const {
++
++    result->Reset();
++    for (int i = 0; i < current_particles.get_num_particles(); i++) {
++        std::vector<geometry::SignedDistanceToPoint<T>> point_to_geometry = query_object.ComputeSignedDistanceToPoint(current_particles.get_position(i));
++        for (size_t num_geometries = 0; num_geometries < point_to_geometry.size(); num_geometries++) {
++            const T signed_distance = point_to_geometry[num_geometries].distance;
++            if (signed_distance < 0) {
++                // if mpm particle is inside rigid geometry, i.e. in contact
++                const GeometryId& id_rigid = point_to_geometry[num_geometries].id_G;
++                const Vector3<T>& normal = point_to_geometry[num_geometries].grad_W; // normal direction ( <---- p      )
++                result->AddMpmContactPair(i, id_rigid, signed_distance, normal, current_particles.get_position(i));
++               
++            }
++        }
++    }
++
++}
++
+ template <typename T>
+ const DeformableContact<T>& DeformableDriver<T>::EvalDeformableContact(
+     const Context<T>& context) const {
+diff --git a/multibody/plant/deformable_driver.h b/multibody/plant/deformable_driver.h
+index 69d8785ddf..1c4c50da2b 100644
+--- a/multibody/plant/deformable_driver.h
++++ b/multibody/plant/deformable_driver.h
+@@ -15,6 +15,8 @@
+ #include "drake/systems/framework/context.h"
+ #include "drake/multibody/mpm/mpm_solver.h"
+ 
++#include "drake/geometry/query_results/mpm_contact.h"
++
+ 
+ namespace drake {
+ namespace multibody {
+@@ -103,6 +105,13 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
+ 
+   ~DeformableDriver();
+ 
++  // it should be that contact detection happens after free motion mpm solve
++  // so in contact detection, we have already had ordered particles and grid nodes.
++  // here we just do the ordering and compute weights, for testing purpose
++  void MakeGridCompatibleWithParticleTestPurpose(systems::Context<T>* context) {
++    
++  }
++
+   int num_deformable_bodies() const { return deformable_model_->num_bodies(); }
+ 
+   // TODO(xuchenhan-tri): Implement CloneToDouble() and allow cloning to double.
+@@ -141,6 +150,18 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
+       const systems::Context<T>& context,
+       std::vector<DiscreteContactPair<T>>* pairs) const;
+ 
++    /* Given the configuration stored in `context`, appends the mpm part. 
++    This function should be called by the above function
++   @pre pairs != nullptr. */
++  void AppendDiscreteContactPairsMpm(
++      const systems::Context<T>& context,
++      std::vector<DiscreteContactPair<T>>* pairs) const;
++
++  void AppendDiscreteContactPairsMpm(
++        const geometry::QueryObject<T>& query_object, 
++        const drake::multibody::mpm::Particles<T>& particles, 
++        std::vector<DiscreteContactPair<T>>* result) const;
++
+   /* Appends the contact kinematics information for each contact pair where at
+    least one of the body in contact is deformable.
+    @pre result != nullptr. */
+@@ -148,6 +169,19 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
+       const systems::Context<T>& context,
+       std::vector<ContactPairKinematics<T>>* result) const;
+ 
++  // note: the particles that join the computation comes directly from evaluating the context
++  void AppendContactKinematicsMpm(
++      const systems::Context<T>& context,
++      std::vector<ContactPairKinematics<T>>* result) const;
++
++  // note: in this implementation, mpm data are directly obtained via particles
++  // context is used for the rigid part
++  // this allows external manipulation of particles
++  void AppendContactKinematicsMpm(const systems::Context<T>& context,
++    const geometry::QueryObject<T>& query_object, 
++    const drake::multibody::mpm::Particles<T>& particles,
++    std::vector<ContactPairKinematics<T>>* result) const;
++
+   /* Evaluates FemState at the next time step for each deformable body and
+    copies the them into the corresponding DiscreteValues.
+    @pre next_states != nullptr. */
+@@ -165,6 +199,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
+   const Multiplexer<T>& EvalParticipatingVelocityMultiplexer(
+       const systems::Context<T>& context) const;
+ 
++  void DummyCheckContext(const systems::Context<T>& context) const;
++
+  private:
+   friend class DeformableDriverTest;
+   friend class DeformableDriverContactTest;
+@@ -269,6 +305,15 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
+       const systems::Context<T>& context,
+       geometry::internal::DeformableContact<T>* result) const;
+ 
++  void CalcMpmContact(
++      const systems::Context<T>& context,
++      geometry::internal::MpmContact<T>* result) const;
++
++  void CalcMpmContact(
++    const geometry::QueryObject<T>& query_object, 
++    const drake::multibody::mpm::Particles<T>& current_particles, 
++    geometry::internal::MpmContact<T>* result) const;
++
+   /* Eval version of CalcDeformableContact(). */
+   const geometry::internal::DeformableContact<T>& EvalDeformableContact(
+       const systems::Context<T>& context) const;
+@@ -350,7 +395,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
+   /* The integrator used to advance deformable body free motion states in
+    time. */
+   std::unique_ptr<mpm::internal::MpmSolver<T>> mpm_solver_;
+-
+ };
+ 
+ }  // namespace internal
+diff --git a/multibody/plant/discrete_contact_pair.h b/multibody/plant/discrete_contact_pair.h
+index 62411271a7..fc3c9d92d8 100644
+--- a/multibody/plant/discrete_contact_pair.h
++++ b/multibody/plant/discrete_contact_pair.h
+@@ -19,6 +19,8 @@ namespace internal {
+  @tparam T The underlying scalar type. Must be a valid Eigen scalar. */
+ template <typename T>
+ struct DiscreteContactPair {
++  int contact_particle_index{-1}; // the index of mpm particle participating in contact, -1 if not MPM
++
+   /* The id of the first geometry in the contact. */
+   geometry::GeometryId id_A;
+   /* The id of the second geometry in the contact. */
+@@ -55,6 +57,8 @@ struct DiscreteContactPair {
+   std::optional<int> face_index{};
+ };
+ 
++
++
+ }  // namespace internal
+ }  // namespace multibody
+ }  // namespace drake
+diff --git a/multibody/plant/discrete_update_manager.h b/multibody/plant/discrete_update_manager.h
+index c9920ba4d2..c0763c324c 100644
+--- a/multibody/plant/discrete_update_manager.h
++++ b/multibody/plant/discrete_update_manager.h
+@@ -144,9 +144,6 @@ class DiscreteUpdateManager : public ScalarConvertibleComponent<T> {
+    update in discrete timestep. */
+   void CalcAbstractValues(const systems::Context<T>& context,
+                           systems::State<T>* update) const {
+-    // The discrete sampling of input ports needs to be the first step of a
+-    // discrete update.
+-    // SampleDiscreteInputPortForces(context);
+     DRAKE_DEMAND(update != nullptr);
+     DoCalcAbstractValues(context, update);
+   }
+diff --git a/multibody/plant/multibody_plant.h b/multibody/plant/multibody_plant.h
+index 78e3459f74..a69c24eb46 100644
+--- a/multibody/plant/multibody_plant.h
++++ b/multibody/plant/multibody_plant.h
+@@ -605,6 +605,10 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
+  public:
+   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MultibodyPlant)
+ 
++  const internal::DiscreteUpdateManager<T>& GetDiscreteUpdateManager(){
++      return *discrete_update_manager_;
++    }
++
+   /// @anchor mbp_input_and_output_ports
+   /// @name                 Input and output ports
+   /// These methods provide access to the Drake
+@@ -5201,6 +5205,7 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
+     /// It returns a negative value when the stiction tolerance has not been set
+     /// previously with set_stiction_tolerance().
+     double stiction_tolerance() const { return v_stiction_tolerance_; }
++      
+ 
+    private:
+     // Stiction velocity tolerance for the Stribeck model.

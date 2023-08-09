@@ -306,10 +306,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       geometry::internal::DeformableContact<T>* result) const;
 
   void CalcMpmContact(
-      const systems::Context<T>& context,
-      geometry::internal::MpmContact<T>* result) const;
-
-  void CalcMpmContact(
     const geometry::QueryObject<T>& query_object, 
     const drake::multibody::mpm::Particles<T>& current_particles, 
     geometry::internal::MpmContact<T>* result) const;
