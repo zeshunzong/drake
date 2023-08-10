@@ -16,7 +16,7 @@
 #include "drake/multibody/mpm/mpm_solver.h"
 
 #include "drake/geometry/query_results/mpm_contact.h"
-
+#include "drake/multibody/mpm/mpm_cache.h"
 
 namespace drake {
 namespace multibody {
@@ -213,6 +213,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     systems::CacheIndex free_motion_mpm_state;
     systems::CacheIndex next_mpm_state;
     systems::CacheIndex mpm_solver_scratch;
+    systems::CacheIndex mpm_cache;
 
 
     std::vector<systems::CacheIndex> fem_solver_scratches;
@@ -243,6 +244,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   const mpm::MpmState<T>& EvalMpmState(const systems::Context<T>& context) const;
 
   void CalcMpmState(const systems::Context<T>& context, mpm::MpmState<T>* mpm_state) const;
+
+  // take Particles from context, make a copy as particles_sorted
+  // make grid compatible with particles, do p2g, do grid update
+  // store particles_sorted and compatible_grid in mpm_cache
+  void CalcMpmCacheAfterGridUpdate(const systems::Context<T>& context, mpm::MpmCache<T>* mpm_cache) const;
                                      
 
   /* Given the state of the deformable body with `index` in the given `context`,
@@ -384,6 +390,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   /* The integrator used to advance deformable body free motion states in
    time. */
   std::unique_ptr<mpm::internal::MpmSolver<T>> mpm_solver_;
+  // TODO: remove or rewrite this
+  std::unique_ptr<mpm::MPMTransfer<T>> mpm_transfer_;
 };
 
 }  // namespace internal

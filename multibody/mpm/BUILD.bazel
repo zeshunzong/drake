@@ -23,6 +23,7 @@ drake_cc_package_library(
     deps = [
         ":mpm_model", 
         ":mpm_solver",
+        ":mpm_cache",
     ],
 )
 
@@ -354,6 +355,19 @@ drake_cc_library(
         ":Particles",
         "//common:essential",
         "//systems/framework:context",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_cache",
+    hdrs = [
+        "mpm_cache.h",
+    ],
+    deps = [
+        ":Particles",
+        "//common:essential",
+        "//systems/framework:context",
+        ":SparseGrid",
     ],
 )
 

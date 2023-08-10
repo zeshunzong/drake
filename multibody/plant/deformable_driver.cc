@@ -80,6 +80,7 @@ DeformableDriver<T>::DeformableDriver(
   const MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
   mpm_solver_ = std::make_unique<mpm::internal::MpmSolver<T>>(&mpm_model,
       manager_->plant().time_step());
+  mpm_transfer_ = std::make_unique<mpm::MPMTransfer<T>>();
  
 }
 
@@ -269,11 +270,36 @@ void DeformableDriver<T>::DeclareCacheEntries(
 
     } else { throw;}
   }
+
+  // state: particles
+  // cache entry: particles_sorted, compatible_grid
   // cache mpm, if there exists one
   if (deformable_model_->ExistsMpmModel()){
     const mpm::MpmModel<T>& mpm_model = deformable_model_->GetMpmModel();
     std::unique_ptr<mpm::MpmState<T>> model_state = mpm_model.MakeMpmState();
     //---------------------------- cache current state--------------------
+
+
+    // cache mpm_cache
+
+    mpm::Particles<T> particles_sorted(0);
+    mpm::SparseGrid<T> compatible_grid(mpm_model.grid_h());
+    mpm::MpmCache<T> mpm_cache(particles_sorted, compatible_grid);
+
+    const auto& mpm_cache_entry = manager->DeclareCacheEntry(
+        fmt::format("Mpm cache: sorted particles and compatible grid, with grid_v after grid update"),
+        systems::ValueProducer(
+            mpm_cache,
+            std::function<void(const Context<T>&, mpm::MpmCache<T>*)>{
+                [this](const Context<T>& context, mpm::MpmCache<T>* mpm_cache) {
+                  this->CalcMpmCacheAfterGridUpdate(context, mpm_cache);
+                }}),
+        {systems::SystemBase::all_sources_ticket()}); // TODO: add prereq dependency
+    cache_indexes_.mpm_cache = mpm_cache_entry.cache_index();
+
+
+
+
     const auto& mpm_state_cache_entry = manager->DeclareCacheEntry(
         fmt::format("MPM state"),
         systems::ValueProducer(
@@ -766,6 +792,23 @@ void DeformableDriver<T>::CalcMpmState(const Context<T>& context,
 
     const MpmState<T>& current_state = context.template get_abstract_state<MpmState<T>>(deformable_model_->particles_container_index());
     mpm_state->SetState(current_state);
+}
+
+
+template <typename T>
+void DeformableDriver<T>::CalcMpmCacheAfterGridUpdate(const Context<T>& context, 
+                                                    mpm::MpmCache<T>* mpm_cache) const{
+    const MpmState<T>& current_state = context.template get_abstract_state<MpmState<T>>(deformable_model_->particles_container_index());
+    const Particles<T>& particles_from_context = current_state.GetParticles(); 
+
+    Particles<T> particles_sorted_new(particles_from_context);
+    particles_sorted_new.ApplyPlasticityAndUpdateStresses();
+    mpm_transfer_->SetUpTransfer(&(mpm_cache->compatible_grid_), &particles_sorted_new); 
+    mpm_transfer_->TransferParticlesToGrid(particles_sorted_new, &(mpm_cache->compatible_grid_)); 
+    mpm_cache->compatible_grid_.UpdateVelocity(manager_->plant().time_step()); // right now dt = global dt   
+
+    // after pre-transfer, p2g, and grid update, store info to cache
+    mpm_cache->particles_sorted_ = particles_sorted_new;                                                    
 }
 
 template <typename T>
