@@ -10,8 +10,8 @@ namespace internal {
 
 // See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
 // Return (i, j, k)th entry of the third order permutation tensor
-template <typename T>
-T LeviCivita(int i, int j, int k) {
+// @pre i, j, k ∈ {0, 1, 2}
+double LeviCivita(int i, int j, int k) {
   // Even permutation
   if ((i == 0 && j == 1 && k == 2) || (i == 1 && j == 2 && k == 0) ||
       (i == 2 && j == 0 && k == 1)) {
@@ -27,13 +27,14 @@ T LeviCivita(int i, int j, int k) {
 
 // See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
 // Calculate A:ε
+// TODO: Consider unroll the loop and maybe also remove multiplication
 template <typename T>
 Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
   Vector3<T> A_dot_eps = {0.0, 0.0, 0.0};
   for (int k = 0; k < 3; ++k) {
     for (int j = 0; j < 3; ++j) {
       for (int i = 0; i < 3; ++i) {
-        A_dot_eps(k) += A(i, j) * LeviCivita<T>(i, j, k);
+        A_dot_eps(k) += A(i, j) * LeviCivita(i, j, k);
       }
     }
   }
@@ -43,9 +44,10 @@ Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
 /**
    Prevent x from getting more than eps-close to zero
    See accompanied math_utils.md
+   Autodiff will not work for this function.
+   @pre eps > 0
  */
-template <typename T>
-T ClampToEpsilon(const T& x, const T& eps) {
+double ClampToEpsilon(double x, double eps) {
   DRAKE_ASSERT(eps >= 0);
   if (x < -eps) {
     return x;
@@ -59,12 +61,16 @@ T ClampToEpsilon(const T& x, const T& eps) {
 }
 
 /**
-   Robustly computing log(x+1)/x
-   See accompanied math_utils.md
+   Robustly computing log(x+1)/x based on Taylor expansion.
+   See accompanied math_utils.md.
+   We can typically choose eps = 1e-6.
+   @pre x > -1
+   @pre eps > 0
  */
 template <typename T>
-T CalcLogXPlus1OverX(const T& x, const T& eps) {
+T CalcLogXPlus1OverX(const T& x, double eps) {
   DRAKE_ASSERT(eps > 0);
+  DRAKE_ASSERT(x > -1);
   using std::abs;  // ADL overload to AutoDiff type
   if (abs(x) < eps) {
     return 1 - x / (2) + x * x / (3) - x * x * x / (4);
@@ -76,14 +82,20 @@ T CalcLogXPlus1OverX(const T& x, const T& eps) {
 }
 
 /**
-   Robustly computing (logx-logy)/(x-y)
+   Robustly computing (logx-logy)/(x-y).
+   Approximation via Taylor expansion when |x/y-1|<1e-6.
    See accompanied math_utils.md
+   @pre x > 0
+   @pre y > 0
+   @pre x != y
  */
 template <typename T>
-T CalcLogXMinusLogYOverXMinusY(const T& x, const T& y, const T& eps) {
-  DRAKE_ASSERT(eps > 0);
+T CalcLogXMinusLogYOverXMinusY(const T& x, const T& y) {
+  DRAKE_ASSERT(x > 0);
+  DRAKE_ASSERT(y > 0);
+  DRAKE_ASSERT(x != y);
   T p = x / y - 1;
-  return CalcLogXPlus1OverX(p, eps) / y;
+  return CalcLogXPlus1OverX(p, 1e-6) / y;
 }
 
 /**
@@ -91,18 +103,17 @@ T CalcLogXMinusLogYOverXMinusY(const T& x, const T& y, const T& eps) {
    See accompanied math_utils.md
  */
 template <typename T>
-T CalcXLogYMinusYLogXOverXMinusY(const T& x, const T& y, const T& eps) {
-  DRAKE_ASSERT(eps > 0);
+T CalcXLogYMinusYLogXOverXMinusY(const T& x, const T& y) {
   using std::abs;  // ADL overload to AutoDiff type
-  return log(y) - y * CalcLogXMinusLogYOverXMinusY(x, y, eps);
+  return log(y) - y * CalcLogXMinusLogYOverXMinusY(x, y);
 }
 
 /**
-   Robustly computing (expx-1)/x
+   Robustly computing (expx-1)/x based on Taylor expansion.
    See accompanied math_utils.md
  */
 template <typename T>
-T CalcExpXMinus1OverX(const T& x, const T& eps) {
+T CalcExpXMinus1OverX(const T& x, double eps) {
   DRAKE_ASSERT(eps > 0);
   using std::abs;
   if (abs(x) < eps) {
@@ -115,15 +126,15 @@ T CalcExpXMinus1OverX(const T& x, const T& eps) {
 }
 
 /**
-   Robustly computing (expx-expy)/(x-y)
+   Robustly computing (expx-expy)/(x-y).
+   Approximation via Taylor expansion when |x-y|<1e-6.
    See accompanied math_utils.md
  */
 template <typename T>
-T CalcExpXMinusExpYOverXMinusY(const T& x, const T& y, const T& eps) {
-  DRAKE_ASSERT(eps > 0);
+T CalcExpXMinusExpYOverXMinusY(const T& x, const T& y) {
   T p = x - y;
   using std::exp;
-  return CalcExpXMinus1OverX(p, eps) * exp(y);
+  return CalcExpXMinus1OverX(p, 1e-6) * exp(y);
 }
 
 }  // namespace internal
