@@ -49,15 +49,13 @@ GTEST_TEST(MathUtilsTest, ClampTest) {
 }
 
 GTEST_TEST(MathUtilsTest, LogTest) {
-  double eps = 0.01;
-
   double x_large = 2.17;    // when approximation is not used
   double x_small = 0.0047;  // when approximation is used
 
   // log(x+1)/x
-  EXPECT_EQ(internal::CalcLogXPlus1OverX<double>(x_large, eps),
+  EXPECT_EQ(internal::CalcLogXPlus1OverX<double>(x_large),
             std::log(x_large + 1) / x_large);
-  EXPECT_NEAR(internal::CalcLogXPlus1OverX<double>(x_small, eps),
+  EXPECT_NEAR(internal::CalcLogXPlus1OverX<double>(x_small),
               std::log(x_small + 1) / x_small, kTolerance);
 
   // approximation is needed when x and y are close
@@ -92,15 +90,13 @@ GTEST_TEST(MathUtilsTest, LogTest) {
 }
 
 GTEST_TEST(MathUtilsTest, ExpTest) {
-  double eps = 0.01;
-
   double x_large = 2.17;    // when approximation is not used
   double x_small = 0.0047;  // when approximation is used
 
   // (expx-1)/x
-  EXPECT_EQ(internal::CalcExpXMinus1OverX<double>(x_large, eps),
+  EXPECT_EQ(internal::CalcExpXMinus1OverX<double>(x_large),
             (std::exp(x_large) - 1.0) / x_large);
-  EXPECT_NEAR(internal::CalcExpXMinus1OverX<double>(x_small, eps),
+  EXPECT_NEAR(internal::CalcExpXMinus1OverX<double>(x_small),
               (std::exp(x_small) - 1.0) / x_small, kTolerance);
 
   //(expx-expy)/(x-y)

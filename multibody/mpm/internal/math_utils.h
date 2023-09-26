@@ -8,6 +8,8 @@ namespace multibody {
 namespace mpm {
 namespace internal {
 
+constexpr double kEps = 1e-6;
+
 // See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
 // Return (i, j, k)th entry of the third order permutation tensor
 // @pre i, j, k ∈ {0, 1, 2}
@@ -63,17 +65,15 @@ double ClampToEpsilon(double x, double eps) {
 /**
    Robustly computing log(x+1)/x based on Taylor expansion.
    See accompanied math_utils.md.
-   We can typically choose eps = 1e-6.
    @pre x > -1
-   @pre eps > 0
  */
 template <typename T>
-T CalcLogXPlus1OverX(const T& x, double eps) {
-  DRAKE_ASSERT(eps > 0);
+T CalcLogXPlus1OverX(const T& x) {
   DRAKE_ASSERT(x > -1);
   using std::abs;  // ADL overload to AutoDiff type
-  if (abs(x) < eps) {
-    return 1 - x / (2) + x * x / (3) - x * x * x / (4);
+  if (abs(x) < kEps) {
+    T x_squared = x * x;
+    return 1 - x / (2) + x_squared / (3) - x_squared * x / (4);
   } else {
     // return std::log1p(x) / x;
     using std::log;  // ADL overload to AutoDiff type, std::log1p not supperted
@@ -83,7 +83,7 @@ T CalcLogXPlus1OverX(const T& x, double eps) {
 
 /**
    Robustly computing (logx-logy)/(x-y).
-   Approximation via Taylor expansion when |x/y-1|<1e-6.
+   Approximation via Taylor expansion when |x/y-1|<kEps.
    See accompanied math_utils.md
    @pre x > 0
    @pre y > 0
@@ -95,15 +95,21 @@ T CalcLogXMinusLogYOverXMinusY(const T& x, const T& y) {
   DRAKE_ASSERT(y > 0);
   DRAKE_ASSERT(x != y);
   T p = x / y - 1;
-  return CalcLogXPlus1OverX(p, 1e-6) / y;
+  return CalcLogXPlus1OverX(p) / y;
 }
 
 /**
    Robustly computing (x logy - y logx)/(x-y)
    See accompanied math_utils.md
+   @pre x > 0
+   @pre y > 0
+   @pre x != y
  */
 template <typename T>
 T CalcXLogYMinusYLogXOverXMinusY(const T& x, const T& y) {
+  DRAKE_ASSERT(x > 0);
+  DRAKE_ASSERT(y > 0);
+  DRAKE_ASSERT(x != y);
   using std::abs;  // ADL overload to AutoDiff type
   return log(y) - y * CalcLogXMinusLogYOverXMinusY(x, y);
 }
@@ -113,11 +119,11 @@ T CalcXLogYMinusYLogXOverXMinusY(const T& x, const T& y) {
    See accompanied math_utils.md
  */
 template <typename T>
-T CalcExpXMinus1OverX(const T& x, double eps) {
-  DRAKE_ASSERT(eps > 0);
+T CalcExpXMinus1OverX(const T& x) {
   using std::abs;
-  if (abs(x) < eps) {
-    return 1 + x / (2) + x * x / (6) + x * x * x / (24);
+  if (abs(x) < kEps) {
+    T x_squared = x * x;
+    return 1 + x / (2) + x_squared / (6) + x_squared * x / (24);
   } else {
     using std::exp;
     // return std::expm1(x) / x;
@@ -127,14 +133,14 @@ T CalcExpXMinus1OverX(const T& x, double eps) {
 
 /**
    Robustly computing (expx-expy)/(x-y).
-   Approximation via Taylor expansion when |x-y|<1e-6.
+   Approximation via Taylor expansion when |x-y|<kEps.
    See accompanied math_utils.md
  */
 template <typename T>
 T CalcExpXMinusExpYOverXMinusY(const T& x, const T& y) {
   T p = x - y;
   using std::exp;
-  return CalcExpXMinus1OverX(p, 1e-6) * exp(y);
+  return CalcExpXMinus1OverX(p) * exp(y);
 }
 
 }  // namespace internal
