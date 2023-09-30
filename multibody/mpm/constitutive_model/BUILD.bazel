@@ -15,28 +15,11 @@ package(
     default_visibility = ["//visibility:public"],
 )
 
-
-drake_cc_library(
-    name = "math_utils",
-    hdrs = [
-        "math_utils.h",
-    ],
-    deps = [
-        "//common:essential",
-        "//common:autodiff",
-    ],
-)
-drake_cc_googletest(
-    name = "math_utils_test",
-    deps = [
-        ":math_utils",
-        "//common/test_utilities:eigen_matrix_compare",
-    ],
-)
-
-
 drake_cc_library(
     name = "elastoplastic_model",
+    srcs = [
+        "elastoplastic_model.cc",
+    ],
     hdrs = [
         "elastoplastic_model.h",
     ],
@@ -63,12 +46,31 @@ drake_cc_library(
 drake_cc_googletest(
     name = "corotated_elastic_model_test",
     deps = [
-        ":corotated_elastic_model",
-        "//common:essential",
         "//common/test_utilities:eigen_matrix_compare",
+        "//common:autodiff",
+        "//math:gradient",
+        ":corotated_elastic_model",
         "//math:geometric_transform",
     ],
 )
+
+
+'''
+To be added later
+drake_cc_library(
+    name = "StvkHenckyWithVonMisesModel",
+    srcs = [
+        "StvkHenckyWithVonMisesModel.cc",
+    ],
+    hdrs = [
+        "StvkHenckyWithVonMisesModel.h",
+    ],
+    deps = [
+        ":elastoplastic_model",
+    ],
+)
+'''
+
 
 
 add_lint_tests()
