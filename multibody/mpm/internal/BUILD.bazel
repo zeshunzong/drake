@@ -34,5 +34,49 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "b_spline",
+    srcs = [
+        "b_spline.cc",
+    ],
+    hdrs = [
+        "b_spline.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//common:autodiff",
+    ],
+)
+
+drake_cc_googletest(
+    name = "b_spline_test",
+    deps = [
+        ":b_spline",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_library(
+    name = "analytic_level_set",
+    srcs = [
+        "analytic_level_set.cc",
+    ],
+    hdrs = [
+        "analytic_level_set.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//math:geometric_transform",
+    ],
+)
+
+drake_cc_googletest(
+    name = "analytic_level_set_test",
+    deps = [
+        ":analytic_level_set",
+        "//common:essential",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
 
 add_lint_tests()
