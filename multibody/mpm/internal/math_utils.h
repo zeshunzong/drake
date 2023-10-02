@@ -49,7 +49,8 @@ Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
    Autodiff will not work for this function.
    @pre eps > 0
  */
-inline double ClampToEpsilon(double x, double eps) {
+template <typename T>
+T ClampToEpsilon(const T& x, const T& eps) {
   DRAKE_ASSERT(eps >= 0);
   if (x < -eps) {
     return x;

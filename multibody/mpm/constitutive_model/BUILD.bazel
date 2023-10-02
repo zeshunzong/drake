@@ -55,8 +55,7 @@ drake_cc_googletest(
 )
 
 
-'''
-To be added later
+
 drake_cc_library(
     name = "StvkHenckyWithVonMisesModel",
     srcs = [
@@ -69,7 +68,31 @@ drake_cc_library(
         ":elastoplastic_model",
     ],
 )
-'''
+
+drake_cc_library(
+    name = "StvkHenckyWithVonMisesModel2",
+    srcs = [
+        "StvkHenckyWithVonMisesModel2.cc",
+    ],
+    hdrs = [
+        "StvkHenckyWithVonMisesModel2.h",
+    ],
+    deps = [
+        ":elastoplastic_model",
+    ],
+)
+
+drake_cc_googletest(
+    name = "stvk_with_vm_model_test",
+    deps = [
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common:autodiff",
+        "//math:gradient",
+        ":StvkHenckyWithVonMisesModel",
+        ":StvkHenckyWithVonMisesModel2",
+        "//math:geometric_transform",
+    ],
+)
 
 
 
