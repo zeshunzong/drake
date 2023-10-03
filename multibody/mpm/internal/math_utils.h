@@ -29,7 +29,8 @@ double LeviCivita(int i, int j, int k) {
 
 // See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
 // Calculate A:ε
-// TODO: Consider unroll the loop and maybe also remove multiplication
+// TODO(@zeshunzong): Consider unroll the loop and maybe also remove
+// multiplication
 template <typename T>
 Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
   Vector3<T> A_dot_eps = {0.0, 0.0, 0.0};

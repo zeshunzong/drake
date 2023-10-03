@@ -62,16 +62,16 @@ GTEST_TEST(MathUtilsTest, LogTest) {
   double y_far = x_large + 0.5;
   double y_close = x_large - 0.00047;
 
-  //(logx-logy)/(x-y)
-  EXPECT_NEAR(
-      internal::CalcLogXMinusLogYOverXMinusY<double>(x_large, y_far),
-      (std::log(x_large) - std::log(y_far)) / (x_large - y_far), kTolerance);
+  // (logx-logy)/(x-y)
+  EXPECT_NEAR(internal::CalcLogXMinusLogYOverXMinusY<double>(x_large, y_far),
+              (std::log(x_large) - std::log(y_far)) / (x_large - y_far),
+              kTolerance);
   // Although there is no approximation when x and y are far away from each
   // other, what we are computing is a mathematically equivalent form, thus not
   // exactly the same.
-  EXPECT_NEAR(
-      internal::CalcLogXMinusLogYOverXMinusY<double>(x_large, y_close),
-      (std::log(x_large) - std::log(y_close)) / (x_large - y_close), kTolerance);
+  EXPECT_NEAR(internal::CalcLogXMinusLogYOverXMinusY<double>(x_large, y_close),
+              (std::log(x_large) - std::log(y_close)) / (x_large - y_close),
+              kTolerance);
   // approximation is used
 
   // (x logy - y logx)/(x-y)
@@ -82,10 +82,11 @@ GTEST_TEST(MathUtilsTest, LogTest) {
   // Although there is no approximation when x and y are far away from each
   // other, what we are computing is a mathematically equivalent form, thus not
   // exactly the same.
-  EXPECT_NEAR(internal::CalcXLogYMinusYLogXOverXMinusY<double>(x_large, y_close),
-              (x_large * std::log(y_close) - y_close * std::log(x_large)) /
-                  (x_large - y_close),
-              kTolerance);
+  EXPECT_NEAR(
+      internal::CalcXLogYMinusYLogXOverXMinusY<double>(x_large, y_close),
+      (x_large * std::log(y_close) - y_close * std::log(x_large)) /
+          (x_large - y_close),
+      kTolerance);
   // approximation is used
 }
 
@@ -99,19 +100,19 @@ GTEST_TEST(MathUtilsTest, ExpTest) {
   EXPECT_NEAR(internal::CalcExpXMinus1OverX<double>(x_small),
               (std::exp(x_small) - 1.0) / x_small, kTolerance);
 
-  //(expx-expy)/(x-y)
+  // (expx-expy)/(x-y)
   double y_far = x_large + 0.5;
   double y_close = x_large + 0.00047;
 
-  EXPECT_NEAR(
-      internal::CalcExpXMinusExpYOverXMinusY<double>(x_large, y_far),
-      (std::exp(x_large) - std::exp(y_far)) / (x_large - y_far), kTolerance);
+  EXPECT_NEAR(internal::CalcExpXMinusExpYOverXMinusY<double>(x_large, y_far),
+              (std::exp(x_large) - std::exp(y_far)) / (x_large - y_far),
+              kTolerance);
   // Although there is no approximation when x and y are far away from each
   // other, what we are computing is a mathematically equivalent form, thus not
   // exactly the same.
-  EXPECT_NEAR(
-      internal::CalcExpXMinusExpYOverXMinusY<double>(x_large, y_close),
-      (std::exp(x_large) - std::exp(y_close)) / (x_large - y_close), kTolerance);
+  EXPECT_NEAR(internal::CalcExpXMinusExpYOverXMinusY<double>(x_large, y_close),
+              (std::exp(x_large) - std::exp(y_close)) / (x_large - y_close),
+              kTolerance);
 }
 
 }  // namespace

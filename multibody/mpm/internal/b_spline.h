@@ -12,7 +12,7 @@ namespace internal {
 // A implementation of 3D quadratic B spline
 /**
  * An implementation of 3D quadratic B spline.
- * This gives an (interpolation) function centered at position with support
+ * This gives an (interpolation) function centered at center with support
  * being [-1.5h,1.5h] in each dimension See
  * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf page
  * 32-34
@@ -20,47 +20,56 @@ namespace internal {
 template <typename T>
 class BSpline {
  public:
-  BSpline(const T h, const Vector3<T>& position);
+  BSpline(double h, const Vector3<double>& center);
 
   /**
-   * Default to h = 1.0 and position = [0,0,0]
+   * Default to h = 1.0 and center = [0,0,0]
    */
   BSpline();
 
-  T get_h() const { return h_; }
-  Vector3<T> get_position() { return position_; }
+  double h() const { return h_; }
+  const Vector3<double>& center() const { return center_; }
+
+  T dummy(T x) { return 2.0 * x; }
 
   /**
-   * Checks whether a point with position x is inside the support of this
-   * Bspline x is in support if |x(i)-center(i)|<1.5h for i = 0, 1, 2
+   * Computes BSpline(x), parameterized by h_ and center_
    */
-  bool InSupport(const Vector3<T>& x) const;
+  T ComputeValue(const Vector3<T>& x) const;
+  /**
+   * Compute ∇BSpline(x)
+   */
+  Vector3<T> ComputeGradient(const Vector3<T>& x) const;
 
-  // Evaluation of Bspline basis and gradient on a particular position x
-  T EvalBasis(const Vector3<T>& x) const;
-  Vector3<T> EvalGradientBasis(const Vector3<T>& x) const;
-  std::pair<T, Vector3<T>> EvalBasisAndGradient(const Vector3<T>& x) const;
+  /**
+   * Computes {BSpline(x), ∇BSpline(x)}
+   */
+  std::pair<T, Vector3<T>> ComputeValueAndGradient(const Vector3<T>& x) const;
 
  private:
-  // Helper function. Evaluate the values and the gradients of 1D quadratic
-  // Bspline on the reference 1D domain r, note that the basis has compact
-  // support in [-1.5, 1.5]
-  T Eval1DBasis(T r) const;
-  T EvalGradient1DBasis(T r) const;
+  /**
+   * A (1D) reference bpline is a 1D function N(x) defined with h = 1 and (1d)
+   * center = 0, as in eqn(123) in
+   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf
+   *
+   * Denote the reference function as N(x).
+   * Computes N(x), N'(x)
+   */
+  T ComputeReferenceValue(const T& x) const;
+  T ComputeReferenceDerivative(const T& x) const;
 
-  T h_{};                  // The scaling of the reference domain.
-                           // Since the class is for the usage of
-                           // MPM, we assume we are on the uniform
-                           // grid, and the physical domain (x, y,
-                           // z) can be transformed to the
-                           // reference domain (r, s, t) through a
-                           // affine transformation \phi^-1(x, y,
-                           // z) = (r, s, t) = 1/h*(x-xc, y-yc,
-                           // z-zc). The basis on physical domain
-                           // will have support [-1.5h, 1.5h]
-  Vector3<T> position_{};  // The "center" of the Bspline, or (xc,
-                           // yc, zc) in above comment
-};                         // class BSpline
+  /**
+   * The scaling of the reference domain. Since the class is for the usage of
+   MPM, we assume we are on the uniform grid, and the physical domain (x, y, z)
+   can be transformed to the reference domain (r, s, t) through a linear
+   transformation \phi^-1(x, y, z) = (r, s, t) = 1/h*(x-xc, y-yc, z-zc). The
+   basis on physical domain will have support [-1.5h, 1.5h].
+  */
+  double h_{};
+  double one_over_h_{};
+  // The "center" of the Bspline, or (xc, yc, zc) in above comment
+  Vector3<double> center_{};
+};
 
 }  // namespace internal
 }  // namespace mpm

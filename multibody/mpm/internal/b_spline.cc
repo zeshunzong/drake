@@ -6,101 +6,66 @@ namespace mpm {
 namespace internal {
 
 template <typename T>
-BSpline<T>::BSpline() : h_(1.0), position_(0.0, 0.0, 0.0) {}
+BSpline<T>::BSpline() : h_(1.0), one_over_h_(1.0), center_(0.0, 0.0, 0.0) {}
 
 template <typename T>
-BSpline<T>::BSpline(const T h, const Vector3<T>& position) {
-  DRAKE_ASSERT(h > 0.0);
+BSpline<T>::BSpline(double h, const Vector3<double>& center) {
+  DRAKE_DEMAND(h > 0.0);
   h_ = h;
-  position_ = position;
+  one_over_h_ = 1.0 / h;
+  center_ = center;
 }
 
 template <typename T>
-bool BSpline<T>::InSupport(const Vector3<T>& x) const {
-  using std::abs;
-  return (abs(x(0) - position_(0)) / h_ < 1.5 &&
-          abs(x(1) - position_(1)) / h_ < 1.5 &&
-          abs(x(2) - position_(2)) / h_ < 1.5);
+T BSpline<T>::ComputeValue(const Vector3<T>& x) const {
+  return ComputeReferenceValue((x(0) - center_(0)) * one_over_h_) *
+         ComputeReferenceValue((x(1) - center_(1)) * one_over_h_) *
+         ComputeReferenceValue((x(2) - center_(2)) * one_over_h_);
 }
 
 template <typename T>
-T BSpline<T>::EvalBasis(const Vector3<T>& x) const {
-  // If the basis is not in the support, we simply return 0.0
-  if (!InSupport(x)) {
-    return 0.0;
-  } else {
-    return Eval1DBasis((x(0) - position_(0)) / h_) *
-           Eval1DBasis((x(1) - position_(1)) / h_) *
-           Eval1DBasis((x(2) - position_(2)) / h_);
-  }
+Vector3<T> BSpline<T>::ComputeGradient(const Vector3<T>& x) const {
+  Vector3<T> coordinate = Vector3<T>(one_over_h_ * (x(0) - center_(0)),
+                                     one_over_h_ * (x(1) - center_(1)),
+                                     one_over_h_ * (x(2) - center_(2)));
+  Vector3<T> basis_val = Vector3<T>(ComputeReferenceValue(coordinate(0)),
+                                    ComputeReferenceValue(coordinate(1)),
+                                    ComputeReferenceValue(coordinate(2)));
+  return Vector3<T>(one_over_h_ * (ComputeReferenceDerivative(coordinate(0))) *
+                        basis_val(1) * basis_val(2),
+                    one_over_h_ * (ComputeReferenceDerivative(coordinate(1))) *
+                        basis_val(0) * basis_val(2),
+                    one_over_h_ * (ComputeReferenceDerivative(coordinate(2))) *
+                        basis_val(0) * basis_val(1));
 }
 
 template <typename T>
-Vector3<T> BSpline<T>::EvalGradientBasis(const Vector3<T>& x) const {
-  if (!InSupport(x)) {
-    return Vector3<T>(0.0, 0.0, 0.0);
-  } else {
-    T scale = 1.0 / h_;
-    Vector3<T> coordinate =
-        Vector3<T>(scale * (x(0) - position_(0)), scale * (x(1) - position_(1)),
-                   scale * (x(2) - position_(2)));
-    Vector3<T> basis_val =
-        Vector3<T>(Eval1DBasis(coordinate(0)), Eval1DBasis(coordinate(1)),
-                   Eval1DBasis(coordinate(2)));
-    return Vector3<T>(scale * (EvalGradient1DBasis(coordinate(0))) *
-                          basis_val(1) * basis_val(2),
-                      scale * (EvalGradient1DBasis(coordinate(1))) *
-                          basis_val(0) * basis_val(2),
-                      scale * (EvalGradient1DBasis(coordinate(2))) *
-                          basis_val(0) * basis_val(1));
-  }
-}
-
-template <typename T>
-std::pair<T, Vector3<T>> BSpline<T>::EvalBasisAndGradient(
+std::pair<T, Vector3<T>> BSpline<T>::ComputeValueAndGradient(
     const Vector3<T>& x) const {
-  if (!InSupport(x)) {
-    return std::pair<T, Vector3<T>>(0.0, Vector3<T>(0.0, 0.0, 0.0));
-  } else {
-    T scale = 1.0 / h_;
-    Vector3<T> coordinate =
-        Vector3<T>(scale * (x(0) - position_(0)), scale * (x(1) - position_(1)),
-                   scale * (x(2) - position_(2)));
-    Vector3<T> basis_val =
-        Vector3<T>(Eval1DBasis(coordinate(0)), Eval1DBasis(coordinate(1)),
-                   Eval1DBasis(coordinate(2)));
-    return std::pair<T, Vector3<T>>(
-        basis_val(0) * basis_val(1) * basis_val(2),
-        Vector3<T>(scale * (EvalGradient1DBasis(coordinate(0))) * basis_val(1) *
-                       basis_val(2),
-                   scale * (EvalGradient1DBasis(coordinate(1))) * basis_val(0) *
-                       basis_val(2),
-                   scale * (EvalGradient1DBasis(coordinate(2))) * basis_val(0) *
-                       basis_val(1)));
-  }
+  return std::pair<T, Vector3<T>>(ComputeValue(x), ComputeGradient(x));
 }
 
 template <typename T>
-T BSpline<T>::Eval1DBasis(T r) const {
+T BSpline<T>::ComputeReferenceValue(const T& x) const {
   using std::abs;
-  T r_abs = abs(r);
-  if (r_abs >= 1.5) {
+  T x_abs = abs(x);
+  if (x_abs >= 1.5) {
     return 0.0;
-  } else if (r_abs < 1.5 && r_abs >= 0.5) {
-    return .5 * (1.5 - r_abs) * (1.5 - r_abs);
+  } else if (x_abs < 1.5 && x_abs >= 0.5) {
+    return .5 * (1.5 - x_abs) * (1.5 - x_abs);
   } else {
-    return 0.75 - r_abs * r_abs;
+    return 0.75 - x_abs * x_abs;
   }
 }
 
 template <typename T>
-T BSpline<T>::EvalGradient1DBasis(T r) const {
-  if (r <= 0.5 && r >= -0.5) {
-    return -2.0 * r;
-  } else if (r >= 0.5 && r < 1.5) {
-    return -1.5 + r;
-  } else if (r <= -0.5 && r > -1.5) {
-    return 1.5 + r;
+T BSpline<T>::ComputeReferenceDerivative(const T& x) const {
+  if (x <= 0.5 && x >= -0.5) {
+    return -2.0 * x;
+  } else if (x >= 0.5 && x < 1.5) {
+    return -1.5 + x;
+  } else if (x <= -0.5 && x > -1.5) {
+    return 1.5 + x;
   } else {
     return 0.0;
   }

@@ -15,17 +15,17 @@ package(
     default_visibility = ["//visibility:public"],
 )
 
-
 drake_cc_library(
     name = "math_utils",
     hdrs = [
         "math_utils.h",
     ],
     deps = [
-        "//common:essential",
         "//common:autodiff",
+        "//common:essential",
     ],
 )
+
 drake_cc_googletest(
     name = "math_utils_test",
     deps = [
@@ -43,8 +43,8 @@ drake_cc_library(
         "b_spline.h",
     ],
     deps = [
-        "//common:essential",
         "//common:autodiff",
+        "//common:essential",
     ],
 )
 
@@ -53,6 +53,7 @@ drake_cc_googletest(
     deps = [
         ":b_spline",
         "//common/test_utilities:eigen_matrix_compare",
+        "//math:gradient",
     ],
 )
 
