@@ -6,9 +6,6 @@ namespace mpm {
 namespace internal {
 
 template <typename T>
-BSpline<T>::BSpline() : h_(1.0), one_over_h_(1.0), center_(0.0, 0.0, 0.0) {}
-
-template <typename T>
 BSpline<T>::BSpline(double h, const Vector3<double>& center) {
   DRAKE_DEMAND(h > 0.0);
   h_ = h;

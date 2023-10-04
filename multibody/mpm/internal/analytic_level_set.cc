@@ -5,7 +5,9 @@ namespace multibody {
 namespace mpm {
 namespace internal {
 
-AnalyticLevelSet::AnalyticLevelSet() : volume_(0.0) {}
+AnalyticLevelSet::AnalyticLevelSet(
+    double volume, const std::array<Vector3<double>, 2>& bounding_box)
+    : volume_(volume), bounding_box_(bounding_box) {}
 
 Vector3<double> AnalyticLevelSet::GetNormal(
     const Vector3<double>& position) const {
@@ -18,11 +20,10 @@ Vector3<double> AnalyticLevelSet::GetNormal(
 }
 
 HalfSpaceLevelSet::HalfSpaceLevelSet(const Vector3<double>& normal)
-    : AnalyticLevelSet() {
-  this->volume_ = std::numeric_limits<double>::infinity();
-  this->bounding_box_ = {
-      -std::numeric_limits<double>::infinity() * Vector3<double>::Ones(),
-      std::numeric_limits<double>::infinity() * Vector3<double>::Ones()};
+    : AnalyticLevelSet(
+          std::numeric_limits<double>::infinity(),
+          {-std::numeric_limits<double>::infinity() * Vector3<double>::Ones(),
+           std::numeric_limits<double>::infinity() * Vector3<double>::Ones()}) {
   DRAKE_DEMAND((normal.array() != 0.0).any());
   normal_ = normal.normalized();
 }
@@ -38,11 +39,11 @@ Vector3<double> HalfSpaceLevelSet::DoGetNormal(
 }
 
 SphereLevelSet::SphereLevelSet(double radius)
-    : AnalyticLevelSet(), radius_(radius) {
+    : AnalyticLevelSet(4.0 / 3.0 * M_PI * radius * radius * radius,
+                       {-radius * Vector3<double>::Ones(),
+                        radius * Vector3<double>::Ones()}),
+      radius_(radius) {
   DRAKE_DEMAND(radius > 0);
-  this->volume_ = 4.0 / 3.0 * M_PI * radius * radius * radius;
-  this->bounding_box_ = {-radius * Vector3<double>::Ones(),
-                         radius * Vector3<double>::Ones()};
 }
 
 bool SphereLevelSet::IsInClosure(const Vector3<double>& position) const {
@@ -58,12 +59,12 @@ Vector3<double> SphereLevelSet::DoGetNormal(
 }
 
 BoxLevelSet::BoxLevelSet(const Vector3<double>& xscale)
-    : AnalyticLevelSet(), xscale_(xscale) {
+    : AnalyticLevelSet(8 * xscale(0) * xscale(1) * xscale(2),
+                       {-xscale, xscale}),
+      xscale_(xscale) {
   DRAKE_DEMAND(xscale_(0) > 0);
   DRAKE_DEMAND(xscale_(1) > 0);
   DRAKE_DEMAND(xscale_(2) > 0);
-  this->volume_ = 8 * xscale(0) * xscale(1) * xscale(2);
-  this->bounding_box_ = {-xscale, xscale};
 }
 
 bool BoxLevelSet::IsInClosure(const Vector3<double>& position) const {
@@ -104,12 +105,13 @@ Vector3<double> BoxLevelSet::DoGetNormal(
 }
 
 CylinderLevelSet::CylinderLevelSet(double height, double radius)
-    : AnalyticLevelSet(), height_(height), radius_(radius) {
+    : AnalyticLevelSet(
+          2.0 * M_PI * radius * radius * height,
+          {{{-radius, -radius, -height}, {radius, radius, height}}}),
+      height_(height),
+      radius_(radius) {
   DRAKE_DEMAND(height > 0);
   DRAKE_DEMAND(radius > 0);
-  this->volume_ = 2.0 * M_PI * radius * radius * height;
-  this->bounding_box_ = {
-      {{-radius, -radius, -height}, {radius, radius, height}}};
 }
 
 bool CylinderLevelSet::IsInClosure(const Vector3<double>& position) const {
