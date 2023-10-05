@@ -13,7 +13,7 @@ constexpr double kEps = 1e-6;
 // See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
 // Return (i, j, k)th entry of the third order permutation tensor
 // @pre i, j, k ∈ {0, 1, 2}
-double LeviCivita(int i, int j, int k) {
+inline double LeviCivita(int i, int j, int k) {
   // Even permutation
   if ((i == 0 && j == 1 && k == 2) || (i == 1 && j == 2 && k == 0) ||
       (i == 2 && j == 0 && k == 1)) {
@@ -28,7 +28,7 @@ double LeviCivita(int i, int j, int k) {
 }
 
 // See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
-// Calculate A:ε
+// Computes A:ε
 // TODO(@zeshunzong): Consider unroll the loop and maybe also remove
 // multiplication
 template <typename T>
@@ -45,26 +45,34 @@ Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
 }
 
 /**
-   Prevent x from getting more than eps-close to zero
-   See accompanied math_utils.md
-   Autodiff will not work for this function.
-   @pre eps > 0
+ * Prevents x from getting more than eps-close to zero.See accompanied
+ * math_utils.md. Its derivative is 0 when x ∈ (−ε,  ε).
+ * @pre eps > 0
  */
-double ClampToEpsilon(double x, double eps) {
+template <typename T>
+T ClampToEpsilon(T x, T eps) {
   DRAKE_ASSERT(eps >= 0);
-  if (x < -eps) {
+  using std::abs;  // ADL overload to AutoDiff type
+  if (abs(x) >= eps) {
     return x;
-  } else if (x < 0) {
-    return -eps;
-  } else if (x < eps) {
-    return eps;
+  } else if (x >= 0) {
+    if constexpr (std::is_same_v<T, AutoDiffXd>) {
+      return AutoDiffXd(eps.value(), 1, 1);
+
+    } else {
+      return eps;
+    }
   } else {
-    return x;
+    if constexpr (std::is_same_v<T, AutoDiffXd>) {
+      return AutoDiffXd(-eps.value(), 1, 1);
+    } else {
+      return -eps;
+    }
   }
 }
 
 /**
-   Robustly computing log(x+1)/x based on Taylor expansion.
+   Robustly computes log(x+1)/x based on Taylor expansion.
    See accompanied math_utils.md.
    @pre x > -1
  */
@@ -83,7 +91,7 @@ T CalcLogXPlus1OverX(const T& x) {
 }
 
 /**
-   Robustly computing (logx-logy)/(x-y).
+   Robustly computes (logx-logy)/(x-y).
    Approximation via Taylor expansion when |x/y-1|<kEps.
    See accompanied math_utils.md
    @pre x > 0
@@ -100,7 +108,7 @@ T CalcLogXMinusLogYOverXMinusY(const T& x, const T& y) {
 }
 
 /**
-   Robustly computing (x logy - y logx)/(x-y)
+   Robustly computes (x logy - y logx)/(x-y)
    See accompanied math_utils.md
    @pre x > 0
    @pre y > 0
@@ -116,7 +124,7 @@ T CalcXLogYMinusYLogXOverXMinusY(const T& x, const T& y) {
 }
 
 /**
-   Robustly computing (expx-1)/x based on Taylor expansion.
+   Robustly computes (expx-1)/x based on Taylor expansion.
    See accompanied math_utils.md
  */
 template <typename T>
@@ -133,7 +141,7 @@ T CalcExpXMinus1OverX(const T& x) {
 }
 
 /**
-   Robustly computing (expx-expy)/(x-y).
+   Robustly computes (expx-expy)/(x-y).
    Approximation via Taylor expansion when |x-y|<kEps.
    See accompanied math_utils.md
  */

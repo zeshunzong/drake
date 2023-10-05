@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
+#include "drake/math/autodiff_gradient.h"
 
 namespace drake {
 namespace multibody {
@@ -36,16 +37,47 @@ GTEST_TEST(MathUtilsTest, APermutationTest) {
 
 GTEST_TEST(MathUtilsTest, ClampTest) {
   double eps = 0.01;
-  EXPECT_EQ(internal::ClampToEpsilon(0.5, eps),
+  EXPECT_EQ(internal::ClampToEpsilon<double>(0.5, eps),
             0.5);  // x = 0.5, x > eps, returns x
-  EXPECT_EQ(internal::ClampToEpsilon(0.005, eps),
+  EXPECT_EQ(internal::ClampToEpsilon<double>(0.005, eps),
             eps);  // x = 0.005, 0 < x < eps, returns eps
-  EXPECT_EQ(internal::ClampToEpsilon(-0.005, eps),
+  EXPECT_EQ(internal::ClampToEpsilon<double>(-0.005, eps),
             -eps);  // x = -0.005, -eps < x < 0, returns -eps
-  EXPECT_EQ(internal::ClampToEpsilon(-0.5, eps),
+  EXPECT_EQ(internal::ClampToEpsilon<double>(-0.5, eps),
             -0.5);  // x = -0.5, x < -eps, returns x
-  EXPECT_EQ(internal::ClampToEpsilon(0, eps),
+  EXPECT_EQ(internal::ClampToEpsilon<double>(0, eps),
             eps);  // x = 0, can be either +eps or -eps, we choose it to be +eps
+}
+
+void TestClampAutoDiff(double x, double eps_double) {
+  Vector1<AutoDiffXd> x_autodiff = math::InitializeAutoDiff(Vector1<double>(x));
+  AutoDiffXd eps_autodiff = static_cast<AutoDiffXd>(eps_double);
+
+  AutoDiffXd value =
+      internal::ClampToEpsilon<AutoDiffXd>(x_autodiff(0), eps_autodiff);
+  Vector1<double> derivative = value.derivatives();
+  if (std::abs(x) >= eps_double) {
+    // when |x| is large enough, return x and derivative is 1
+    EXPECT_EQ(derivative(0), 1.0);
+    EXPECT_EQ(value.value(), x);
+  } else {
+    // when |x| is small, derivative is 0
+    EXPECT_EQ(derivative(0), 0.0);
+    // return sign(x)*eps, where sign(0):=1
+    if (x >= 0) {
+      EXPECT_EQ(value.value(), eps_double);
+    } else {
+      EXPECT_EQ(value.value(), -eps_double);
+    }
+  }
+}
+
+GTEST_TEST(MathUtilsTest, ClampDerivativeTest) {
+  TestClampAutoDiff(1.2, 0.8);
+  TestClampAutoDiff(0.5, 0.8);
+  TestClampAutoDiff(0.0, 0.8);
+  TestClampAutoDiff(-0.5, 0.8);
+  TestClampAutoDiff(-1.2, 0.8);
 }
 
 GTEST_TEST(MathUtilsTest, LogTest) {

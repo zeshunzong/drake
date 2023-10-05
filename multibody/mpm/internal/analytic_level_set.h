@@ -47,6 +47,8 @@ class AnalyticLevelSet {
   virtual ~AnalyticLevelSet() = default;
 
  protected:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(AnalyticLevelSet);
+
   // Constructs an AnalyticLevelSet with given volume and bounding_box. Will
   // only be invoked by derived class constructors
   AnalyticLevelSet(double volume,
