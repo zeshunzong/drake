@@ -49,14 +49,12 @@ GTEST_TEST(MathUtilsTest, ClampTest) {
             eps);  // x = 0, can be either +eps or -eps, we choose it to be +eps
 }
 
-void TestClampAutoDiff(double x, double eps_double) {
+void TestClampAutoDiff(double x, double eps) {
   Vector1<AutoDiffXd> x_autodiff = math::InitializeAutoDiff(Vector1<double>(x));
-  AutoDiffXd eps_autodiff = static_cast<AutoDiffXd>(eps_double);
 
-  AutoDiffXd value =
-      internal::ClampToEpsilon<AutoDiffXd>(x_autodiff(0), eps_autodiff);
+  AutoDiffXd value = internal::ClampToEpsilon<AutoDiffXd>(x_autodiff(0), eps);
   Vector1<double> derivative = value.derivatives();
-  if (std::abs(x) >= eps_double) {
+  if (std::abs(x) >= eps) {
     // when |x| is large enough, return x and derivative is 1
     EXPECT_EQ(derivative(0), 1.0);
     EXPECT_EQ(value.value(), x);
@@ -65,9 +63,9 @@ void TestClampAutoDiff(double x, double eps_double) {
     EXPECT_EQ(derivative(0), 0.0);
     // return sign(x)*eps, where sign(0):=1
     if (x >= 0) {
-      EXPECT_EQ(value.value(), eps_double);
+      EXPECT_EQ(value.value(), eps);
     } else {
-      EXPECT_EQ(value.value(), -eps_double);
+      EXPECT_EQ(value.value(), -eps);
     }
   }
 }
