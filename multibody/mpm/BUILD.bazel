@@ -1,0 +1,39 @@
+# -*- python -*-
+
+load(
+    "@drake//tools/skylark:drake_cc.bzl",
+    "drake_cc_googletest",
+    "drake_cc_library",
+)
+load(
+    "@drake//tools/vector_gen:vector_gen.bzl",
+    "drake_cc_vector_gen_library",
+)
+load("//tools/lint:lint.bzl", "add_lint_tests")
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+drake_cc_library(
+    name = "particles",
+    srcs = [
+        "particles.cc",
+    ],
+    hdrs = [
+        "particles.h",
+    ],
+    deps = [
+        "//common:autodiff",
+        "//common:essential",
+    ],
+)
+
+drake_cc_googletest(
+    name = "particles_test",
+    deps = [
+        ":particles",
+    ],
+)
+
+add_lint_tests()
