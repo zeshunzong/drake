@@ -15,8 +15,7 @@ namespace constitutive_model {
 template <typename T>
 class CorotatedElasticModel : public ElastoPlasticModel<T> {
  public:
-  explicit CorotatedElasticModel(const T& youngs_modulus,
-                                 const T& poissons_ratio);
+  CorotatedElasticModel(const T& youngs_modulus, const T& poissons_ratio);
 
   std::unique_ptr<ElastoPlasticModel<T>> Clone() const final {
     return std::make_unique<CorotatedElasticModel<T>>(*this);
@@ -32,9 +31,6 @@ class CorotatedElasticModel : public ElastoPlasticModel<T> {
 
   void CalcFirstPiolaStressDerivative(const Matrix3<T>& FE,
                                       Eigen::Matrix<T, 9, 9>* dPdF) const final;
-
-  void UpdateDeformationGradientAndCalcKirchhoffStress(
-      Matrix3<T>* tau, Matrix3<T>* elastic_deformation_gradient) const final;
 };
 
 }  // namespace constitutive_model

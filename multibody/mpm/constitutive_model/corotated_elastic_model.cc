@@ -13,8 +13,7 @@ CorotatedElasticModel<T>::CorotatedElasticModel(const T& youngs_modulus,
 template <typename T>
 T CorotatedElasticModel<T>::CalcStrainEnergyDensity(
     const Matrix3<T>& FE) const {
-  Eigen::JacobiSVD<Matrix3<T>> svd(FE,
-                                   Eigen::ComputeFullU | Eigen::ComputeFullV);
+  Eigen::JacobiSVD<Matrix3<T>> svd(FE);
   Vector3<T> sigma = svd.singularValues();
   T J = sigma(0) * sigma(1) * sigma(2);
   return this->mu() * ((sigma(0) - 1.0) * (sigma(0) - 1.0) +
@@ -68,15 +67,6 @@ void CorotatedElasticModel<T>::CalcFirstPiolaStressDerivative(
       FE, this->lambda() * (FE.determinant() - 1.0), dPdF);
 }
 
-template <typename T>
-void CorotatedElasticModel<T>::UpdateDeformationGradientAndCalcKirchhoffStress(
-    Matrix3<T>* tau, Matrix3<T>* FE) const {
-  Matrix3<T> R, S;
-  T J = FE->determinant();
-  fem::internal::PolarDecompose<T>(*FE, &R, &S);
-  *tau = 2.0 * this->mu() * (*FE - R) * FE->transpose() +
-         this->lambda() * (J - 1.0) * J * Matrix3<T>::Identity();
-}
 template class CorotatedElasticModel<AutoDiffXd>;
 template class CorotatedElasticModel<double>;
 

@@ -21,7 +21,7 @@ namespace {
 using Eigen::Matrix3d;
 using Eigen::Matrix3Xd;
 
-constexpr double kTolerance = 1e-10;
+constexpr double kTolerance = 1e-12;
 
 Matrix3<AutoDiffXd> MakeDeformationGradientsWithDerivatives() {
   /* Create an arbitrary AutoDiffXd deformation. */
@@ -91,7 +91,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
   EXPECT_TRUE(CompareMatrices(tau_computed1, tau_exact1, kTolerance));
   // Sanity check: no plasticity shall be applied
   // F_trial_1 now is FE_computed, after return mapping
-  EXPECT_TRUE(CompareMatrices(F_trial1, FE_exact, kTolerance));
+  EXPECT_TRUE(CompareMatrices(F_trial1, FE_exact));
 
   /* ==================== Test #2 ================ */
   // tau_exact2 is the exact tau computed from F=R*S, under E = 5.0 and mu =
@@ -128,7 +128,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
   EXPECT_TRUE(CompareMatrices(tau_computed2, tau_exact2, kTolerance));
   // Sanity check: no plasticity shall be applied
   // F_trial2 now is FE_computed, after return mapping
-  EXPECT_TRUE(CompareMatrices(F_trial2, FE_exact, kTolerance));
+  EXPECT_TRUE(CompareMatrices(F_trial2, FE_exact));
 
   /* ==================== Test #3 ================ */
   // If F is a rotation matrix, then stress is zero
