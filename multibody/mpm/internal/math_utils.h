@@ -13,7 +13,7 @@ constexpr double kEps = 1e-6;
 // See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
 // Return (i, j, k)th entry of the third order permutation tensor
 // @pre i, j, k ∈ {0, 1, 2}
-double LeviCivita(int i, int j, int k) {
+inline double LeviCivita(int i, int j, int k) {
   // Even permutation
   if ((i == 0 && j == 1 && k == 2) || (i == 1 && j == 2 && k == 0) ||
       (i == 2 && j == 0 && k == 1)) {
@@ -50,7 +50,7 @@ Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
    Autodiff will not work for this function.
    @pre eps > 0
  */
-double ClampToEpsilon(double x, double eps) {
+inline double ClampToEpsilon(double x, double eps) {
   DRAKE_ASSERT(eps >= 0);
   if (x < -eps) {
     return x;
