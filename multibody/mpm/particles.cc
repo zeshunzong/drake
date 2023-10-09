@@ -59,8 +59,8 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
 
 template <typename T>
 void Particles<T>::AddParticle(const Vector3<T>& position,
-                               const Vector3<T>& velocity, T mass,
-                               T reference_volume,
+                               const Vector3<T>& velocity, const T& mass,
+                               const T& reference_volume,
                                const Matrix3<T>& deformation_gradient,
                                const Matrix3<T>& B_matrix) {
   positions_.emplace_back(position);
@@ -72,7 +72,7 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
   neighbor_grid_nodes_global_indices_.emplace_back();
   w_ip_neighbor_nodes_.emplace_back();
   dw_ip_neighbor_nodes_.emplace_back();
-  num_particles_++;
+  ++num_particles_;
 }
 
 template class Particles<double>;

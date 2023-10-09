@@ -33,12 +33,12 @@ class Particles {
    * Length of each std::vector is set to num_particles, but zero-initialized.
    * This will be used sampling info is loaded externally.
    */
-  explicit Particles(size_t num_particles_);
+  explicit Particles(size_t num_particles);
 
   // Adds (appends) a particle into Particles with given properties.
   // TODO(zeshunzong): More attributes will come later.
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
-                   T mass, T reference_volume,
+                   const T& mass, const T& reference_volume,
                    const Matrix3<T>& deformation_gradient,
                    const Matrix3<T>& B_matrix);
 
@@ -79,8 +79,8 @@ class Particles {
   const std::vector<Matrix3<T>>& B_matrices() const { return B_matrices_; }
 
   /**
-   * Returns the position of p_th particle.
-   * @pre 0 <= p < num_particles_
+   * Returns the position of p-th particle.
+   * @pre 0 <= p < num_particles()
    */
   const Vector3<T>& GetPositionAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles_);
@@ -88,8 +88,8 @@ class Particles {
   }
 
   /**
-   * Returns the velocity of p_th particle.
-   * @pre 0 <= p < num_particles_
+   * Returns the velocity of p-th particle.
+   * @pre 0 <= p < num_particles()
    */
   const Vector3<T>& GetVelocityAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles_);
@@ -97,8 +97,8 @@ class Particles {
   }
 
   /**
-   * Returns the mass of p_th particle.
-   * @pre 0 <= p < num_particles_
+   * Returns the mass of p-th particle.
+   * @pre 0 <= p < num_particles()
    */
   const T& GetMassAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles_);
@@ -106,8 +106,8 @@ class Particles {
   }
 
   /**
-   * Returns the reference volume of p_th particle.
-   * @pre 0 <= p < num_particles_
+   * Returns the reference volume of p-th particle.
+   * @pre 0 <= p < num_particles()
    */
   const T& GetReferenceVolumeAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles_);
@@ -115,8 +115,8 @@ class Particles {
   }
 
   /**
-   * Returns the deformation gradient of p_th particle.
-   * @pre 0 <= p < num_particles_
+   * Returns the deformation gradient of p-th particle.
+   * @pre 0 <= p < num_particles()
    * @note one must know beforehand if the data stored is F_trial or F_elastic.
    */
   const Matrix3<T>& GetDeformationGradientAt(size_t p) const {
@@ -125,10 +125,10 @@ class Particles {
   }
 
   /**
-   * Returns the B_matrix of p_th particle. B_matrix is part of the affine
+   * Returns the B_matrix of p-th particle. B_matrix is part of the affine
    * momentum matrix C as
    * v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p).
-   * @pre 0 <= p < num_particles_
+   * @pre 0 <= p < num_particles()
    */
   const Matrix3<T>& GetBMatrixAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles_);
@@ -136,8 +136,8 @@ class Particles {
   }
 
   /**
-   * Sets the position at p_th particle from input.
-   * @pre 0 <= p < num_particles_
+   * Sets the position at p-th particle from input.
+   * @pre 0 <= p < num_particles()
    */
   void SetPositionAt(size_t p, const Vector3<T>& position) {
     DRAKE_ASSERT(p < num_particles_);
@@ -145,8 +145,8 @@ class Particles {
   }
 
   /**
-   * Sets the velocity at p_th particle from input.
-   * @pre 0 <= p < num_particles_
+   * Sets the velocity at p-th particle from input.
+   * @pre 0 <= p < num_particles()
    */
   void SetVelocityAt(size_t p, const Vector3<T>& velocity) {
     DRAKE_ASSERT(p < num_particles_);
@@ -154,8 +154,8 @@ class Particles {
   }
 
   /**
-   * Sets the deformation gradient at p_th particle from input.
-   * @pre 0 <= p < num_particles_
+   * Sets the deformation gradient at p-th particle from input.
+   * @pre 0 <= p < num_particles()
    * @note one should know if F_in is F_trial or F_elastic.
    */
   void SetDeformationGradient(size_t p, const Matrix3<T>& F_in) {
@@ -164,8 +164,8 @@ class Particles {
   }
 
   /**
-   * Sets the B_matrix at p_th particle from input.
-   * @pre 0 <= p < num_particles_
+   * Sets the B_matrix at p-th particle from input.
+   * @pre 0 <= p < num_particles()
    */
   void SetBMatrix(size_t p, const Matrix3<T>& B_matrix) {
     DRAKE_ASSERT(p < num_particles_);
@@ -175,7 +175,7 @@ class Particles {
   /**
    * For the node_local-th neighbor (out of a total of 27) grid node of particle
    * p, stores its global index in sparse_grid given by node_global.
-   * @pre p < num_particles_
+   * @pre p < num_particles()
    * @pre node_local < 27
    * @pre node_global < sparse_grid.num_active_nodes()
    */
@@ -189,7 +189,7 @@ class Particles {
   /**
    * Returns the global index (in sparse_grid) of the node_local-th neighbor
    * grid node of particle p.
-   * @pre p < num_particles_
+   * @pre p < num_particles()
    * @pre node_local < 27
    */
   size_t GetNeighborNodeGlobalIndex(size_t p, size_t node_local) const {
@@ -199,7 +199,7 @@ class Particles {
   /**
    * Given particle index p and node_local i, stores w_ip =
    * Nᵢ(xₚ).
-   * @pre p < num_particles_
+   * @pre p < num_particles()
    * @pre node_local < 27
    */
   void SetWeightAtParticleAndNeighborNode(size_t p, size_t node_local,
@@ -212,7 +212,7 @@ class Particles {
   /**
    * Given particle index p and node_local i, stores dw_ip =
    * ∇Nᵢ(xₚ).
-   * @pre p < num_particles_
+   * @pre p < num_particles()
    * @pre node_local < 27
    */
   void SetWeightGradientAtParticleAndNeighborNode(size_t p, size_t node_local,
@@ -225,7 +225,7 @@ class Particles {
   /**
    * Given particle index p and node_local i, returns the stored
    * Nᵢ(xₚ).
-   * @pre p < num_particles_
+   * @pre p < num_particles()
    * @pre node_local < 27
    * @note the stored Nᵢ(xₚ) is meaningless when xₚ changes.
    */
@@ -239,7 +239,7 @@ class Particles {
   /**
    * Given particle index p and node_local i, returns the stored
    * ∇Nᵢ(xₚ).
-   * @pre p < num_particles_
+   * @pre p < num_particles()
    * @pre node_local < 27
    * @note the stored ∇Nᵢ(xₚ) is meaningless when xₚ changes.
    */
