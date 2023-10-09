@@ -10,10 +10,10 @@ namespace internal {
 
 constexpr double kEps = 1e-6;
 
-// See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
-// Return (i, j, k)th entry of the third order permutation tensor
+// See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details.
+// Returns (i, j, k)th entry of the third order permutation tensor.
 // @pre i, j, k ∈ {0, 1, 2}
-double LeviCivita(int i, int j, int k) {
+inline double LeviCivita(int i, int j, int k) {
   // Even permutation
   if ((i == 0 && j == 1 && k == 2) || (i == 1 && j == 2 && k == 0) ||
       (i == 2 && j == 0 && k == 1)) {
@@ -27,10 +27,10 @@ double LeviCivita(int i, int j, int k) {
   return 0.0;
 }
 
-// See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details
-// Calculate A:ε
+// See https://en.wikipedia.org/wiki/Levi-Civita_symbol for details.
+// Computes A:ε
 // TODO(@zeshunzong): Consider unroll the loop and maybe also remove
-// multiplication
+// multiplication.
 template <typename T>
 Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
   Vector3<T> A_dot_eps = {0.0, 0.0, 0.0};
@@ -44,30 +44,34 @@ Vector3<T> ContractionWithLeviCivita(const Matrix3<T>& A) {
   return A_dot_eps;
 }
 
-/**
-   Prevent x from getting more than eps-close to zero
-   See accompanied math_utils.md
-   Autodiff will not work for this function.
-   @pre eps > 0
- */
-double ClampToEpsilon(double x, double eps) {
+// Prevents x from getting more than eps-close to zero. See
+// accompaniedmath_utils.md. Its derivative is 0 when x ∈ (−ε, ε).
+// @pre eps > 0
+template <typename T>
+T ClampToEpsilon(const T& x, double eps) {
   DRAKE_ASSERT(eps >= 0);
-  if (x < -eps) {
+  using std::abs;  // ADL overload to AutoDiff type
+  if (abs(x) >= eps) {
     return x;
-  } else if (x < 0) {
-    return -eps;
-  } else if (x < eps) {
-    return eps;
+  } else if (x >= 0) {
+    if constexpr (std::is_same_v<T, AutoDiffXd>) {
+      return AutoDiffXd(eps, VectorX<double>::Zero(x.derivatives().size()));
+
+    } else {
+      return eps;
+    }
   } else {
-    return x;
+    if constexpr (std::is_same_v<T, AutoDiffXd>) {
+      return AutoDiffXd(-eps, VectorX<double>::Zero(x.derivatives().size()));
+    } else {
+      return -eps;
+    }
   }
 }
 
-/**
-   Robustly computing log(x+1)/x based on Taylor expansion.
-   See accompanied math_utils.md.
-   @pre x > -1
- */
+// Robustly computes log(x+1)/x based on Taylor expansion. See accompanied
+// math_utils.md.
+// @pre x > -1
 template <typename T>
 T CalcLogXPlus1OverX(const T& x) {
   DRAKE_ASSERT(x > -1);
@@ -82,14 +86,11 @@ T CalcLogXPlus1OverX(const T& x) {
   }
 }
 
-/**
-   Robustly computing (logx-logy)/(x-y).
-   Approximation via Taylor expansion when |x/y-1|<kEps.
-   See accompanied math_utils.md
-   @pre x > 0
-   @pre y > 0
-   @pre x != y
- */
+// Robustly computes (logx-logy)/(x-y). Approximation via Taylor expansion when
+// |x/y-1|<kEps. See accompanied math_utils.md.
+// @pre x > 0
+// @pre y > 0
+// @pre x != y
 template <typename T>
 T CalcLogXMinusLogYOverXMinusY(const T& x, const T& y) {
   DRAKE_ASSERT(x > 0);
@@ -99,13 +100,10 @@ T CalcLogXMinusLogYOverXMinusY(const T& x, const T& y) {
   return CalcLogXPlus1OverX(p) / y;
 }
 
-/**
-   Robustly computing (x logy - y logx)/(x-y)
-   See accompanied math_utils.md
-   @pre x > 0
-   @pre y > 0
-   @pre x != y
- */
+// Robustly computes (x logy - y logx)/(x-y). See accompanied math_utils.md.
+// @pre x > 0
+// @pre y > 0
+// @pre x != y
 template <typename T>
 T CalcXLogYMinusYLogXOverXMinusY(const T& x, const T& y) {
   DRAKE_ASSERT(x > 0);
@@ -115,10 +113,8 @@ T CalcXLogYMinusYLogXOverXMinusY(const T& x, const T& y) {
   return log(y) - y * CalcLogXMinusLogYOverXMinusY(x, y);
 }
 
-/**
-   Robustly computing (expx-1)/x based on Taylor expansion.
-   See accompanied math_utils.md
- */
+// Robustly computes (expx-1)/x based on Taylor expansion. See accompanied
+// math_utils.md.
 template <typename T>
 T CalcExpXMinus1OverX(const T& x) {
   using std::abs;
@@ -132,11 +128,8 @@ T CalcExpXMinus1OverX(const T& x) {
   }  // ADL overload to AutoDiff type, std::expm1 not supperted
 }
 
-/**
-   Robustly computing (expx-expy)/(x-y).
-   Approximation via Taylor expansion when |x-y|<kEps.
-   See accompanied math_utils.md
- */
+// Robustly computes (expx-expy)/(x-y). Approximation via Taylor expansion when
+// |x-y|<kEps. See accompanied math_utils.md.
 template <typename T>
 T CalcExpXMinusExpYOverXMinusY(const T& x, const T& y) {
   T p = x - y;

@@ -16,6 +16,7 @@ namespace internal {
 template <typename T>
 class BSpline {
  public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(BSpline);
   // Constructs a 3D quadratic B spline (function) centered at center with
   // scaling h. See class documentation for details.
   // @pre h > 0
