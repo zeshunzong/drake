@@ -15,6 +15,10 @@ namespace mpm {
 /**
  * A Particles class holding particle states as several std::vectors.
  * Each particle carries its own position, velocity, mass, volume, etc.
+ * 
+ * The Material Point Method (MPM) consists of a set of particles (implemented in this class) and a background Eulerian grid (implemented in sparse_grid.h).
+ * At each time step, particle mass and momentum are transferred to the grid nodes via a B-spline interpolation function
+ * (implemented in internal::b_spline.h). 
  */
 template <typename T>
 class Particles {
