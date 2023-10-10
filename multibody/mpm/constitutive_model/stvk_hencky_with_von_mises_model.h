@@ -56,18 +56,16 @@ namespace constitutive_model {
 // change with respect to time. This is equivalent to the formulation in
 // (BW Box 7.1) with H = 0.
 template <typename T>
-class StvkHenckyWithVonMisesModel2 : public ElastoPlasticModel<T> {
+class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
  public:
-  /**
-   * Yield stress is the minimum stress at which the material undergoes plastic
-   * deformation
-   * @pre yield_stress > 0
-   */
-  StvkHenckyWithVonMisesModel2(const T& E, const T& nu, const T& yield_stress);
+  // Constructs the model with an additional parameter yield_stress.
+  // Yield stress is the minimum stress at which the material undergoes plastic
+  // deformation.
+  // @pre yield_stress > 0
+  StvkHenckyWithVonMisesModel(const T& E, const T& nu, const T& yield_stress);
 
-
-  virtual std::unique_ptr<ElastoPlasticModel<T>> Clone() const {
-    return std::make_unique<StvkHenckyWithVonMisesModel2<T>>(*this);
+  std::unique_ptr<ElastoPlasticModel<T>> Clone() const {
+    return std::make_unique<StvkHenckyWithVonMisesModel<T>>(*this);
   }
 
   T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
@@ -81,39 +79,24 @@ class StvkHenckyWithVonMisesModel2 : public ElastoPlasticModel<T> {
   void CalcFirstPiolaStressDerivative(const Matrix3<T>& FE,
                                       Eigen::Matrix<T, 9, 9>* dPdF) const final;
 
-  void UpdateDeformationGradientAndCalcKirchhoffStress(
-      Matrix3<T>* tau,
-      Matrix3<T>* trial_elastic_deformation_gradient) const final;
-
  private:
-  // Given the Hencky strain ε, assume the SVD of it is U Σ Vᵀ,
-  // We store U in `U`, V in `V`, eps_hat in `Σ`, and tr(Σ) in `tr_eps`
-  struct StrainData {
-    Matrix3<T> U;
-    Matrix3<T> V;
-    Vector3<T> eps_hat;
-    T tr_eps;
-    Vector3<T> sigma;
-    Vector3<T> sigma_inverse;
-  };
-  
   // Given deformation gradient F, stores the following results
   // U, V: from svd such that F = U Σ Vᵀ, Matrix3
-  // Sigma: diag(Σ), Vector3
-  // OneOverSigma: 1./diag(Σ), Vector3
-  // log_Sigma: log(diag(Σ)), Vector3
-  // log_Sigma_trace: sum(log(diag(Σ))), scalar
-  // deviatoric_tau: the deviatoric component of τ in the principal frame, Vector3
-  // N.B.: user should pay attention to whether the data is computed from
+  // sigma: diag(Σ), Vector3
+  // one_over_sigma: 1./diag(Σ), Vector3
+  // log_sigma: log(diag(Σ)), Vector3
+  // log_sigma_trace: sum(log(diag(Σ))), scalar
+  // deviatoric_tau: deviatoric component of τ in principal frame, Vector3
+  // @note: user should pay attention to whether the data is computed from
   // F_trial or FE
-  
+
   struct StrainStressData {
     Matrix3<T> U;
     Matrix3<T> V;
-    Vector3<T> Sigma;
-    Vector3<T> OneOverSigma;
-    Vector3<T> log_Sigma;
-    T log_Sigma_trace;
+    Vector3<T> sigma;
+    Vector3<T> one_over_sigma;
+    Vector3<T> log_sigma;
+    T log_sigma_trace;
     Vector3<T> deviatoric_tau;
   };
 
@@ -135,18 +118,17 @@ class StvkHenckyWithVonMisesModel2 : public ElastoPlasticModel<T> {
     T psi_02;  // d^2_psi_d_sigma0_d_sigma2
     T psi_12;  // d^2_psi_d_sigma1_d_sigma2
 
-
-    T m01;    // (psi_0-psi_1)/(sigma0-sigma1), usually can be computed robustly
-    T p01;    // (psi_0+psi_1)/(sigma0+sigma1), need to clamp bottom with 1e-6
-    T m02;    // (psi_0-psi_2)/(sigma0-sigma2), usually can be computed robustly
-    T p02;    // (psi_0+psi_2)/(sigma0+sigma2), need to clamp bottom with 1e-6
-    T m12;    // (psi_1-psi_2)/(sigma1-sigma2), usually can be computed robustly
-    T p12;    // (psi_1+psi_2)/(sigma1+sigma2), need to clamp bottom with 1e-6
+    T m01;  // (psi_0-psi_1)/(sigma0-sigma1), usually can be computed robustly
+    T p01;  // (psi_0+psi_1)/(sigma0+sigma1), need to clamp denominator
+    T m02;  // (psi_0-psi_2)/(sigma0-sigma2), usually can be computed robustly
+    T p02;  // (psi_0+psi_2)/(sigma0+sigma2), need to clamp denominator
+    T m12;  // (psi_1-psi_2)/(sigma1-sigma2), usually can be computed robustly
+    T p12;  // (psi_1+psi_2)/(sigma1+sigma2), need to clamp denominator
 
     Vector3<T> dpsi_dsigma_i;
   };
-  
-  // Returns the (i,j)'s entry of Matrix B01.
+
+  // Returns the (i,j)'s entry of Matrix B01. See accompanied doc.
   // @pre i = 0 or 1
   // @pre j = 0 or 1
   T B01(const PsiSigmaDerivatives& psi_derivatives, int i, int j) const {
@@ -155,7 +137,7 @@ class StvkHenckyWithVonMisesModel2 : public ElastoPlasticModel<T> {
            0.5;
   }
 
-  // Returns the (i,j)'s entry of Matrix B12.
+  // Returns the (i,j)'s entry of Matrix B12. See accompanied doc.
   // @pre i = 0 or 1
   // @pre j = 0 or 1
   T B12(const PsiSigmaDerivatives& psi_derivatives, int i, int j) const {
@@ -164,7 +146,7 @@ class StvkHenckyWithVonMisesModel2 : public ElastoPlasticModel<T> {
            0.5;
   }
 
-  // Returns the (i,j)'s entry of Matrix B20.
+  // Returns the (i,j)'s entry of Matrix B20. See accompanied doc.
   // @pre i = 0 or 1
   // @pre j = 0 or 1
   T B20(const PsiSigmaDerivatives& psi_derivatives, int i, int j) const {
@@ -173,28 +155,24 @@ class StvkHenckyWithVonMisesModel2 : public ElastoPlasticModel<T> {
            0.5;
   }
 
-
   PsiSigmaDerivatives CalcPsiSigmaDerivative(const Matrix3<T>& FE) const;
 
-  // Returns f(dev(τ)) = sqrt(3/2)‖ dev(τ) ‖ - τ_c, where dev(τ) is the deviatoric
-  // component of Kirchhoff stress in the principal frame, and τ_c is yield_stress
+  // Returns f(dev(τ)) = sqrt(3/2)‖ dev(τ) ‖ - τ_c, where dev(τ) is the
+  // deviatoric component of Kirchhoff stress in the principal frame, and τ_c is
+  // yield_stress
   T ComputeYieldFunction(const Vector3<T>& deviatoric_tau) const;
 
-  /**
-   * If yields, apply ReturnMap(F_trial) to obtain the ELASTIC deformation
-   * gradient FE (modify F_trial in place). 
-   */
-  void ApplyReturnMapping(
-      const StrainStressData& strain_stress_data_trial, Matrix3<T>* F_trial) const;
-
-
+  // Applies ReturnMap(F_trial) onto the trial deformation gradient to get
+  // *elastic* deformation gradient.
+  void ApplyReturnMapping(const StrainStressData& strain_stress_data_trial,
+                          Matrix3<T>* F_trial) const;
 
   T yield_stress_;
   // sqrt(3.0/2.0)
   const double kSqrt3Over2 = 1.224744871391589;
-  // used in clamping denominator.
-  const double kEpsilon = 1e-12;  
-};          
+  // kEpsilon used in clamping denominator.
+  const double kEpsilon = 1e-10;
+};
 
 }  // namespace constitutive_model
 }  // namespace mpm

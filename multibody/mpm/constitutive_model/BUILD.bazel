@@ -50,4 +50,28 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "stvk_hencky_with_von_mises_model",
+    srcs = [
+        "stvk_hencky_with_von_mises_model.cc",
+    ],
+    hdrs = [
+        "stvk_hencky_with_von_mises_model.h",
+    ],
+    deps = [
+        ":elastoplastic_model",
+    ],
+)
+
+drake_cc_googletest(
+    name = "stvk_hencky_with_von_mises_model_test",
+    deps = [
+        ":stvk_hencky_with_von_mises_model",
+        "//common:autodiff",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//math:geometric_transform",
+        "//math:gradient",
+    ],
+)
+
 add_lint_tests()

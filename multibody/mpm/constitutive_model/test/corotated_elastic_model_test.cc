@@ -19,7 +19,6 @@ namespace constitutive_model {
 namespace {
 
 using Eigen::Matrix3d;
-using Eigen::Matrix3Xd;
 
 constexpr double kTolerance = 1e-12;
 
