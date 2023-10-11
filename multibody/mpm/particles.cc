@@ -18,7 +18,10 @@ Particles<T>::Particles(size_t num_particles)
       B_matrices_(num_particles),
       neighbor_grid_nodes_global_indices_(num_particles),
       w_ip_neighbor_nodes_(num_particles),
-      dw_ip_neighbor_nodes_(num_particles) {}
+      dw_ip_neighbor_nodes_(num_particles),
+      temporary_scalar_field_(num_particles),
+      temporary_vector_field_(num_particles),
+      temporary_matrix_field_(num_particles) {}
 
 template <typename T>
 void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
@@ -28,14 +31,15 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
     // already been sorted
     size_t ind = new_order[i];
     // the i-th element should be placed at ind-th position
-    if (ind < i) {
-      // its correct position is before i. In this case, the element must have
-      // already been swapped to a position after i. find out where it has been
-      // swapped to.
-      while (ind < i) {
-        ind = new_order[ind];
-      }
-    }
+    // if (ind < i) {
+    //   // its correct position is before i. In this case, the element must have
+    //   // already been swapped to a position after i. find out where it has been
+    //   // swapped to.
+    //   while (ind < i) {
+    //     ind = new_order[ind];
+    //   }
+    // }
+    ind = chase_index(ind, i, new_order);
     // after this operation, ind is either equal to i or larger than i
     if (ind == i) {
       // at its correct position, nothing needs to be done
@@ -57,6 +61,42 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
   }
 }
 
+
+
+template <typename T>
+void Particles<T>::Reorder2(const std::vector<size_t>& new_order) {
+  DRAKE_DEMAND((new_order.size()) == num_particles_);
+
+  temporary_scalar_field_ = masses_;
+  for (size_t i = 0; i < num_particles_; ++i) {
+    masses_[i] = temporary_scalar_field_[new_order[i]];
+  }
+  temporary_scalar_field_ = reference_volumes_;
+  for (size_t i = 0; i < num_particles_; ++i) {
+    reference_volumes_[i] = temporary_scalar_field_[new_order[i]];
+  }
+
+  temporary_vector_field_ = positions_;
+  for (size_t i = 0; i < num_particles_; ++i) {
+    positions_[i] = temporary_vector_field_[new_order[i]];
+  }  
+
+  temporary_vector_field_ = velocities_;
+  for (size_t i = 0; i < num_particles_; ++i) {
+    velocities_[i] = temporary_vector_field_[new_order[i]];
+  }  
+
+  temporary_matrix_field_ = deformation_gradients_;
+  for (size_t i = 0; i < num_particles_; ++i) {
+    deformation_gradients_[i] = temporary_matrix_field_[new_order[i]];
+  }  
+
+  temporary_matrix_field_ = B_matrices_;
+  for (size_t i = 0; i < num_particles_; ++i) {
+    B_matrices_[i] = temporary_matrix_field_[new_order[i]];
+  }  
+}
+
 template <typename T>
 void Particles<T>::AddParticle(const Vector3<T>& position,
                                const Vector3<T>& velocity, const T& mass,
@@ -73,6 +113,10 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
   w_ip_neighbor_nodes_.emplace_back();
   dw_ip_neighbor_nodes_.emplace_back();
   ++num_particles_;
+
+  temporary_scalar_field_.emplace_back();
+  temporary_vector_field_.emplace_back();
+  temporary_matrix_field_.emplace_back();
 }
 
 template class Particles<double>;

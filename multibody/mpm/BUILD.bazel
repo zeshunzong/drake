@@ -33,4 +33,11 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_googletest(
+    name = "reorder_speed_test",
+    deps = [
+        ":particles",
+    ],
+)
+
 add_lint_tests()

@@ -53,6 +53,21 @@ class Particles {
   // @pre new_order is a permutation of [0, ..., num_particles-1]
   void Reorder(const std::vector<size_t>& new_order);
 
+  void Reorder2(const std::vector<size_t>& new_order);
+
+
+  size_t chase_index(size_t ind, size_t i, const std::vector<size_t>& new_order) {
+    if (ind < i) {
+      // its correct position is before i. In this case, the element must have
+      // already been swapped to a position after i. find out where it has been
+      // swapped to.
+      while (ind < i) {
+        ind = new_order[ind];
+      }
+    }
+    return ind;
+  }
+
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
    * velocity.
@@ -277,6 +292,11 @@ class Particles {
   std::vector<std::array<size_t, 27>> neighbor_grid_nodes_global_indices_{};
   std::vector<std::array<T, 27>> w_ip_neighbor_nodes_{};
   std::vector<std::array<Vector3<T>, 27>> dw_ip_neighbor_nodes_{};
+
+  std::vector<T> temporary_scalar_field_{};
+  std::vector<Vector3<T>> temporary_vector_field_{};
+  std::vector<Matrix3<T>> temporary_matrix_field_{};
+
 };
 }  // namespace mpm
 }  // namespace multibody
