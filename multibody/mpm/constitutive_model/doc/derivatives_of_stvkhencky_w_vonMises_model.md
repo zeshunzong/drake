@@ -1,7 +1,7 @@
-How return mapping should be performed has already been documented. Here we derive the derivative relationships.
+How return mapping should be performed has already been documented in the class documentation. More details can be seen in https://www.math.ucla.edu/~cffjiang/research/sand/paper.pdf and https://www.math.ucla.edu/~cffjiang/research/sand/tech-doc.pdf. Here we derive the derivative relationships.
 
-Below we denote $F$ as the deformation gradient *after* return mapping, i,e, the *.
-​
+Below we denote $F$ as the deformation gradient *after* return mapping, i,e, the *elastic* deformation gradient.
+
 Write 
 $$F = U \Sigma V^T,$$
 with $\Sigma = \operatorname{diag}(\sigma_0, \sigma_1, \sigma_2).$
@@ -14,11 +14,11 @@ $$
 \end{aligned}
 $$
 First Piola Stress is $\frac{d\psi}{dF}.$
-$$P =\frac{d\psi}{dF}= U \frac{d\psi}{d\Sigma} V^T.$$
+$$P =\frac{d\psi}{dF}= U \frac{d\hat{\psi}}{d\Sigma} V^T.$$
 $$
 \begin{aligned}
-\frac{\partial \psi}{\partial \sigma_i} & =\frac{1}{\sigma_i}\left[2 \mu\left(\log \sigma_i\right)+\lambda\left(\log \sigma_0+\log \sigma_1+\log \sigma_2\right)\right] \\
-& =\Sigma^{-1}[2 \mu(\log \Sigma)+\operatorname{trace}(\log \Sigma)].
+\frac{\partial \hat{\psi}}{\partial \sigma_i} & =\frac{1}{\sigma_i}\left[2 \mu\left(\log \sigma_i\right)+\lambda\left(\log \sigma_0+\log \sigma_1+\log \sigma_2\right)\right] \\
+& =\Sigma^{-1}[2 \mu(\log \Sigma)+\operatorname{tr}(\log \Sigma)].
 \end{aligned}
 $$
 Next we compute $\frac{dP}{dF}.$
@@ -77,12 +77,3 @@ $$
 Here $C = \log \sigma_0+\log \sigma_1+\log \sigma_2.$
 
 In implementation we write `ij=3*j+i` and `rs=3*s+r`, so that the fourth-order tensor is reshaped to a 9by9 matrix.
-
-
-
-
-
-
-
-
-
