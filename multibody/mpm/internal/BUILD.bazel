@@ -81,4 +81,20 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "poisson_disk",
+    srcs = [
+        "poisson_disk.cc",
+    ],
+    hdrs = [
+        "poisson_disk.h",
+    ],
+    interface_deps = [
+        "//common:essential",
+    ],
+    deps = [
+        "@poisson_disk_sampling_internal//:poisson_disk_sampling",
+    ],
+)
+
 add_lint_tests()
