@@ -21,9 +21,9 @@ class CorotatedElasticModel : public ElastoPlasticModel<T> {
     return std::make_unique<CorotatedElasticModel<T>>(*this);
   }
 
-  T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
-
   void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final;
+
+  T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
 
   void CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix3<T>* P) const final;
 
