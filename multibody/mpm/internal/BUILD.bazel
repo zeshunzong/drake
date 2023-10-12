@@ -97,4 +97,12 @@ drake_cc_library(
     ],
 )
 
+drake_cc_googletest(
+    name = "poisson_disk_test",
+    deps = [
+        ":poisson_disk",
+        "//common:essential",
+    ],
+)
+
 add_lint_tests()
