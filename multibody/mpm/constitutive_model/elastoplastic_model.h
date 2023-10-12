@@ -13,6 +13,7 @@ namespace constitutive_model {
 // A base class providing the interface of constituive and plastic model. Any
 // elastoplastic model is parametrized by at least youngs_modulus E and
 // poissons_ratio nu.
+// Youngs_modulus has unit N/m², poissons_ratio is unitless
 template <typename T>
 class ElastoPlasticModel {
  public:
@@ -34,11 +35,6 @@ class ElastoPlasticModel {
     mu_ = (youngs_modulus_ / (2 * (1 + poissons_ratio_)));
   }
 
-  // Returns ψ(FE) where ψ is the energy density function. FE is the *elastic*
-  // part of deformation gradient.
-  // TODO(zeshunzong): consider adding an Eval function based on cached FE.
-  virtual T CalcStrainEnergyDensity(const Matrix3<T>& FE) const = 0;
-
   // Computes the *elastic* deformation gradient FE from the *trial* deformation
   // gradient F_trial, and writes FE to F_trial. For elastic model, FE =
   // F_trial. For elastoplastic model, FE = ReturnMap(F_trial) when yield_stress
@@ -47,6 +43,11 @@ class ElastoPlasticModel {
   // gradient; on ouput, returns the *elastic* deformation gradient.
   // @pre F_trial != null_ptr
   virtual void CalcFEFromFtrial(Matrix3<T>* F_trial) const = 0;
+
+  // Returns ψ(FE) where ψ is the energy density function. FE is the *elastic*
+  // part of deformation gradient.
+  // TODO(zeshunzong): consider adding an Eval function based on cached FE.
+  virtual T CalcStrainEnergyDensity(const Matrix3<T>& FE) const = 0;
 
   // Calculates the first Piola Kirchhoff stress P = dψ(FE)/dFE, where FE is the
   // *elastic* deformation gradient.
