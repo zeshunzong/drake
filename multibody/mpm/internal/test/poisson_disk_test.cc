@@ -20,7 +20,7 @@ GTEST_TEST(PoissonDiskTest, TestOnePoint) {
 
   auto result = PoissonDiskSampling(r, x_min, x_max);
 
-  // redius is larger than diagonal of bounding box, should return only one
+  // radius is larger than diagonal of bounding box, should return only one
   // point
   EXPECT_EQ(result.size(), 1);
   // this point should be inside
@@ -54,15 +54,16 @@ GTEST_TEST(PoissonDiskTest, TestDistance) {
     EXPECT_TRUE(result[i](2) <= -0.1 + 1);
   }
 
+  EXPECT_TRUE(result.size() > 1);
+  // indeed more than one point. in fact, 32 points
+
   for (size_t i = 0; i < result.size(); ++i) {
-    for (size_t j = 0; j < result.size(); ++j) {
-      if (j != i) {
-        double distance_sq =
-            (result[i](0) - result[j](0)) * (result[i](0) - result[j](0)) +
-            (result[i](1) - result[j](1)) * (result[i](1) - result[j](1)) +
-            (result[i](2) - result[j](2)) * (result[i](2) - result[j](2));
-        EXPECT_TRUE(distance_sq >= r * r);
-      }
+    for (size_t j = i; j < result.size(); ++j) {
+      double distance_sq =
+          (result[i](0) - result[j](0)) * (result[i](0) - result[j](0)) +
+          (result[i](1) - result[j](1)) * (result[i](1) - result[j](1)) +
+          (result[i](2) - result[j](2)) * (result[i](2) - result[j](2));
+      EXPECT_TRUE(distance_sq >= r * r);
     }
   }
 }
