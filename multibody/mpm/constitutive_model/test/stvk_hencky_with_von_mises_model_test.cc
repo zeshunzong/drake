@@ -16,16 +16,57 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 namespace constitutive_model {
+
+constexpr double kTolerance = 1e-12;
+
+class StvkHenckyWithVonMisesModelTester {
+ public:
+  void TestReturnMap() {
+    // clang-format off
+    Matrix3<double> F =
+    (Matrix3<double>() << 1.18, 0.68, 0.54,
+                          0.13, 0.92, 0.17,
+                          0.03, 0.86, 0.85).finished();
+    // clang-format on
+
+    const double E = 23.4;
+    const double nu = 0.41;
+    const double yield_stress = 1.0;
+    const StvkHenckyWithVonMisesModel<double> hencky_model = {E, nu,
+                                                              yield_stress};
+
+    const StvkHenckyWithVonMisesModel<double>::StrainStressData ssd =
+        hencky_model.ComputeStrainStressData(F);
+    const double yield = hencky_model.ComputeYieldFunction(ssd.deviatoric_tau);
+    EXPECT_TRUE(yield > 0.0);  // it indeed yields
+
+    hencky_model.CalcFEFromFtrial(&F);  // apply returnMap
+
+    const StvkHenckyWithVonMisesModel<double>::StrainStressData ssd_after =
+        hencky_model.ComputeStrainStressData(F);
+    const double yield_after =
+        hencky_model.ComputeYieldFunction(ssd_after.deviatoric_tau);
+    EXPECT_NEAR(yield_after, 0.0, kTolerance);  // should not yield
+
+    // the deviatoric_tau before and after should be parallel
+    EXPECT_NEAR(ssd_after.deviatoric_tau(0) / ssd.deviatoric_tau(0),
+                ssd_after.deviatoric_tau(1) / ssd.deviatoric_tau(1),
+                kTolerance);
+    EXPECT_NEAR(ssd_after.deviatoric_tau(1) / ssd.deviatoric_tau(1),
+                ssd_after.deviatoric_tau(2) / ssd.deviatoric_tau(2),
+                kTolerance);
+  }
+};
+
 namespace {
 
 using Eigen::Matrix3d;
 using Eigen::Matrix3Xd;
 
-constexpr double kTolerance = 1e-12;
-
 Matrix3<AutoDiffXd> MakeDeformationGradientsWithDerivatives() {
   /* Create an arbitrary AutoDiffXd deformation. */
   Matrix3d F;
+
   // clang-format off
   F << 1.18, 0.63, 0.54,
        0.13, 0.92, 0.17,
@@ -41,9 +82,6 @@ Matrix3<AutoDiffXd> MakeDeformationGradientsWithDerivatives() {
 }
 
 GTEST_TEST(StvkWithVonMisesModelTest, SanityCheck) {
-  // TODO(zeshunzong): currently we don't have a way to test return mapping. As
-  // a result, we set the yield stress large enough so that no plasticity is
-  // applied.
   // Sanity check: If F_trial is a rotation matrix, then stresses are
   // zero
 
@@ -73,21 +111,10 @@ GTEST_TEST(StvkWithVonMisesModelTest, SanityCheck) {
                               kTolerance));
 }
 
-
-// class StvkHenckyWithVonMisesModelTester{
-//   public:
-
-//   StvkHenckyWithVonMisesModelTester(){
-//     StvkHenckyWithVonMisesModel<double>::StrainStressData ssd;
-//   }
-
-// };
-
-// GTEST_TEST(StvkWithVonMisesModelTest, TestReturnMapping) {
-
-
-
-// }
+GTEST_TEST(StvkWithVonMisesModelTest, TestReturnMapping) {
+  StvkHenckyWithVonMisesModelTester tester;
+  tester.TestReturnMap();
+}
 
 GTEST_TEST(StvkWithVonMisesModelTest, TestPsiTauP) {
   // For  F with SVD

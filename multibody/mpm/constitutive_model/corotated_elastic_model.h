@@ -15,6 +15,8 @@ namespace constitutive_model {
 template <typename T>
 class CorotatedElasticModel : public ElastoPlasticModel<T> {
  public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(CorotatedElasticModel)
+
   CorotatedElasticModel(const T& youngs_modulus, const T& poissons_ratio);
 
   std::unique_ptr<ElastoPlasticModel<T>> Clone() const final {
