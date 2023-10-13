@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 
 #include "drake/multibody/mpm/constitutive_model/elastoplastic_model.h"
 
@@ -58,6 +59,7 @@ namespace constitutive_model {
 template <typename T>
 class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
  public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(StvkHenckyWithVonMisesModel)
   // Constructs the model with an additional parameter yield_stress with unit
   // N/m². Yield stress is the minimum stress at which the material undergoes
   // plastic deformation.
@@ -87,9 +89,18 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
   void CalcFirstPiolaStressDerivative(const Matrix3<T>& FE,
                                       Eigen::Matrix<T, 9, 9>* dPdF) const final;
 
+  struct StrainStressData {
+    Matrix3<T> U;
+    Matrix3<T> V;
+    Vector3<T> sigma;
+    Vector3<T> one_over_sigma;
+    Vector3<T> log_sigma;
+    T log_sigma_trace;
+    Vector3<T> deviatoric_tau;
+  };
+
  private:
   friend class StvkHenckyWithVonMisesModelTester;
-
 
   // Given deformation gradient F, stores the following results
   // U, V: from svd such that F = U Σ Vᵀ, Matrix3
@@ -100,18 +111,6 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
   // deviatoric_tau: deviatoric component of τ in principal frame, Vector3
   // @note: user should pay attention to whether the data is computed from
   // F_trial or FE
-
-  struct StrainStressData {
-    Matrix3<T> U;
-    Matrix3<T> V;
-    Vector3<T> sigma;
-    Vector3<T> one_over_sigma;
-    Vector3<T> log_sigma;
-    T log_sigma_trace;
-    Vector3<T> deviatoric_tau;
-
-    friend class StvkHenckyWithVonMisesModelTester;
-  };
 
   StrainStressData ComputeStrainStressData(const Matrix3<T>& F_trial) const;
 
@@ -186,9 +185,9 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
 
   T yield_stress_{};
   // sqrt(3.0/2.0)
-  const double kSqrt3Over2 = 1.224744871391589;
+  static constexpr double kSqrt3Over2 = 1.224744871391589;
   // kEpsilon used in clamping denominator.
-  const double kEpsilon = 1e-10;
+  static constexpr double kEpsilon = 1e-10;
 };
 
 }  // namespace constitutive_model
