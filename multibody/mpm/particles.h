@@ -15,10 +15,12 @@ namespace mpm {
 /**
  * A Particles class holding particle states as several std::vectors.
  * Each particle carries its own position, velocity, mass, volume, etc.
- * 
- * The Material Point Method (MPM) consists of a set of particles (implemented in this class) and a background Eulerian grid (implemented in sparse_grid.h).
- * At each time step, particle mass and momentum are transferred to the grid nodes via a B-spline interpolation function
- * (implemented in internal::b_spline.h). 
+ *
+ * The Material Point Method (MPM) consists of a set of particles (implemented
+ * in this class) and a background Eulerian grid (implemented in sparse_grid.h).
+ * At each time step, particle mass and momentum are transferred to the grid
+ * nodes via a B-spline interpolation function (implemented in
+ * internal::b_spline.h).
  */
 template <typename T>
 class Particles {
@@ -39,34 +41,41 @@ class Particles {
    */
   explicit Particles(size_t num_particles);
 
-  // Adds (appends) a particle into Particles with given properties.
-  // TODO(zeshunzong): More attributes will come later.
+  /**
+   *  Adds (appends) a particle into Particles with given properties.
+   * <!-- TODO(zeshunzong): More attributes will come later. -->
+   */
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
                    const T& mass, const T& reference_volume,
                    const Matrix3<T>& deformation_gradient,
                    const Matrix3<T>& B_matrix);
 
-  // Permutes all states in Particles with respect to the index set
-  // new_order. e.g. given new_order = [2; 0; 1], and the original
-  // particle states are denoted by [p0; p1; p2]. The new particles states
-  // after calling Reorder() will be [p2; p0; p1]
-  // @pre new_order is a permutation of [0, ..., num_particles-1]
+  /**
+   * Permutes all states in Particles with respect to the index set new_order.
+   * e.g. given new_order = [2; 0; 1], and the original particle states are
+   * denoted by [p0; p1; p2]. The new particles states after calling Reorder()
+   * will be [p2; p0; p1].
+   * @pre new_order is a permutation of [0, ..., num_particles-1]
+   * @note this algorithm uses index-chasing and might be O(n^2) in worst case.
+   * <!-- TODO(zeshunzong): this algorithm is insanely fast for "simple"
+   * permutations. A standard O(n) algorithm is implemented below in Reorder2().
+   * We should decide on which one to choose once the whole MPM pipeline is
+   * finished. -->
+   * <!-- TODO(zeshunzong): May need to reorder more attributes as more
+   * attributes are added. -->
+   */
   void Reorder(const std::vector<size_t>& new_order);
 
+  /**
+   * Performs the same function as Reorder but in a constant O(n) way.
+   * <!-- TODO(zeshunzong): Technically we can reduce the number of copies
+   * introducing a flag and alternatingly return the (currently) ordered
+   * attribute. Since we haven't decided which algorithm to use, for clarity
+   * let's defer this for future. -->
+   * <!-- TODO(zeshunzong): May need to reorder more attributes as more
+   * attributes are added. -->
+   */
   void Reorder2(const std::vector<size_t>& new_order);
-
-
-  size_t chase_index(size_t ind, size_t i, const std::vector<size_t>& new_order) {
-    if (ind < i) {
-      // its correct position is before i. In this case, the element must have
-      // already been swapped to a position after i. find out where it has been
-      // swapped to.
-      while (ind < i) {
-        ind = new_order[ind];
-      }
-    }
-    return ind;
-  }
 
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
@@ -147,6 +156,8 @@ class Particles {
    * Returns the B_matrix of p-th particle. B_matrix is part of the affine
    * momentum matrix C as
    * v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p).
+   * See (173) in
+   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
    * @pre 0 <= p < num_particles()
    */
   const Matrix3<T>& GetBMatrixAt(size_t p) const {
@@ -191,84 +202,6 @@ class Particles {
     B_matrices_[p] = B_matrix;
   }
 
-  /**
-   * For the node_local-th neighbor (out of a total of 27) grid node of particle
-   * p, stores its global index in sparse_grid given by node_global.
-   * @pre p < num_particles()
-   * @pre node_local < 27
-   * @pre node_global < sparse_grid.num_active_nodes()
-   */
-  void SetNeighborNodeGlobalIndex(size_t p, size_t node_local,
-                                  size_t node_global) {
-    DRAKE_ASSERT(p < num_particles_);
-    DRAKE_ASSERT(node_local < 27);
-    neighbor_grid_nodes_global_indices_[p][node_local] = node_global;
-  }
-
-  /**
-   * Returns the global index (in sparse_grid) of the node_local-th neighbor
-   * grid node of particle p.
-   * @pre p < num_particles()
-   * @pre node_local < 27
-   */
-  size_t GetNeighborNodeGlobalIndex(size_t p, size_t node_local) const {
-    return neighbor_grid_nodes_global_indices_[p][node_local];
-  }
-
-  /**
-   * Given particle index p and node_local i, stores w_ip =
-   * Nᵢ(xₚ).
-   * @pre p < num_particles()
-   * @pre node_local < 27
-   */
-  void SetWeightAtParticleAndNeighborNode(size_t p, size_t node_local,
-                                          const T& w_ip) {
-    DRAKE_ASSERT(p < num_particles_);
-    DRAKE_ASSERT(node_local < 27);
-    w_ip_neighbor_nodes_[p][node_local] = w_ip;
-  }
-
-  /**
-   * Given particle index p and node_local i, stores dw_ip =
-   * ∇Nᵢ(xₚ).
-   * @pre p < num_particles()
-   * @pre node_local < 27
-   */
-  void SetWeightGradientAtParticleAndNeighborNode(size_t p, size_t node_local,
-                                                  const Vector3<T>& dw_ip) {
-    DRAKE_ASSERT(p < num_particles_);
-    DRAKE_ASSERT(node_local < 27);
-    dw_ip_neighbor_nodes_[p][node_local] = dw_ip;
-  }
-
-  /**
-   * Given particle index p and node_local i, returns the stored
-   * Nᵢ(xₚ).
-   * @pre p < num_particles()
-   * @pre node_local < 27
-   * @note the stored Nᵢ(xₚ) is meaningless when xₚ changes.
-   */
-  const T& GetWeightAtParticleAndNeighborNode(size_t p,
-                                              size_t node_local) const {
-    DRAKE_ASSERT(p < num_particles_);
-    DRAKE_ASSERT(node_local < 27);
-    return w_ip_neighbor_nodes_[p][node_local];
-  }
-
-  /**
-   * Given particle index p and node_local i, returns the stored
-   * ∇Nᵢ(xₚ).
-   * @pre p < num_particles()
-   * @pre node_local < 27
-   * @note the stored ∇Nᵢ(xₚ) is meaningless when xₚ changes.
-   */
-  const Vector3<T>& GetWeightGradientAtParticleAndNeighborNode(
-      size_t p, size_t node_local) const {
-    DRAKE_ASSERT(p < num_particles_);
-    DRAKE_ASSERT(node_local < 27);
-    return dw_ip_neighbor_nodes_[p][node_local];
-  }
-
  private:
   size_t num_particles_ = 0;
   std::vector<Vector3<T>> positions_{};
@@ -283,20 +216,10 @@ class Particles {
   // v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p).
   std::vector<Matrix3<T>> B_matrices_{};
 
-  // Each particle p lives in the support of (quadratic) BSpline functions
-  // centered at 27 neighbor grid nodes. neighbor_grid_nodes_global_indices_[p]
-  // stores the global indices of the 27 neighbor grid nodes.
-  // w_ip_neighbor_nodes_[p] stores the weights Nᵢ(xₚ) for i ∈ [27 neighbor grid
-  // nodes]. dw_ip_neighbor_nodes_[p] stores the weight gradients ∇Nᵢ(xₚ) for i
-  // ∈ [27 neighbor grid nodes].
-  std::vector<std::array<size_t, 27>> neighbor_grid_nodes_global_indices_{};
-  std::vector<std::array<T, 27>> w_ip_neighbor_nodes_{};
-  std::vector<std::array<Vector3<T>, 27>> dw_ip_neighbor_nodes_{};
-
+  // for reorder only
   std::vector<T> temporary_scalar_field_{};
   std::vector<Vector3<T>> temporary_vector_field_{};
   std::vector<Matrix3<T>> temporary_matrix_field_{};
-
 };
 }  // namespace mpm
 }  // namespace multibody
