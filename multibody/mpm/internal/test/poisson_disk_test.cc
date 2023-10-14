@@ -54,11 +54,11 @@ GTEST_TEST(PoissonDiskTest, TestDistance) {
     EXPECT_TRUE(result[i](2) <= -0.1 + 1);
   }
 
-  EXPECT_TRUE(result.size() > 1);
+  EXPECT_GT(result.size(), 1);
   // indeed more than one point. in fact, 32 points
 
-  for (size_t i = 0; i < result.size(); ++i) {
-    for (size_t j = i; j < result.size(); ++j) {
+  for (size_t i = 0; i < result.size() - 1; ++i) {
+    for (size_t j = i + 1; j < result.size(); ++j) {
       double distance_sq =
           (result[i](0) - result[j](0)) * (result[i](0) - result[j](0)) +
           (result[i](1) - result[j](1)) * (result[i](1) - result[j](1)) +
