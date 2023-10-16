@@ -72,26 +72,27 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
   // Test on E = 2.0, nu = 0.0
   CorotatedElasticModel<double> model1(2.0, 0.0);
 
-  model1.CalcFEFromFtrial(&F_trial1);
-  // Now F_trial1 is essentially FE_1, the elastic deformation gradient
+  // Compute FE_1 = returnMap(F_trial1)
+  Matrix3<double> FE_1;
+  model1.CalcFEFromFtrial(F_trial1, &FE_1);
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed1;
-  model1.CalcKirchhoffStress(F_trial1, &tau_computed1);
+  model1.CalcKirchhoffStress(FE_1, &tau_computed1);
 
   // Compute First Piola stress from FE
   Matrix3<double> piola_stress_computed1;
-  model1.CalcFirstPiolaStress(F_trial1, &piola_stress_computed1);
+  model1.CalcFirstPiolaStress(FE_1, &piola_stress_computed1);
 
   // verify the relationship between P and τ
   // P = τ * FE^{-T}, or P * FE^T = τ
-  EXPECT_TRUE(CompareMatrices(piola_stress_computed1 * F_trial1.transpose(),
+  EXPECT_TRUE(CompareMatrices(piola_stress_computed1 * FE_1.transpose(),
                               tau_computed1, kTolerance));
 
   EXPECT_TRUE(CompareMatrices(tau_computed1, tau_exact1, kTolerance));
   // Sanity check: no plasticity shall be applied
-  // F_trial_1 now is FE_computed, after return mapping
-  EXPECT_TRUE(CompareMatrices(F_trial1, FE_exact));
+  // FE_1 now is FE_computed, after return mapping
+  EXPECT_TRUE(CompareMatrices(FE_1, FE_exact));
 
   /* ==================== Test #2 ================ */
   // tau_exact2 is the exact tau computed from F=R*S, under E = 5.0 and mu =
@@ -109,45 +110,47 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
   Matrix3<double> F_trial2 = R * S;
   FE_exact = F_trial2;  // under Corotated Model, FE_exact = F_trial
 
-  model2.CalcFEFromFtrial(&F_trial2);
-  // Now F_trial2 is essentially FE_2, the elastic deformation gradient
+  // Compute FE_2 = returnMap(F_trial2)
+  Matrix3<double> FE_2;
+  model2.CalcFEFromFtrial(F_trial2, &FE_2);
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed2;
-  model2.CalcKirchhoffStress(F_trial2, &tau_computed2);
+  model2.CalcKirchhoffStress(FE_2, &tau_computed2);
 
   // Compute First Piola stress from FE
   Matrix3<double> piola_stress_computed2;
-  model2.CalcFirstPiolaStress(F_trial2, &piola_stress_computed2);
+  model2.CalcFirstPiolaStress(FE_2, &piola_stress_computed2);
 
   // verify the relationship between P and τ
   // P = τ * FE^{-T}, or P * FE^T = τ
-  EXPECT_TRUE(CompareMatrices(piola_stress_computed2 * F_trial2.transpose(),
+  EXPECT_TRUE(CompareMatrices(piola_stress_computed2 * FE_2.transpose(),
                               tau_computed2, kTolerance));
 
   EXPECT_TRUE(CompareMatrices(tau_computed2, tau_exact2, kTolerance));
   // Sanity check: no plasticity shall be applied
-  // F_trial2 now is FE_computed, after return mapping
-  EXPECT_TRUE(CompareMatrices(F_trial2, FE_exact));
+  EXPECT_TRUE(CompareMatrices(FE_2, FE_exact));
 
   /* ==================== Test #3 ================ */
   // If F is a rotation matrix, then stress is zero
-  Matrix3<double> F_rot =
+  Matrix3<double> F_trial_rot =
       math::RotationMatrix<double>(math::RollPitchYaw<double>(1.0, 2.0, 3.0))
           .matrix();
-  model2.CalcFEFromFtrial(&F_rot);
+  Matrix3<double> FE_rot;
+  model2.CalcFEFromFtrial(F_trial_rot, &FE_rot);
   Matrix3<double> tau_computed_zero;
-  model2.CalcKirchhoffStress(F_rot, &tau_computed_zero);
+  model2.CalcKirchhoffStress(FE_rot, &tau_computed_zero);
   EXPECT_TRUE(
       CompareMatrices(tau_computed_zero, Matrix3<double>::Zero(), kTolerance));
 
   // Try another F
-  Matrix3<double> F_rot2 =
+  Matrix3<double> F_trial_rot2 =
       math::RotationMatrix<double>(math::RollPitchYaw<double>(0.1, -2.4, 13.3))
           .matrix();
-  model1.CalcFEFromFtrial(&F_rot2);
+  Matrix3<double> FE_rot2;
+  model1.CalcFEFromFtrial(F_trial_rot2, &FE_rot2);
   Matrix3<double> tau_computed_zero2;
-  model1.CalcKirchhoffStress(F_rot2, &tau_computed_zero2);
+  model1.CalcKirchhoffStress(FE_rot2, &tau_computed_zero2);
   EXPECT_TRUE(
       CompareMatrices(tau_computed_zero2, Matrix3<double>::Zero(), kTolerance));
 }

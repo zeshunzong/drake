@@ -14,7 +14,8 @@ Particles<T>::Particles(size_t num_particles)
       velocities_(num_particles),
       masses_(num_particles),
       reference_volumes_(num_particles),
-      deformation_gradients_(num_particles),
+      trial_deformation_gradients_(num_particles),
+      elastic_deformation_gradients_(num_particles),
       B_matrices_(num_particles),
       temporary_scalar_field_(num_particles),
       temporary_vector_field_(num_particles),
@@ -49,7 +50,10 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
       std::swap(positions_[i], positions_[ind]);
       std::swap(velocities_[i], velocities_[ind]);
 
-      std::swap(deformation_gradients_[i], deformation_gradients_[ind]);
+      std::swap(elastic_deformation_gradients_[i],
+                elastic_deformation_gradients_[ind]);
+      std::swap(trial_deformation_gradients_[i],
+                trial_deformation_gradients_[ind]);
       std::swap(B_matrices_[i], B_matrices_[ind]);
     } else {
       DRAKE_UNREACHABLE();
@@ -80,9 +84,14 @@ void Particles<T>::Reorder2(const std::vector<size_t>& new_order) {
     velocities_[i] = temporary_vector_field_[new_order[i]];
   }
 
-  temporary_matrix_field_ = deformation_gradients_;
+  temporary_matrix_field_ = trial_deformation_gradients_;
   for (size_t i = 0; i < num_particles_; ++i) {
-    deformation_gradients_[i] = temporary_matrix_field_[new_order[i]];
+    trial_deformation_gradients_[i] = temporary_matrix_field_[new_order[i]];
+  }
+
+  temporary_matrix_field_ = elastic_deformation_gradients_;
+  for (size_t i = 0; i < num_particles_; ++i) {
+    elastic_deformation_gradients_[i] = temporary_matrix_field_[new_order[i]];
   }
 
   temporary_matrix_field_ = B_matrices_;
@@ -95,13 +104,15 @@ template <typename T>
 void Particles<T>::AddParticle(const Vector3<T>& position,
                                const Vector3<T>& velocity, const T& mass,
                                const T& reference_volume,
-                               const Matrix3<T>& deformation_gradient,
+                               const Matrix3<T>& trial_deformation_gradient,
+                               const Matrix3<T>& elastic_deformation_gradient,
                                const Matrix3<T>& B_matrix) {
   positions_.emplace_back(position);
   velocities_.emplace_back(velocity);
   masses_.emplace_back(mass);
   reference_volumes_.emplace_back(reference_volume);
-  deformation_gradients_.emplace_back(deformation_gradient);
+  trial_deformation_gradients_.emplace_back(trial_deformation_gradient);
+  elastic_deformation_gradients_.emplace_back(elastic_deformation_gradient);
   B_matrices_.emplace_back(B_matrix);
   ++num_particles_;
 

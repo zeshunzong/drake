@@ -47,7 +47,8 @@ class Particles {
    */
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
                    const T& mass, const T& reference_volume,
-                   const Matrix3<T>& deformation_gradient,
+                   const Matrix3<T>& trial_deformation_gradient,
+                   const Matrix3<T>& elastic_deformation_gradient,
                    const Matrix3<T>& B_matrix);
 
   /**
@@ -99,10 +100,11 @@ class Particles {
   const std::vector<Vector3<T>>& velocities() const { return velocities_; }
   const std::vector<T>& masses() const { return masses_; }
   const std::vector<T>& reference_volumes() const { return reference_volumes_; }
-
-  // Note: one must know beforehand if the data stored is F_trial or F_elastic.
-  const std::vector<Matrix3<T>>& deformation_gradients() const {
-    return deformation_gradients_;
+  const std::vector<Matrix3<T>>& trial_deformation_gradients() const {
+    return trial_deformation_gradients_;
+  }
+  const std::vector<Matrix3<T>>& elastic_deformation_gradients() const {
+    return elastic_deformation_gradients_;
   }
   const std::vector<Matrix3<T>>& B_matrices() const { return B_matrices_; }
 
@@ -143,13 +145,21 @@ class Particles {
   }
 
   /**
-   * Returns the deformation gradient of p-th particle.
+   * Returns the trial deformation gradient of p-th particle.
    * @pre 0 <= p < num_particles()
-   * @note one must know beforehand if the data stored is F_trial or F_elastic.
    */
-  const Matrix3<T>& GetDeformationGradientAt(size_t p) const {
+  const Matrix3<T>& GetTrialDeformationGradientAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles_);
-    return deformation_gradients_[p];
+    return trial_deformation_gradients_[p];
+  }
+
+  /**
+   * Returns the elastic deformation gradient of p-th particle.
+   * @pre 0 <= p < num_particles()
+   */
+  const Matrix3<T>& GetElasticDeformationGradientAt(size_t p) const {
+    DRAKE_ASSERT(p < num_particles_);
+    return elastic_deformation_gradients_[p];
   }
 
   /**
@@ -184,13 +194,21 @@ class Particles {
   }
 
   /**
-   * Sets the deformation gradient at p-th particle from input.
+   * Sets the trial deformation gradient at p-th particle from input.
    * @pre 0 <= p < num_particles()
-   * @note one should know if F_in is F_trial or F_elastic.
    */
-  void SetDeformationGradient(size_t p, const Matrix3<T>& F_in) {
+  void SetTrialDeformationGradient(size_t p, const Matrix3<T>& F_trial_in) {
     DRAKE_ASSERT(p < num_particles_);
-    deformation_gradients_[p] = F_in;
+    trial_deformation_gradients_[p] = F_trial_in;
+  }
+
+  /**
+   * Sets the elastic deformation gradient at p-th particle from input.
+   * @pre 0 <= p < num_particles()
+   */
+  void SetElasticDeformationGradient(size_t p, const Matrix3<T>& FE_in) {
+    DRAKE_ASSERT(p < num_particles_);
+    elastic_deformation_gradients_[p] = FE_in;
   }
 
   /**
@@ -208,15 +226,17 @@ class Particles {
   std::vector<Vector3<T>> velocities_{};
   std::vector<T> masses_{};
   std::vector<T> reference_volumes_{};
-  // This may be either F_trial or F_elastic, depending on the context.
-  std::vector<Matrix3<T>> deformation_gradients_{};
+
+  std::vector<Matrix3<T>> trial_deformation_gradients_{};
+  std::vector<Matrix3<T>> elastic_deformation_gradients_{};
 
   // The affine matrix B_p in APIC
   // B_matrix is part of the affine momentum matrix C as
   // v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p).
   std::vector<Matrix3<T>> B_matrices_{};
 
-  // for reorder only
+  // TODO(zeshunzong): Consider make struct Scratch and put the buffer data
+  // inside scratch for better clarity. for reorder only
   std::vector<T> temporary_scalar_field_{};
   std::vector<Vector3<T>> temporary_vector_field_{};
   std::vector<Matrix3<T>> temporary_matrix_field_{};

@@ -18,14 +18,17 @@ GTEST_TEST(ParticlesClassTest, TestAddSetGet) {
   // add particle #1
   particles.AddParticle(Vector3<double>{1, 1, 1}, Vector3<double>{1, 1, 1}, 1.0,
                         1.0, Matrix3<double>::Ones() * 1.0,
+                        Matrix3<double>::Ones() * 1.0,
                         Matrix3<double>::Ones() * 1.0);
   // add particle #2
   particles.AddParticle(Vector3<double>{2, 2, 2}, Vector3<double>{2, 2, 2}, 2.0,
                         2.0, Matrix3<double>::Ones() * 2.0,
+                        Matrix3<double>::Ones() * 2.0,
                         Matrix3<double>::Ones() * 2.0);
   // add particle #3
   particles.AddParticle(Vector3<double>{3, 3, 3}, Vector3<double>{3, 3, 3}, 3.0,
                         3.0, Matrix3<double>::Ones() * 3.0,
+                        Matrix3<double>::Ones() * 3.0,
                         Matrix3<double>::Ones() * 3.0);
 
   EXPECT_EQ(particles.num_particles(), 3);
@@ -40,18 +43,20 @@ GTEST_TEST(ParticlesClassTest, TestAddSetGet) {
   std::vector<Matrix3<double>> truth_matrix{Matrix3<double>::Ones() * 1.0,
                                             Matrix3<double>::Ones() * 2.0,
                                             Matrix3<double>::Ones() * 3.0};
-  EXPECT_EQ(particles.deformation_gradients(), truth_matrix);
+  EXPECT_EQ(particles.elastic_deformation_gradients(), truth_matrix);
+  EXPECT_EQ(particles.trial_deformation_gradients(), truth_matrix);
   EXPECT_EQ(particles.B_matrices(), truth_matrix);
 
   // getters for a single particle
-  for (size_t p = 0; p < 3; p++) {
+  for (size_t p = 0; p < 3; ++p) {
     Vector3<double> vec{p + 1.0, p + 1.0, p + 1.0};
     EXPECT_EQ(particles.GetPositionAt(p), vec);
     EXPECT_EQ(particles.GetVelocityAt(p), vec);
     EXPECT_EQ(particles.GetMassAt(p), p + 1.0);
     EXPECT_EQ(particles.GetReferenceVolumeAt(p), p + 1.0);
     Matrix3<double> mat = Matrix3<double>::Ones() * (p + 1.0);
-    EXPECT_EQ(particles.GetDeformationGradientAt(p), mat);
+    EXPECT_EQ(particles.GetElasticDeformationGradientAt(p), mat);
+    EXPECT_EQ(particles.GetTrialDeformationGradientAt(p), mat);
     EXPECT_EQ(particles.GetBMatrixAt(p), mat);
   }
 }
@@ -79,46 +84,26 @@ std::vector<std::vector<size_t>> GenerateAllPermutations(size_t n) {
   return result;
 }
 
-void CheckReorder(const Particles<double>& particles,
-                  const std::vector<size_t>& perm) {
-  // assume the input particles has n particles, initialized with data
-  // [1,2,3,...,n]
-  Particles<double> particles_new = particles;
-  particles_new.Reorder(perm);
-
-  for (size_t i = 0; i < particles_new.num_particles(); i++) {
+// The pre-reordered Particles has [p1, p2, p3, ..., pn]
+void CheckReordering(const Particles<double>& reordered_particles,
+                     const std::vector<size_t>& ordering) {
+  DRAKE_DEMAND(ordering.size() == reordered_particles.num_particles());
+  for (size_t i = 0; i < reordered_particles.num_particles(); ++i) {
     // the i_th now particle is the original perm[i]'s particle,
     // its scaler field is (perm[i]+1)
-    EXPECT_EQ(particles_new.GetMassAt(i), perm[i] + 1.0);
+    EXPECT_EQ(reordered_particles.GetMassAt(i), ordering[i] + 1.0);
     // its vector field is vec3((perm[i]+1),(perm[i]+1),(perm[i]+1))
-    EXPECT_EQ(particles_new.GetVelocityAt(i),
-              Vector3<double>(perm[i] + 1.0, perm[i] + 1.0, perm[i] + 1.0));
+    EXPECT_EQ(reordered_particles.GetVelocityAt(i),
+              Vector3<double>(ordering[i] + 1.0, ordering[i] + 1.0,
+                              ordering[i] + 1.0));
     // its matrix field is Matrix3<double>::Ones() * (p + 1.0);
-    EXPECT_EQ(particles_new.GetDeformationGradientAt(i),
-              Matrix3<double>::Ones() * (perm[i] + 1.0));
+    EXPECT_EQ(reordered_particles.GetElasticDeformationGradientAt(i),
+              Matrix3<double>::Ones() * (ordering[i] + 1.0));
   }
 }
 
-void CheckReorder2(const Particles<double>& particles,
-                   const std::vector<size_t>& perm) {
-  // assume the input particles has n particles, initialized with data
-  // [1,2,3,...,n]
-  Particles<double> particles_new = particles;
-  particles_new.Reorder2(perm);
-
-  for (size_t i = 0; i < particles_new.num_particles(); i++) {
-    // the i_th now particle is the original perm[i]'s particle,
-    // its scaler field is (perm[i]+1)
-    EXPECT_EQ(particles_new.GetMassAt(i), perm[i] + 1.0);
-    // its vector field is vec3((perm[i]+1),(perm[i]+1),(perm[i]+1))
-    EXPECT_EQ(particles_new.GetVelocityAt(i),
-              Vector3<double>(perm[i] + 1.0, perm[i] + 1.0, perm[i] + 1.0));
-    // its matrix field is Matrix3<double>::Ones() * (p + 1.0);
-    EXPECT_EQ(particles_new.GetDeformationGradientAt(i),
-              Matrix3<double>::Ones() * (perm[i] + 1.0));
-  }
-}
-
+// we require a that the original Particles look like [p1, p2, p3, ...]
+// Shuffle by a permutation and check the new data attributes
 GTEST_TEST(ParticlesClassTest, TestReorder) {
   // test on 5 particles
   Particles<double> particles = Particles<double>();
@@ -126,22 +111,27 @@ GTEST_TEST(ParticlesClassTest, TestReorder) {
   // add particle #1
   particles.AddParticle(Vector3<double>{1, 1, 1}, Vector3<double>{1, 1, 1}, 1.0,
                         1.0, Matrix3<double>::Ones() * 1.0,
+                        Matrix3<double>::Ones() * 1.0,
                         Matrix3<double>::Ones() * 1.0);
   // add particle #2
   particles.AddParticle(Vector3<double>{2, 2, 2}, Vector3<double>{2, 2, 2}, 2.0,
                         2.0, Matrix3<double>::Ones() * 2.0,
+                        Matrix3<double>::Ones() * 2.0,
                         Matrix3<double>::Ones() * 2.0);
   // add particle #3
   particles.AddParticle(Vector3<double>{3, 3, 3}, Vector3<double>{3, 3, 3}, 3.0,
                         3.0, Matrix3<double>::Ones() * 3.0,
+                        Matrix3<double>::Ones() * 3.0,
                         Matrix3<double>::Ones() * 3.0);
   // add particle #4
   particles.AddParticle(Vector3<double>{4, 4, 4}, Vector3<double>{4, 4, 4}, 4.0,
                         4.0, Matrix3<double>::Ones() * 4.0,
+                        Matrix3<double>::Ones() * 4.0,
                         Matrix3<double>::Ones() * 4.0);
   // add particle #5
   particles.AddParticle(Vector3<double>{5, 5, 5}, Vector3<double>{5, 5, 5}, 5.0,
                         5.0, Matrix3<double>::Ones() * 5.0,
+                        Matrix3<double>::Ones() * 5.0,
                         Matrix3<double>::Ones() * 5.0);
 
   EXPECT_EQ(particles.num_particles(), 5);
@@ -151,15 +141,17 @@ GTEST_TEST(ParticlesClassTest, TestReorder) {
       GenerateAllPermutations(5);
   EXPECT_EQ(all_permutations.size(), 120);
 
-  for (size_t i = 0; i < all_permutations.size(); i++) {
-    CheckReorder(particles, all_permutations[i]);
-  }
+  Particles<double> reordered_particles;
 
-  for (size_t i = 0; i < all_permutations.size(); i++) {
-    CheckReorder2(particles, all_permutations[i]);
-  }
+  for (size_t i = 0; i < all_permutations.size(); ++i) {
+    reordered_particles = particles;
+    reordered_particles.Reorder(all_permutations[i]);
+    CheckReordering(reordered_particles, all_permutations[i]);
 
-  // The two Reorder methods should be mathematically correct.
+    reordered_particles = particles;
+    reordered_particles.Reorder2(all_permutations[i]);
+    CheckReordering(reordered_particles, all_permutations[i]);
+  }
 }
 
 }  // namespace
