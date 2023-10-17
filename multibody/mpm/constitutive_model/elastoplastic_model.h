@@ -46,7 +46,8 @@ class ElastoPlasticModel {
   // @param[in, out] F_trial On input, provides the *trial* deformation
   // gradient; on ouput, returns the *elastic* deformation gradient.
   // @pre F_trial != null_ptr
-  virtual void CalcFEFromFtrial(Matrix3<T>* F_trial) const = 0;
+  virtual void CalcFEFromFtrial(const Matrix3<T>& F_trial,
+                                Matrix3<T>* FE) const = 0;
 
   // Calculates the first Piola Kirchhoff stress P = dψ(FE)/dFE, where FE is the
   // *elastic* deformation gradient.
