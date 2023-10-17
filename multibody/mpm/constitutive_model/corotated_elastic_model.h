@@ -15,15 +15,17 @@ namespace constitutive_model {
 template <typename T>
 class CorotatedElasticModel : public ElastoPlasticModel<T> {
  public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(CorotatedElasticModel)
+
   CorotatedElasticModel(const T& youngs_modulus, const T& poissons_ratio);
 
   std::unique_ptr<ElastoPlasticModel<T>> Clone() const final {
     return std::make_unique<CorotatedElasticModel<T>>(*this);
   }
 
-  T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
-
   void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final;
+
+  T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
 
   void CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix3<T>* P) const final;
 
