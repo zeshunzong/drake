@@ -30,12 +30,12 @@ T StvkHenckyWithVonMisesModel<T>::CalcStrainEnergyDensity(
 }
 
 template <typename T>
-void StvkHenckyWithVonMisesModel<T>::CalcFEFromFtrial(
-    Matrix3<T>* F_trial) const {
-  DRAKE_ASSERT(F_trial != nullptr);
+void StvkHenckyWithVonMisesModel<T>::CalcFEFromFtrial(const Matrix3<T>& F_trial,
+                                                      Matrix3<T>* FE) const {
+  DRAKE_ASSERT(FE != nullptr);
   const StrainStressData strain_stress_data_trial =
-      ComputeStrainStressData(*F_trial);
-  ApplyReturnMapping(strain_stress_data_trial, F_trial);
+      ComputeStrainStressData(F_trial);
+  ApplyReturnMapping(strain_stress_data_trial, F_trial, FE);
 }
 
 template <typename T>
@@ -158,8 +158,8 @@ void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStressDerivative(
 template <typename T>
 StvkHenckyWithVonMisesModel<T>::StrainStressData
 StvkHenckyWithVonMisesModel<T>::ComputeStrainStressData(
-    const Matrix3<T>& F_trial) const {
-  Eigen::JacobiSVD<Matrix3<T>> svd(F_trial,
+    const Matrix3<T>& deformation_gradient) const {
+  Eigen::JacobiSVD<Matrix3<T>> svd(deformation_gradient,
                                    Eigen::ComputeFullU | Eigen::ComputeFullV);
   const Vector3<T> sigma = svd.singularValues();
   DRAKE_ASSERT(sigma(0) > kEpsilon);
@@ -279,7 +279,7 @@ T StvkHenckyWithVonMisesModel<T>::ComputeYieldFunction(
 template <typename T>
 void StvkHenckyWithVonMisesModel<T>::ApplyReturnMapping(
     const StrainStressData& strain_stress_data_trial,
-    Matrix3<T>* F_trial) const {
+    const Matrix3<T>& F_trial, Matrix3<T>* FE) const {
   const T f_tau = ComputeYieldFunction(strain_stress_data_trial.deviatoric_tau);
   bool in_yield_surface = f_tau <= 0.0;
   if (!in_yield_surface) {
@@ -293,8 +293,10 @@ void StvkHenckyWithVonMisesModel<T>::ApplyReturnMapping(
     // proj_F_hat = exp(ε_proj) in the principal frame
     const Vector3<T> proj_F_hat = (log_sigma_new).array().exp();
     // get the *elastic* deformation gradient from proj_F_hat
-    *F_trial = strain_stress_data_trial.U * proj_F_hat.asDiagonal() *
+    *FE = strain_stress_data_trial.U * proj_F_hat.asDiagonal() *
                strain_stress_data_trial.V.transpose();
+  } else {
+    *FE = F_trial;
   }
 }
 template class StvkHenckyWithVonMisesModel<AutoDiffXd>;

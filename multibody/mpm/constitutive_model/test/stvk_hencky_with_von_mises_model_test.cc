@@ -19,45 +19,6 @@ namespace constitutive_model {
 
 constexpr double kTolerance = 1e-12;
 
-class StvkHenckyWithVonMisesModelTester {
- public:
-  void TestReturnMap() {
-    // clang-format off
-    Matrix3<double> F =
-    (Matrix3<double>() << 1.18, 0.68, 0.54,
-                          0.13, 0.92, 0.17,
-                          0.03, 0.86, 0.85).finished();
-    // clang-format on
-
-    const double E = 23.4;
-    const double nu = 0.41;
-    const double yield_stress = 1.0;
-    const StvkHenckyWithVonMisesModel<double> hencky_model = {E, nu,
-                                                              yield_stress};
-
-    const StvkHenckyWithVonMisesModel<double>::StrainStressData ssd =
-        hencky_model.ComputeStrainStressData(F);
-    const double yield = hencky_model.ComputeYieldFunction(ssd.deviatoric_tau);
-    EXPECT_TRUE(yield > 0.0);  // it indeed yields
-
-    hencky_model.CalcFEFromFtrial(&F);  // apply returnMap
-
-    const StvkHenckyWithVonMisesModel<double>::StrainStressData ssd_after =
-        hencky_model.ComputeStrainStressData(F);
-    const double yield_after =
-        hencky_model.ComputeYieldFunction(ssd_after.deviatoric_tau);
-    EXPECT_NEAR(yield_after, 0.0, kTolerance);  // should not yield
-
-    // the deviatoric_tau before and after should be parallel
-    EXPECT_NEAR(ssd_after.deviatoric_tau(0) / ssd.deviatoric_tau(0),
-                ssd_after.deviatoric_tau(1) / ssd.deviatoric_tau(1),
-                kTolerance);
-    EXPECT_NEAR(ssd_after.deviatoric_tau(1) / ssd.deviatoric_tau(1),
-                ssd_after.deviatoric_tau(2) / ssd.deviatoric_tau(2),
-                kTolerance);
-  }
-};
-
 namespace {
 
 using Eigen::Matrix3d;
@@ -89,31 +50,65 @@ GTEST_TEST(StvkWithVonMisesModelTest, SanityCheck) {
   const double nu = 0.25;
   const double yield_stress = 1e6;
   const StvkHenckyWithVonMisesModel<double> hencky_model(E, nu, yield_stress);
-  Matrix3<double> F_trial =
+  const Matrix3<double> F_trial =
       math::RotationMatrix<double>(math::RollPitchYaw<double>(1.0, 2.0, 3.0))
           .matrix();
   const Matrix3<double> FE_exact = F_trial;
 
-  hencky_model.CalcFEFromFtrial(&F_trial);
-  // Apply return mapping to F_trial, nothing should change
-  EXPECT_TRUE(CompareMatrices(F_trial, FE_exact));
+  Matrix3<double> FE;
+  hencky_model.CalcFEFromFtrial(F_trial, &FE);
+  // Apply return mapping to F_trial, it should be that FE = FE_exact = F_trial
+  EXPECT_TRUE(CompareMatrices(FE, FE_exact));
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed;
-  hencky_model.CalcKirchhoffStress(F_trial, &tau_computed);
+  hencky_model.CalcKirchhoffStress(FE, &tau_computed);
   EXPECT_TRUE(
       CompareMatrices(tau_computed, Matrix3<double>::Zero(), kTolerance));
 
   // Compute First Piola stress from FE
   Matrix3<double> piola_stress_computed;
-  hencky_model.CalcFirstPiolaStress(F_trial, &piola_stress_computed);
+  hencky_model.CalcFirstPiolaStress(FE, &piola_stress_computed);
   EXPECT_TRUE(CompareMatrices(piola_stress_computed, Matrix3<double>::Zero(),
                               kTolerance));
 }
 
+// Pick a F_trial that is indeed in the plastic region. Apply return mapping.
+// The returned elastic stress should be on the yield surface.
 GTEST_TEST(StvkWithVonMisesModelTest, TestReturnMapping) {
-  StvkHenckyWithVonMisesModelTester tester;
-  tester.TestReturnMap();
+  // clang-format off
+    Matrix3<double> F_trial =
+    (Matrix3<double>() << 1.18, 0.68, 0.54,
+                          0.13, 0.92, 0.17,
+                          0.03, 0.86, 0.85).finished();
+  // clang-format on
+
+  const double E = 23.4;
+  const double nu = 0.41;
+  const double yield_stress = 1.0;
+  const StvkHenckyWithVonMisesModel<double> hencky_model = {E, nu,
+                                                            yield_stress};
+
+  const StvkHenckyWithVonMisesModel<double>::StrainStressData ssd =
+      hencky_model.ComputeStrainStressData(F_trial);
+  const double yield = hencky_model.ComputeYieldFunction(ssd.deviatoric_tau);
+  EXPECT_TRUE(yield > 0.0);  // it indeed yields
+
+  // apply returnMap to get FE
+  Matrix3<double> FE;
+  hencky_model.CalcFEFromFtrial(F_trial, &FE);
+
+  const StvkHenckyWithVonMisesModel<double>::StrainStressData ssd_after =
+      hencky_model.ComputeStrainStressData(FE);
+  const double yield_after =
+      hencky_model.ComputeYieldFunction(ssd_after.deviatoric_tau);
+  EXPECT_NEAR(yield_after, 0.0, kTolerance);  // should not yield
+
+  // the deviatoric_tau before and after should be parallel
+  EXPECT_NEAR(ssd_after.deviatoric_tau(0) / ssd.deviatoric_tau(0),
+              ssd_after.deviatoric_tau(1) / ssd.deviatoric_tau(1), kTolerance);
+  EXPECT_NEAR(ssd_after.deviatoric_tau(1) / ssd.deviatoric_tau(1),
+              ssd_after.deviatoric_tau(2) / ssd.deviatoric_tau(2), kTolerance);
 }
 
 GTEST_TEST(StvkWithVonMisesModelTest, TestPsiTauP) {
@@ -136,7 +131,7 @@ GTEST_TEST(StvkWithVonMisesModelTest, TestPsiTauP) {
   //              0    0   1]
   // and tau = P*F^T
   // clang-format off
-  Matrix3<double> F =
+  const Matrix3<double> F_trial =
   (Matrix3<double>() << 3/sqrt(2), 3/sqrt(2),        0.0,
                            -1,         1,        -1/sqrt(2),
                            -1,         1,         1/sqrt(2)).finished();
@@ -165,35 +160,37 @@ GTEST_TEST(StvkWithVonMisesModelTest, TestPsiTauP) {
       mu * std::log(2) + lambda / 2.0 * sum_log_sigma, lambda * sum_log_sigma};
   const Matrix3<double> P_exact = U * P_principal.asDiagonal() * V.transpose();
 
-  hencky_model.CalcFEFromFtrial(&F);
+  Matrix3<double> FE;
+  hencky_model.CalcFEFromFtrial(F_trial, &FE);
   Matrix3<double> piola_stress_computed;
-  hencky_model.CalcFirstPiolaStress(F, &piola_stress_computed);
+  hencky_model.CalcFirstPiolaStress(FE, &piola_stress_computed);
   EXPECT_TRUE(CompareMatrices(piola_stress_computed, P_exact, kTolerance));
 
   Matrix3<double> tau_computed;
-  hencky_model.CalcKirchhoffStress(F, &tau_computed);
+  hencky_model.CalcKirchhoffStress(FE, &tau_computed);
   EXPECT_TRUE(
-      CompareMatrices(tau_computed, P_exact * F.transpose(), kTolerance));
+      CompareMatrices(tau_computed, P_exact * FE.transpose(), kTolerance));
 }
 
 GTEST_TEST(StvkWithVonMisesModelTest, TestEnergyDerivatives) {
   // Test P is derivative of Psi
   const StvkHenckyWithVonMisesModel<AutoDiffXd> model(3.14159, 0.3337, 1e6);
-  Matrix3<AutoDiffXd> F = MakeDeformationGradientsWithDerivatives();
-  model.CalcFEFromFtrial(&F);
-  AutoDiffXd f = model.CalcStrainEnergyDensity(F);
+  Matrix3<AutoDiffXd> FE = MakeDeformationGradientsWithDerivatives();
+  // differentiate w.r.t. elastic deformation gradient. Here we neglect return
+  // mapping
+  AutoDiffXd f = model.CalcStrainEnergyDensity(FE);
   Matrix3<AutoDiffXd> dfdF;
-  model.CalcFirstPiolaStress(F, &dfdF);
+  model.CalcFirstPiolaStress(FE, &dfdF);
   EXPECT_TRUE(
       CompareMatrices(Eigen::Map<const Matrix3d>(f.derivatives().data(), 3, 3),
                       dfdF, kTolerance));
 
   // Test dPdF is derivative of P
   Matrix3<AutoDiffXd> P;
-  model.CalcFirstPiolaStress(F, &P);
+  model.CalcFirstPiolaStress(FE, &P);
 
   Eigen::Matrix<AutoDiffXd, 9, 9> dPdF;
-  model.CalcFirstPiolaStressDerivative(F, &dPdF);
+  model.CalcFirstPiolaStressDerivative(FE, &dPdF);
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
       Matrix3d dPijdF;

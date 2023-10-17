@@ -70,7 +70,26 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
     return std::make_unique<StvkHenckyWithVonMisesModel<T>>(*this);
   }
 
-  void CalcFEFromFtrial(Matrix3<T>* F_trial) const final;
+  // Given deformation gradient F, stores the following results
+  // U, V: from svd such that F = U Σ Vᵀ, Matrix3
+  // sigma: diag(Σ), Vector3
+  // one_over_sigma: 1./diag(Σ), Vector3
+  // log_sigma: log(diag(Σ)), Vector3
+  // log_sigma_trace: sum(log(diag(Σ))), scalar
+  // deviatoric_tau: deviatoric component of τ in principal frame, Vector3
+  // @note: user should pay attention to whether the data is computed from
+  // F_trial or FE
+  struct StrainStressData {
+    Matrix3<T> U;
+    Matrix3<T> V;
+    Vector3<T> sigma;
+    Vector3<T> one_over_sigma;
+    Vector3<T> log_sigma;
+    T log_sigma_trace;
+    Vector3<T> deviatoric_tau;
+  };
+
+  void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final;
 
   // @note The input FE should be *elastic* deformation gradient.
   // @note The calculation ignores the effect of plasticity.
@@ -89,31 +108,16 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
   void CalcFirstPiolaStressDerivative(const Matrix3<T>& FE,
                                       Eigen::Matrix<T, 9, 9>* dPdF) const final;
 
-  struct StrainStressData {
-    Matrix3<T> U;
-    Matrix3<T> V;
-    Vector3<T> sigma;
-    Vector3<T> one_over_sigma;
-    Vector3<T> log_sigma;
-    T log_sigma_trace;
-    Vector3<T> deviatoric_tau;
-  };
+  // Returns f(dev(τ)) = sqrt(3/2)‖ dev(τ) ‖ - τ_c, where dev(τ) is the
+  // deviatoric component of Kirchhoff stress in the principal frame, and τ_c is
+  // yield_stress
+  T ComputeYieldFunction(const Vector3<T>& deviatoric_tau) const;
+
+  // Based on deformation_gradient, computes the struct StrainStressData
+  StrainStressData ComputeStrainStressData(
+      const Matrix3<T>& deformation_gradient) const;
 
  private:
-  friend class StvkHenckyWithVonMisesModelTester;
-
-  // Given deformation gradient F, stores the following results
-  // U, V: from svd such that F = U Σ Vᵀ, Matrix3
-  // sigma: diag(Σ), Vector3
-  // one_over_sigma: 1./diag(Σ), Vector3
-  // log_sigma: log(diag(Σ)), Vector3
-  // log_sigma_trace: sum(log(diag(Σ))), scalar
-  // deviatoric_tau: deviatoric component of τ in principal frame, Vector3
-  // @note: user should pay attention to whether the data is computed from
-  // F_trial or FE
-
-  StrainStressData ComputeStrainStressData(const Matrix3<T>& F_trial) const;
-
   // derivatives of energy density psi w.r.t singular values sigma0, sigma1, and
   // sigma2
   struct PsiSigmaDerivatives {
@@ -173,15 +177,10 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
 
   PsiSigmaDerivatives CalcPsiSigmaDerivative(const Matrix3<T>& FE) const;
 
-  // Returns f(dev(τ)) = sqrt(3/2)‖ dev(τ) ‖ - τ_c, where dev(τ) is the
-  // deviatoric component of Kirchhoff stress in the principal frame, and τ_c is
-  // yield_stress
-  T ComputeYieldFunction(const Vector3<T>& deviatoric_tau) const;
-
   // Applies ReturnMap(F_trial) onto the trial deformation gradient to get
-  // *elastic* deformation gradient.
+  // *elastic* deformation gradient FE.
   void ApplyReturnMapping(const StrainStressData& strain_stress_data_trial,
-                          Matrix3<T>* F_trial) const;
+                          const Matrix3<T>& F_trial, Matrix3<T>* FE) const;
 
   T yield_stress_{};
   // sqrt(3.0/2.0)
