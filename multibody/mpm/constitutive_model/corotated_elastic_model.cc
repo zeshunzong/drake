@@ -23,8 +23,10 @@ T CorotatedElasticModel<T>::CalcStrainEnergyDensity(
 }
 
 template <typename T>
-void CorotatedElasticModel<T>::CalcFEFromFtrial(Matrix3<T>* F_trial) const {
-  DRAKE_ASSERT(F_trial != nullptr);
+void CorotatedElasticModel<T>::CalcFEFromFtrial(const Matrix3<T>& F_trial,
+                                                Matrix3<T>* FE) const {
+  DRAKE_ASSERT(FE != nullptr);
+  *FE = F_trial;
 }
 
 template <typename T>
