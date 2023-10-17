@@ -65,39 +65,40 @@ template <typename T>
 void Particles<T>::Reorder2(const std::vector<size_t>& new_order) {
   DRAKE_DEMAND((new_order.size()) == num_particles_);
 
-  temporary_scalar_field_ = masses_;
   for (size_t i = 0; i < num_particles_; ++i) {
-    masses_[i] = temporary_scalar_field_[new_order[i]];
+    temporary_scalar_field_[i] = masses_[new_order[i]];
   }
-  temporary_scalar_field_ = reference_volumes_;
-  for (size_t i = 0; i < num_particles_; ++i) {
-    reference_volumes_[i] = temporary_scalar_field_[new_order[i]];
-  }
+  masses_.swap(temporary_scalar_field_);
 
-  temporary_vector_field_ = positions_;
   for (size_t i = 0; i < num_particles_; ++i) {
-    positions_[i] = temporary_vector_field_[new_order[i]];
+    temporary_scalar_field_[i] = reference_volumes_[new_order[i]];
   }
+  reference_volumes_.swap(temporary_scalar_field_);
 
-  temporary_vector_field_ = velocities_;
   for (size_t i = 0; i < num_particles_; ++i) {
-    velocities_[i] = temporary_vector_field_[new_order[i]];
+    temporary_vector_field_[i] = positions_[new_order[i]];
   }
+  positions_.swap(temporary_vector_field_);
 
-  temporary_matrix_field_ = trial_deformation_gradients_;
   for (size_t i = 0; i < num_particles_; ++i) {
-    trial_deformation_gradients_[i] = temporary_matrix_field_[new_order[i]];
+    temporary_vector_field_[i] = velocities_[new_order[i]];
   }
+  velocities_.swap(temporary_vector_field_);
 
-  temporary_matrix_field_ = elastic_deformation_gradients_;
   for (size_t i = 0; i < num_particles_; ++i) {
-    elastic_deformation_gradients_[i] = temporary_matrix_field_[new_order[i]];
+    temporary_matrix_field_[i] = trial_deformation_gradients_[new_order[i]];
   }
+  trial_deformation_gradients_.swap(temporary_matrix_field_);
 
-  temporary_matrix_field_ = B_matrices_;
   for (size_t i = 0; i < num_particles_; ++i) {
-    B_matrices_[i] = temporary_matrix_field_[new_order[i]];
+    temporary_matrix_field_[i] = elastic_deformation_gradients_[new_order[i]];
   }
+  elastic_deformation_gradients_.swap(temporary_matrix_field_);
+
+  for (size_t i = 0; i < num_particles_; ++i) {
+    temporary_matrix_field_[i] = B_matrices_[new_order[i]];
+  }
+  B_matrices_.swap(temporary_matrix_field_);
 }
 
 template <typename T>

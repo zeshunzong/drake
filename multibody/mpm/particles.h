@@ -44,6 +44,7 @@ class Particles {
   /**
    *  Adds (appends) a particle into Particles with given properties.
    * <!-- TODO(zeshunzong): More attributes will come later. -->
+   * <!-- TODO(zeshunzong): Do we always start from rest shape? so F=I? -->
    */
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
                    const T& mass, const T& reference_volume,
