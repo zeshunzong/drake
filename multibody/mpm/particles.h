@@ -44,6 +44,7 @@ class Particles {
   /**
    *  Adds (appends) a particle into Particles with given properties.
    * <!-- TODO(zeshunzong): More attributes will come later. -->
+   * <!-- TODO(zeshunzong): Do we always start from rest shape, so F = I? -->
    */
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
                    const T& mass, const T& reference_volume,
@@ -221,6 +222,19 @@ class Particles {
   }
 
  private:
+  struct Scratch {
+    std::vector<T> scalar_scratch{};
+    std::vector<Vector3<T>> vector_scratch{};
+    std::vector<Matrix3<T>> matrix_scratch{};
+
+    void ReorderVectorWithScratch(const std::vector<size_t>& new_order,
+                                  std::vector<Vector3<T>>* data);
+    void ReorderMatrixWithScratch(const std::vector<size_t>& new_order,
+                                  std::vector<Matrix3<T>>* data);
+    void ReorderScalarWithScratch(const std::vector<size_t>& new_order,
+                                  std::vector<T>* data);
+  };
+
   size_t num_particles_ = 0;
   std::vector<Vector3<T>> positions_{};
   std::vector<Vector3<T>> velocities_{};
@@ -240,6 +254,8 @@ class Particles {
   std::vector<T> temporary_scalar_field_{};
   std::vector<Vector3<T>> temporary_vector_field_{};
   std::vector<Matrix3<T>> temporary_matrix_field_{};
+
+  // Scratch scratch_{};
 };
 }  // namespace mpm
 }  // namespace multibody
