@@ -16,11 +16,8 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 namespace constitutive_model {
-
-constexpr double kTolerance = 1e-12;
-
 namespace {
-
+constexpr double kTolerance = 1e-12;
 using Eigen::Matrix3d;
 using Eigen::Matrix3Xd;
 
