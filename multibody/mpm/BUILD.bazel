@@ -32,4 +32,27 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "sparse_grid",
+    srcs = [
+        "sparse_grid.cc",
+    ],
+    hdrs = [
+        "sparse_grid.h",
+    ],
+    deps = [
+        "//multibody/mpm/internal:total_mass_momentum",
+        "//multibody/mpm/internal:hashing_utils",
+        "//common:autodiff",
+        "//common:essential",
+    ],
+)
+
+drake_cc_googletest(
+    name = "sparse_grid_test",
+    deps = [
+        ":sparse_grid",
+    ],
+)
+
 add_lint_tests()
