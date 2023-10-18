@@ -137,6 +137,14 @@ T CalcExpXMinusExpYOverXMinusY(const T& x, const T& y) {
   return CalcExpXMinus1OverX(p) * exp(y);
 }
 
+inline bool CompareIndex3DLexicographically(const Vector3<int>& index_1,
+                                            const Vector3<int>& index_2) {
+  return ((index_1(0) < index_2(0)) ||
+          ((index_1(0) == index_2(0)) && (index_1(1) < index_2(1))) ||
+          ((index_1(0) == index_2(0)) && (index_1(1) == index_2(1)) &&
+           (index_1(2) < index_2(2))));
+}
+
 }  // namespace internal
 }  // namespace mpm
 }  // namespace multibody
