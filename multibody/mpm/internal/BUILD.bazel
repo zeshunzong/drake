@@ -105,4 +105,14 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "hashing_utils",
+    hdrs = [
+        "hashing_utils.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
 add_lint_tests()

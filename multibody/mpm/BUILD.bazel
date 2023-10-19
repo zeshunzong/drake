@@ -32,4 +32,60 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "pad",
+    hdrs = [
+        "pad.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "pad_splatter",
+    hdrs = [
+        "pad_splatter.h",
+    ],
+    deps = [
+        "//common:essential",
+        "//multibody/mpm/internal:b_spline",
+    ],
+)
+
+drake_cc_library(
+    name = "sparse_grid",
+    srcs = [
+        "sparse_grid.cc",
+    ],
+    hdrs = [
+        "sparse_grid.h",
+    ],
+    deps = [
+        "//common:autodiff",
+        "//common:essential",
+        "//multibody/mpm/internal:hashing_utils",
+        "//multibody/mpm/internal:math_utils",
+    ],
+)
+
+drake_cc_googletest(
+    name = "sparse_grid_test",
+    deps = [
+        ":sparse_grid",
+    ],
+)
+
+
+drake_cc_library(
+    name = "grid_data",
+    hdrs = [
+        "grid_data.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+
 add_lint_tests()

@@ -8,6 +8,8 @@
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
 
+#include "drake/multibody/mpm/pad_splatter.h"
+
 namespace drake {
 namespace multibody {
 namespace mpm {
@@ -221,6 +223,11 @@ class Particles {
     B_matrices_[p] = B_matrix;
   }
 
+  // TODO: do whatever needed to compute values in 
+  void UpdatePadSplatters(){
+
+  }
+
  private:
   size_t num_particles_ = 0;
   std::vector<Vector3<T>> positions_{};
@@ -241,6 +248,8 @@ class Particles {
   std::vector<T> temporary_scalar_field_{};
   std::vector<Vector3<T>> temporary_vector_field_{};
   std::vector<Matrix3<T>> temporary_matrix_field_{};
+
+  std::vector<PadSplatter<T>> pad_splatters_{}; // store weight and dw
 };
 }  // namespace mpm
 }  // namespace multibody
