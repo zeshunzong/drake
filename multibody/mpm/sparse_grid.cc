@@ -18,15 +18,12 @@ void SparseGrid<T>::ComputeBatchIndices(
   }
 }
 
-
 template <typename T>
 void SparseGrid<T>::Update(const std::vector<Vector3<T>>& positions) {
   ClearActiveNodes();  // clear exisiting active nodes
 
-
   // first compute the batch index for each particle
   ComputeBatchIndices(positions);
-
 
   for (size_t i = 0; i < batch_indices_.size(); ++i) {
     // loop over each particle's batch index
@@ -60,7 +57,6 @@ void SparseGrid<T>::Update(const std::vector<Vector3<T>>& positions) {
   }
 }
 
-
 template <typename T>
 void SparseGrid<T>::ClearActiveNodes() {
   map_from_3d_to_1d_.clear();
@@ -69,7 +65,6 @@ void SparseGrid<T>::ClearActiveNodes() {
 
 template <typename T>
 void SparseGrid<T>::SortActiveNodes() {
-
   std::sort(map_from_1d_to_3d_.begin(), map_from_1d_to_3d_.end(),
             internal::CompareIndex3DLexicographically);
 
@@ -78,7 +73,40 @@ void SparseGrid<T>::SortActiveNodes() {
   }
 }
 
-
+template <typename T>
+std::vector<std::vector<int>> SparseGrid<T>::CalcGridHessianSparsityPattern()
+    const {
+  // the value to be returned
+  std::vector<std::vector<int>> pattern;
+  Vector3<int> current_index_3d;
+  size_t neighbornode_index_1d; 
+  // loop over all active grid nodes
+  for (size_t index1d = 0; index1d < num_active_nodes(); ++index1d) {
+    current_index_3d = Expand1DIndex(index1d);
+    std::vector<int> pattern_i;
+    // get its 125 neighbors
+    for (int ic = -2; ic <= 2; ++ic) {
+      for (int ib = -2; ib <= 2; ++ib) {
+        for (int ia = -2; ia <= 2; ++ia) {
+          Vector3<int> neighbor_node_index_3d =
+              current_index_3d +
+              Vector3<int>(ia, ib, ic);  // global 3d index of its neighbor
+          if (IsActive(neighbor_node_index_3d)) {
+            // we first require this is an active grid node
+            neighbornode_index_1d = Reduce3DIndex(neighbor_node_index_3d);
+            if (neighbornode_index_1d >= index1d) {
+              // we also require that this block should be in the upper right
+              pattern_i.push_back(
+                  static_cast<int>(neighbornode_index_1d));
+            }
+          }
+        }
+      }
+    }
+    pattern.push_back(std::move(pattern_i));
+  }
+  return pattern;
+}
 
 template class SparseGrid<double>;
 template class SparseGrid<AutoDiffXd>;

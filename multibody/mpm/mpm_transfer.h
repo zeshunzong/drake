@@ -14,9 +14,6 @@
 #include "drake/multibody/mpm/grid_data.h"
 #include "drake/multibody/mpm/pad.h"
 
-// #include "drake/multibody/contact_solvers/block_3x3_sparse_matrix.h"
-// #include "drake/multibody/contact_solvers/block_sparse_lower_triangular_or_symmetric_matrix.h"
-// #include <type_traits>
 
 namespace drake {
 namespace multibody {

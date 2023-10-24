@@ -87,5 +87,23 @@ drake_cc_library(
     ],
 )
 
+drake_cc_library(
+    name = "mpm_transfer",
+    srcs = [
+        "mpm_transfer.cc",
+    ],
+    hdrs = [
+        "mpm_transfer.h",
+    ],
+    deps = [
+        ":pad",
+        ":pad_splatter"
+        ":particles",
+        ":sparse_grid",
+        ":grid_data"
+        "//common:essential",
+    ],
+)
+
 
 add_lint_tests()

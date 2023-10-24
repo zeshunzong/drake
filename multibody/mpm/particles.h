@@ -249,7 +249,9 @@ class Particles {
   std::vector<Vector3<T>> temporary_vector_field_{};
   std::vector<Matrix3<T>> temporary_matrix_field_{};
 
-  std::vector<PadSplatter<T>> pad_splatters_{}; // store weight and dw
+
+  // store weight and weight gradients, as well as transferring utilities
+  std::vector<PadSplatter<T>> pad_splatters_{}; 
 };
 }  // namespace mpm
 }  // namespace multibody
