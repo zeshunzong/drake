@@ -1,12 +1,18 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <memory>
+#include <numeric>
 #include <utility>
 #include <vector>
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/mpm/internal/mass_and_momentum.h"
+#include "drake/multibody/mpm/internal/math_utils.h"
+#include "drake/multibody/mpm/pad_splatter.h"
+#include "drake/multibody/mpm/sparse_grid.h"
 
 namespace drake {
 namespace multibody {
@@ -44,13 +50,31 @@ class Particles {
   /**
    *  Adds (appends) a particle into Particles with given properties.
    * <!-- TODO(zeshunzong): More attributes will come later. -->
-   * <!-- TODO(zeshunzong): Do we always start from rest shape? so F=I? -->
    */
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
                    const T& mass, const T& reference_volume,
                    const Matrix3<T>& trial_deformation_gradient,
                    const Matrix3<T>& elastic_deformation_gradient,
                    const Matrix3<T>& B_matrix);
+
+  /**
+   * Adds (appends) a particle into Particles with given properties, assuming
+   * starts from rest shape.
+   * <!-- TODO(zeshunzong): More attributes will come later. -->
+   */
+  void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
+                   const T& mass, const T& reference_volume);
+
+  /**
+   * Sorts particles (all data attributes) lexicographically (based on the batch
+   * index of each particle).
+   * <!-- TODO(zeshunzong): add a check to ensure that batch_indices_ has been
+   * updated -->
+   * <!-- TODO(zeshunzong): make the Reorder function private -->
+   * <!-- TODO(zeshunzong): consider making sorted_indices a class attribute to
+   * avoid allocation -->
+   */
+  void SortParticles();
 
   /**
    * Permutes all states in Particles with respect to the index set new_order.
@@ -198,7 +222,7 @@ class Particles {
    * Sets the trial deformation gradient at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetTrialDeformationGradient(size_t p, const Matrix3<T>& F_trial_in) {
+  void SetTrialDeformationGradientAt(size_t p, const Matrix3<T>& F_trial_in) {
     DRAKE_ASSERT(p < num_particles_);
     trial_deformation_gradients_[p] = F_trial_in;
   }
@@ -207,7 +231,7 @@ class Particles {
    * Sets the elastic deformation gradient at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetElasticDeformationGradient(size_t p, const Matrix3<T>& FE_in) {
+  void SetElasticDeformationGradientAt(size_t p, const Matrix3<T>& FE_in) {
     DRAKE_ASSERT(p < num_particles_);
     elastic_deformation_gradients_[p] = FE_in;
   }
@@ -216,10 +240,59 @@ class Particles {
    * Sets the B_matrix at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetBMatrix(size_t p, const Matrix3<T>& B_matrix) {
+  void SetBMatrixAt(size_t p, const Matrix3<T>& B_matrix) {
     DRAKE_ASSERT(p < num_particles_);
     B_matrices_[p] = B_matrix;
   }
+
+  /**
+   * Given particle p, returns its 3d batch index.
+   * @pre 0 <= p < num_particles()
+   */
+  const Vector3<int>& GetBatchIndexAt(size_t p) const {
+    DRAKE_ASSERT(p < batch_indices_.size());
+    return batch_indices_[p];
+  }
+
+  /**
+   * Returns a mutable reference of batch_indices_
+   */
+  std::vector<Vector3<int>>& GetMutableBatchIndices() { return batch_indices_; }
+
+  /**
+   * Updates the pad splatter for each particle. More specifically, it updates
+   * and stores the interpolation weights and weight gradients used for
+   * transferring between partciels and grid nodes. Moreover, the global indices
+   * of the neighbor nodes for each particle p is also stored.
+   * @note when calling this the grid and particles should have been sorted.
+   * @note whenever particles move their positions, padsplatters become
+   * outdated.
+   */
+  void UpdatePadSplatters(const SparseGrid<T>& grid) {
+    for (size_t p = 0; p < num_particles(); ++p) {
+      pad_splatters_[p].Update(GetBatchIndexAt(p), GetPositionAt(p), grid);
+    }
+  }
+
+  /**
+   * Splats particle p's mass, velocity and stress onto its local_pad.
+   * The local_pad should correspond to the batch_index of particle p.
+   * <!-- TODO(zeshunzong): also splats stress to force -->
+   */
+  void SplatOneParticleToItsPad(size_t p, const SparseGrid<T>& grid,
+                                Pad<T>* local_pad) const {
+    pad_splatters_[p].SplatToPad(
+        GetBatchIndexAt(p), grid, GetMassAt(p), GetPositionAt(p),
+        GetVelocityAt(p), GetBMatrixAt(p) * grid.Dp_inv(),
+        GetReferenceVolumeAt(p),
+        Matrix3<T>::Zero(),  // neglect stress currently
+        GetElasticDeformationGradientAt(p), local_pad);
+  }
+
+  /**
+   * Returns the total mass and momentum, from the Particles' perspective.
+   */
+  internal::MassAndMomentum<T> ComputeTotalMassAndMomentumParticles() const;
 
  private:
   size_t num_particles_ = 0;
@@ -241,6 +314,16 @@ class Particles {
   std::vector<T> temporary_scalar_field_{};
   std::vector<Vector3<T>> temporary_vector_field_{};
   std::vector<Matrix3<T>> temporary_matrix_field_{};
+  std::vector<Vector3<int>> temporary_batch_indices_{};
+
+  // store weight and weight gradients, as well as transferring utilities
+  std::vector<PadSplatter<T>> pad_splatters_{};
+
+  // Stores the 3d batch index that each particle belongs to.
+  // the 3d batch index is the 3d index of a node whose distance to the given
+  // particle is the shortest among all grid nodes. {(i, j, k) ⋅ h | i, j, k ∈
+  // ℤ}
+  std::vector<Vector3<int>> batch_indices_{};
 };
 }  // namespace mpm
 }  // namespace multibody

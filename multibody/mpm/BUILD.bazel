@@ -12,6 +12,28 @@ package(
 )
 
 drake_cc_library(
+    name = "pad",
+    hdrs = [
+        "pad.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "pad_splatter",
+    hdrs = [
+        "pad_splatter.h",
+    ],
+    deps = [
+        ":pad",
+        "//common:essential",
+        "//multibody/mpm/internal:b_spline",
+    ],
+)
+
+drake_cc_library(
     name = "particles",
     srcs = [
         "particles.cc",
@@ -20,8 +42,12 @@ drake_cc_library(
         "particles.h",
     ],
     deps = [
+        ":pad_splatter",
+        ":sparse_grid",
         "//common:autodiff",
         "//common:essential",
+        "//multibody/mpm/internal:mass_and_momentum",
+        "//multibody/mpm/internal:math_utils",
     ],
 )
 
@@ -29,6 +55,67 @@ drake_cc_googletest(
     name = "particles_test",
     deps = [
         ":particles",
+    ],
+)
+
+drake_cc_library(
+    name = "sparse_grid",
+    srcs = [
+        "sparse_grid.cc",
+    ],
+    hdrs = [
+        "sparse_grid.h",
+    ],
+    deps = [
+        "//common:autodiff",
+        "//common:essential",
+        "//multibody/mpm/internal:hashing_utils",
+        "//multibody/mpm/internal:mass_and_momentum",
+        "//multibody/mpm/internal:math_utils",
+    ],
+)
+
+drake_cc_googletest(
+    name = "sparse_grid_and_particles_test",
+    deps = [
+        ":particles",
+        ":sparse_grid",
+    ],
+)
+
+drake_cc_library(
+    name = "grid_data",
+    hdrs = [
+        "grid_data.h",
+    ],
+    deps = [
+        ":sparse_grid",
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_transfer",
+    srcs = [
+        "mpm_transfer.cc",
+    ],
+    hdrs = [
+        "mpm_transfer.h",
+    ],
+    deps = [
+        ":grid_data",
+        ":pad",
+        ":particles",
+        ":sparse_grid",
+        "//common:essential",
+    ],
+)
+
+drake_cc_googletest(
+    name = "mpm_transfer_test",
+    deps = [
+        ":mpm_transfer",
+        "//common/test_utilities:eigen_matrix_compare",
     ],
 )
 

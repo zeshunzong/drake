@@ -20,10 +20,10 @@ class BSpline {
   // Constructs a 3D quadratic B spline (function) centered at center with
   // scaling h. See class documentation for details.
   // @pre h > 0
-  BSpline(double h, const Vector3<double>& center);
+  BSpline(double h, const Vector3<T>& center);
 
   double h() const { return h_; }
-  const Vector3<double>& center() const { return center_; }
+  const Vector3<T>& center() const { return center_; }
 
   // Computes BSpline(x), parameterized by h_ and center_.
   T ComputeValue(const Vector3<T>& x) const;
@@ -55,7 +55,7 @@ class BSpline {
   double h_{};
   double one_over_h_{};
   // The "center" of the Bspline, or (xc, yc, zc) in above comment
-  Vector3<double> center_{};
+  Vector3<T> center_{};
 };
 
 }  // namespace internal

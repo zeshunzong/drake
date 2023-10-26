@@ -19,7 +19,9 @@ Particles<T>::Particles(size_t num_particles)
       B_matrices_(num_particles),
       temporary_scalar_field_(num_particles),
       temporary_vector_field_(num_particles),
-      temporary_matrix_field_(num_particles) {}
+      temporary_matrix_field_(num_particles),
+      temporary_batch_indices_(num_particles),
+      batch_indices_(num_particles) {}
 
 template <typename T>
 void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
@@ -55,6 +57,8 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
       std::swap(trial_deformation_gradients_[i],
                 trial_deformation_gradients_[ind]);
       std::swap(B_matrices_[i], B_matrices_[ind]);
+
+      std::swap(batch_indices_[i], batch_indices_[ind]);
     } else {
       DRAKE_UNREACHABLE();
     }
@@ -99,6 +103,11 @@ void Particles<T>::Reorder2(const std::vector<size_t>& new_order) {
     temporary_matrix_field_[i] = B_matrices_[new_order[i]];
   }
   B_matrices_.swap(temporary_matrix_field_);
+
+  for (size_t i = 0; i < num_particles_; ++i) {
+    temporary_batch_indices_[i] = batch_indices_[new_order[i]];
+  }
+  batch_indices_.swap(temporary_batch_indices_);
 }
 
 template <typename T>
@@ -120,6 +129,62 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
   temporary_scalar_field_.emplace_back();
   temporary_vector_field_.emplace_back();
   temporary_matrix_field_.emplace_back();
+  temporary_batch_indices_.emplace_back();
+
+  pad_splatters_.emplace_back();
+  batch_indices_.emplace_back();
+}
+
+template <typename T>
+void Particles<T>::AddParticle(const Vector3<T>& position,
+                               const Vector3<T>& velocity, const T& mass,
+                               const T& reference_volume) {
+  positions_.emplace_back(position);
+  velocities_.emplace_back(velocity);
+  masses_.emplace_back(mass);
+  reference_volumes_.emplace_back(reference_volume);
+  // assume rest shape at beginning
+  trial_deformation_gradients_.emplace_back(Matrix3<T>::Identity());
+  elastic_deformation_gradients_.emplace_back(Matrix3<T>::Identity());
+  B_matrices_.emplace_back(Matrix3<T>::Zero());
+  ++num_particles_;
+
+  temporary_scalar_field_.emplace_back();
+  temporary_vector_field_.emplace_back();
+  temporary_matrix_field_.emplace_back();
+  temporary_batch_indices_.emplace_back();
+
+  pad_splatters_.emplace_back();
+  batch_indices_.emplace_back();
+}
+
+template <typename T>
+void Particles<T>::SortParticles() {
+  std::vector<size_t> sorted_indices(num_particles());
+  std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
+  std::sort(sorted_indices.begin(), sorted_indices.end(),
+            [this](size_t i1, size_t i2) {
+              return internal::CompareIndex3DLexicographically(
+                  batch_indices_[i1], batch_indices_[i2]);
+            });
+  // Reorder the particles
+  Reorder(sorted_indices);
+}
+
+template <typename T>
+internal::MassAndMomentum<T>
+Particles<T>::ComputeTotalMassAndMomentumParticles() const {
+  internal::MassAndMomentum<T> total_mass_momentum{};
+  for (size_t p = 0; p < num_particles_; ++p) {
+    total_mass_momentum.total_mass += masses_[p];
+    total_mass_momentum.total_momentum += masses_[p] * velocities_[p];
+    total_mass_momentum.total_angular_momentum +=
+        masses_[p] *
+        (positions_[p].cross(velocities_[p]) +
+         internal::ContractionWithLeviCivita<T>(B_matrices_[p].transpose()));
+  }
+
+  return total_mass_momentum;
 }
 
 template class Particles<double>;
