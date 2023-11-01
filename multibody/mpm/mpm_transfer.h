@@ -45,6 +45,7 @@ class MpmTransfer {
    */
   void G2P(const SparseGrid<T>& grid, const GridData<T>& grid_data,
            Particles<T>* particles, double dt) {
+    DRAKE_DEMAND(!particles->grid_and_particles_and_splatters_need_update());
     DRAKE_ASSERT(dt > 0.0);
     size_t p_start, p_end, idx_local;
     Pad<T> local_pad;
