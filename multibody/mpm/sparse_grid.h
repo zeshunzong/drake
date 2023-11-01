@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -132,7 +133,6 @@ class SparseGrid {
   /// @note User should call this function to update the SparseGrid whenever the
   /// underlying particle positions change, by *only* calling
   /// this.Update(particles.positions(), &particles.GetMutableBatchIndices()).
-  /// All other functionalities of this class will then be up-to-date.
   void Update(const std::vector<Vector3<T>>& positions,
               std::vector<Vector3<int>>* batch_indices);
 
@@ -140,10 +140,35 @@ class SparseGrid {
 
   double h() const { return h_; }
 
+  /// This is the matrix Dₚ⁻¹ as in equation (173) in
+  /// https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf. This
+  /// is a diagonal matrix with all diagonal elements being the same. We thus
+  /// store it as a scalar -- the common diagonal entry. For the quadratic
+  /// interpolaton we use, Dₚ⁻¹ = (0.25 ⋅ h² ⋅ I) ⁻¹, so we hard-code it as
+  /// Dp_inv_ = 4/h².
   double Dp_inv() const { return Dp_inv_; }
 
+  /// <-- TODO(zeshunzong): consider remove this getter -->
   const std::vector<size_t>& batch_sizes() const { return batch_sizes_; }
 
+  ///           o ---- o ---- o ---- o ---- o ---- o
+  ///           |      |      |      |      |      |
+  ///           |   ppp|ppp  l|l     |    tt| ttzzz|
+  ///           o ---- o ---- o ---- o ---- o ---- o
+  ///           |   ppp|ppp   |ll    |   ttt|tt  zz|
+  ///           |   xxx|xxxuuu|uuu kk|kkk   |      |
+  ///           o ---- o ---- o ---- # ---- o ---- o
+  ///           |   xxx|xxxuuu|uuu k |  k   |      |
+  ///           |   yyy|yyy   |   qqq|q q   |      |
+  ///           o ---- * ---- o ---- o ---- o ---- o
+  ///
+  /// For computation purpose, particles clustered around one grid node are
+  /// classified into one batch (the batch is marked by their center grid node).
+  /// See the schematic illustration above. Each particle belongs to *exactly*
+  /// one batch, and there will always be num_active_nodes() batches (some of
+  /// them may be empty). GetBatchSizeAtNode(i) returns the number of particles
+  /// in batch i, i.e. the number of particles clustered around grid node with
+  /// global lexicographical index i. For instance, GetBatchSizeAtNode(#) = 7.
   size_t GetBatchSizeAtNode(size_t index_1d) const {
     DRAKE_ASSERT(index_1d < num_active_nodes());
     return batch_sizes_[index_1d];
@@ -177,31 +202,22 @@ class SparseGrid {
     return map_from_1d_to_3d_[index_1d];
   }
 
-  /// Calculates the sparsity pattern of the hessian matrix d²e/dv² where e is
-  /// the elastic energy and v is grid velocities. Each grid node is interating
-  /// with its 124 neighbors. result[i] is a std::vector<int> that stores grid
-  /// nodes that are interacting with node i and whose indices are larger than
-  /// or equal to i, as the hessian is a symmetric matrix.
-  /// <!-- TODO(zeshunzong) Documentation can be elaborated. Testing will be
-  /// deferred when we check hession -->
-  std::vector<std::vector<int>> CalcGridHessianSparsityPattern() const;
-
  private:
-  /// Removes all existing active grid nodes.
+  // Removes all existing active grid nodes.
   void ClearActiveNodes();
 
-  /// Sorts active grid nodes lexicographically.
+  // Sorts active grid nodes lexicographically.
   void SortActiveNodes();
 
-  /// For each position x in positions, computes the 3d grid index {i, j, k}
-  /// such that (ih, jh, kh) is the closet grid node to position x. When the
-  /// position x is the position of a particle, the corresponding 3d grid index
-  /// {i, j, k} is called the batch index of this particle.
-  /// @pre batch_indices->size() = positions.size()
+  // For each position x in positions, computes the 3d grid index {i, j, k}
+  // such that (ih, jh, kh) is the closet grid node to position x. When the
+  // position x is the position of a particle, the corresponding 3d grid index
+  // {i, j, k} is called the batch index of this particle.
+  // @pre batch_indices->size() = positions.size()
   void ComputeBatchIndices(const std::vector<Vector3<T>>& positions,
                            std::vector<Vector3<int>>* batch_indices);
 
-  /// Resets the counter for the number of particles in each batch
+  // Resets the counter for the number of particles in each batch
   void ResetBatchSizes() {
     batch_sizes_.resize(num_active_nodes());
     std::fill(batch_sizes_.begin(), batch_sizes_.end(), 0);
@@ -209,39 +225,14 @@ class SparseGrid {
 
   double h_{};
 
-  /// This is the matrix Dₚ⁻¹ as in equation (173) in
-  /// https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf. This
-  /// is a diagonal matrix with all diagonal elements being the same. We thus
-  /// store it as a scalar -- the common diagonal entry. For the quadratic
-  /// interpolaton we use, Dₚ⁻¹ = (0.25 ⋅ h² ⋅ I) ⁻¹, so we hard-code it as
-  /// Dp_inv_ = 4/h².
   double Dp_inv_{};
   std::vector<Vector3<int>> map_from_1d_to_3d_;
   std::unordered_map<Vector3<int>, size_t> map_from_3d_to_1d_;
 
-  // A vector holding the number of particles inside each batch,
-  // size=num_active_grids
-
-  //           o ---- o ---- o ---- o ---- o ---- o
-  //           |      |      |      |      |      |
-  //           |   ppp|ppp  l|l     |    tt| ttzzz|
-  //           o ---- o ---- o ---- o ---- o ---- o
-  //           |   ppp|ppp   |ll    |   ttt|tt  zz|
-  //           |   xxx|xxxuuu|uuu kk|kkk   |      |
-  //           o ---- o ---- o ---- # ---- o ---- o
-  //           |   xxx|xxxuuu|uuu k |  k   |      |
-  //           |   yyy|yyy   |   qqq|q q   |      |
-  //           o ---- * ---- o ---- o ---- o ---- o
-  //
-  // For computation purpose, particles clustered around one grid node are
-  // classified into one batch (the batch is marked by their center grid node).
-  // See the schematic illustration above. Each particle belongs to *exactly*
-  // one batch, and there will always be num_active_nodes() batches (some of
-  // them may be empty). batch_sizes_[i] records the number of particles in its
-  // batch, i.e. the number of particles clustered around grid node with global
-  // lexicographical index i. For instance, batch_sizes_[#] = 7. The sum of all
-  // batch sizes should be the same as total number of particles.
+  // A vector holding the number of particles inside each batch.
   // @note batch_sizes_.size() = num_active_nodes()
+  // @note The sum of all batch sizes should be the same as total number of
+  // particles.
   std::vector<size_t> batch_sizes_{};
 };
 

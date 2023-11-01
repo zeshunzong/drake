@@ -133,6 +133,7 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
 
   pad_splatters_.emplace_back();
   batch_indices_.emplace_back();
+  grid_and_particles_and_splatters_need_update_ = true;
 }
 
 template <typename T>
@@ -156,6 +157,7 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
 
   pad_splatters_.emplace_back();
   batch_indices_.emplace_back();
+  grid_and_particles_and_splatters_need_update_ = true;
 }
 
 template <typename T>

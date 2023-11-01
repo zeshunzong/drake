@@ -44,6 +44,8 @@ class Particles {
    * Creates a Particles container with num_particles particles.
    * Length of each std::vector is set to num_particles, but zero-initialized.
    * This will be used sampling info is loaded externally.
+   * <-- TODO(zeshunzong): update this method so that loading external sampling
+   * info can be done completely within this function -->
    */
   explicit Particles(size_t num_particles);
 
@@ -66,15 +68,26 @@ class Particles {
                    const T& mass, const T& reference_volume);
 
   /**
-   * Sorts particles (all data attributes) lexicographically (based on the batch
-   * index of each particle).
-   * <!-- TODO(zeshunzong): add a check to ensure that batch_indices_ has been
-   * updated -->
-   * <!-- TODO(zeshunzong): make the Reorder function private -->
-   * <!-- TODO(zeshunzong): consider making sorted_indices a class attribute to
-   * avoid allocation -->
+   * Assuming the grid has been updated, sorts particles (all data attributes)
+   * lexicographically (based on the batch index of each particle), and then
+   * updates all splatters so that all weights and weight gradients are
+   * up-to-date.
+   * The grid nodes and particles particles ordering, as well as the weights,
+   * will be accurate until grid_and_particles_and_splatters_need_update_ is
+   * reset to true.
    */
-  void SortParticles();
+  void SortParticlesAndUpdateSplatters(const SparseGrid<T>& grid) {
+    SortParticles();
+    UpdatePadSplatters(grid);
+    grid_and_particles_and_splatters_need_update_ = false;
+  }
+
+  // void UpdateGridParticlesAndSplatters(SparseGrid<T>* grid) {
+  //   grid->Update(positions(), &GetMutableBatchIndices());
+  //   SortParticles();
+  //   UpdatePadSplatters(*grid);
+  //   grid_and_particles_and_splatters_need_update_ = false;
+  // }
 
   /**
    * Permutes all states in Particles with respect to the index set new_order.
@@ -106,11 +119,15 @@ class Particles {
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
    * velocity.
+   * @note this is the only method that changes particle positions.
+   * @note grid nodes and particles ordering, as well as splatters, need to be
+   * updated once particle positions change.
    */
   void AdvectParticles(double dt) {
     for (size_t p = 0; p < num_particles_; ++p) {
       positions_[p] += dt * velocities_[p];
     }
+    grid_and_particles_and_splatters_need_update_ = true;
   }
 
   size_t num_particles() const { return num_particles_; }
@@ -201,15 +218,6 @@ class Particles {
   }
 
   /**
-   * Sets the position at p-th particle from input.
-   * @pre 0 <= p < num_particles()
-   */
-  void SetPositionAt(size_t p, const Vector3<T>& position) {
-    DRAKE_ASSERT(p < num_particles_);
-    positions_[p] = position;
-  }
-
-  /**
    * Sets the velocity at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
@@ -260,21 +268,6 @@ class Particles {
   std::vector<Vector3<int>>& GetMutableBatchIndices() { return batch_indices_; }
 
   /**
-   * Updates the pad splatter for each particle. More specifically, it updates
-   * and stores the interpolation weights and weight gradients used for
-   * transferring between partciels and grid nodes. Moreover, the global indices
-   * of the neighbor nodes for each particle p is also stored.
-   * @note when calling this the grid and particles should have been sorted.
-   * @note whenever particles move their positions, padsplatters become
-   * outdated.
-   */
-  void UpdatePadSplatters(const SparseGrid<T>& grid) {
-    for (size_t p = 0; p < num_particles(); ++p) {
-      pad_splatters_[p].Update(GetBatchIndexAt(p), GetPositionAt(p), grid);
-    }
-  }
-
-  /**
    * Splats particle p's mass, velocity and stress onto its local_pad.
    * The local_pad should correspond to the batch_index of particle p.
    * <!-- TODO(zeshunzong): also splats stress to force -->
@@ -289,12 +282,39 @@ class Particles {
         GetElasticDeformationGradientAt(p), local_pad);
   }
 
+  void UpdateVelocityParticleFromItsPad(size_t p, const Pad<T>& local_pad) {
+    Vector3<T> new_particle_v =
+        pad_splatters_[p].AccumulateToParticle(local_pad);
+    SetVelocityAt(p, new_particle_v);
+  }
+
   /**
    * Returns the total mass and momentum, from the Particles' perspective.
    */
   internal::MassAndMomentum<T> ComputeTotalMassAndMomentumParticles() const;
 
+  bool grid_and_particles_and_splatters_need_update() const {
+    return grid_and_particles_and_splatters_need_update_;
+  }
+
  private:
+  // Sorts particles (all data attributes) lexicographically (based on the batch
+  // index of each particle).
+  void SortParticles();
+
+  // Updates the pad splatter for each particle. More specifically, it updates
+  // and stores the interpolation weights and weight gradients used for
+  // transferring between partciels and grid nodes. Moreover, the global indices
+  // of the neighbor nodes for each particle p is also stored.
+  // @note when calling this the grid and particles should have been sorted.
+  // @note whenever particles move their positions, padsplatters become
+  // outdated.
+  void UpdatePadSplatters(const SparseGrid<T>& grid) {
+    for (size_t p = 0; p < num_particles(); ++p) {
+      pad_splatters_[p].Update(GetBatchIndexAt(p), GetPositionAt(p), grid);
+    }
+  }
+
   size_t num_particles_ = 0;
   std::vector<Vector3<T>> positions_{};
   std::vector<Vector3<T>> velocities_{};
@@ -324,6 +344,8 @@ class Particles {
   // particle is the shortest among all grid nodes. {(i, j, k) ⋅ h | i, j, k ∈
   // ℤ}
   std::vector<Vector3<int>> batch_indices_{};
+
+  bool grid_and_particles_and_splatters_need_update_ = true;
 };
 }  // namespace mpm
 }  // namespace multibody

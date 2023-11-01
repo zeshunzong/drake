@@ -42,8 +42,9 @@ void SparseGrid<T>::Update(const std::vector<Vector3<T>>& positions,
 
           if (map_from_3d_to_1d_.count(neighbor_node) == 0) {
             // if this node is not active, mark as active here
-            map_from_1d_to_3d_.emplace_back(std::move(neighbor_node));
-            map_from_3d_to_1d_[neighbor_node] = SIZE_MAX;
+            map_from_1d_to_3d_.emplace_back(neighbor_node);
+            map_from_3d_to_1d_[neighbor_node] =
+                std::numeric_limits<size_t>::max();
           }
         }
       }
@@ -73,40 +74,6 @@ void SparseGrid<T>::SortActiveNodes() {
   for (size_t i = 0; i < num_active_nodes(); ++i) {
     map_from_3d_to_1d_[map_from_1d_to_3d_[i]] = i;
   }
-}
-
-template <typename T>
-std::vector<std::vector<int>> SparseGrid<T>::CalcGridHessianSparsityPattern()
-    const {
-  // the value to be returned
-  std::vector<std::vector<int>> pattern;
-  Vector3<int> current_index_3d;
-  size_t neighbornode_index_1d;
-  // loop over all active grid nodes
-  for (size_t index1d = 0; index1d < num_active_nodes(); ++index1d) {
-    current_index_3d = Expand1DIndex(index1d);
-    std::vector<int> pattern_i;
-    // get its 125 neighbors
-    for (int ic = -2; ic <= 2; ++ic) {
-      for (int ib = -2; ib <= 2; ++ib) {
-        for (int ia = -2; ia <= 2; ++ia) {
-          Vector3<int> neighbor_node_index_3d =
-              current_index_3d +
-              Vector3<int>(ia, ib, ic);  // global 3d index of its neighbor
-          if (IsActive(neighbor_node_index_3d)) {
-            // we first require this is an active grid node
-            neighbornode_index_1d = Reduce3DIndex(neighbor_node_index_3d);
-            if (neighbornode_index_1d >= index1d) {
-              // we also require that this block should be in the upper right
-              pattern_i.push_back(static_cast<int>(neighbornode_index_1d));
-            }
-          }
-        }
-      }
-    }
-    pattern.push_back(std::move(pattern_i));
-  }
-  return pattern;
 }
 
 template class SparseGrid<double>;

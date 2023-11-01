@@ -42,7 +42,7 @@ GTEST_TEST(SparseGridTest, TestParticlesAndGridSorting) {
   particles.AddParticle(particle_E_position, Vector3<double>::Zero(), 5.0, 5.0);
 
   grid.Update(particles.positions(), &particles.GetMutableBatchIndices());
-  particles.SortParticles();
+  particles.SortParticlesAndUpdateSplatters(grid);
 
   // Up to this point both grid and particles have been ordered
 

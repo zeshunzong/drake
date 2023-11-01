@@ -17,7 +17,7 @@ namespace mpm {
  * A class that stores interpolation weights and interpolation utilities for
  * transferring particle data to neighbor grid nodes. Here we only support a
  * quadratic b-spline interpolation.
- * Each particle p has its own PadSplatter. The attrbutes stored in this class
+ * Each particle p has its own PadSplatter. The attributes stored in this class
  * are up-to-date as long as the position of particle p does not change.
  * Throughout this class we refer to `this` particle as the particular particle
  * that is associated with `this` splatter.
@@ -30,14 +30,6 @@ class PadSplatter {
   PadSplatter() {}
 
   /**
-   * Marks the data stored in this class as outdated.
-   * Data stored this class must be up-to-date to correctly transfer data
-   * between particles and grid nodes. The only way to make the data up-to-date
-   * is to call the Update() function.
-   */
-  void SetOutdated() { is_up_to_date_ = false; }
-
-  /**
    * Assuming quadratic interpolation, computes 27 weights and weight gradients
    * for the b-spline interpolation function centered at the 27 grid nodes
    * neighboring to `this` particle, evaluated at `this` particle. It also
@@ -48,7 +40,6 @@ class PadSplatter {
   void Update(const Vector3<int>& particle_batch_index,
               const Vector3<T>& particle_position, const SparseGrid<T>& grid) {
     // lexicographically setup the 27 neighbor nodes
-
     int node_index_local;
     Vector3<int> node_index_3d;
     for (int a = -1; a <= 1; ++a) {
@@ -66,14 +57,13 @@ class PadSplatter {
 
           const internal::BSpline<T> bpline =
               internal::BSpline<T>(grid.h(), grid.GetPositionAt(node_index_3d));
-          const auto wip_and_dwip =
+          const auto [wip, dwip] =
               bpline.ComputeValueAndGradient(particle_position);
-          weights_[node_index_local] = wip_and_dwip.first;
-          weight_gradients_[node_index_local] = wip_and_dwip.second;
+          weights_[node_index_local] = wip;
+          weight_gradients_[node_index_local] = dwip;
         }
       }
     }
-    is_up_to_date_ = true;
   }
 
   /**
@@ -92,18 +82,18 @@ class PadSplatter {
    * @param[in] P_p              the Kirchhoff stress of `this` particle.
    * @param[in] FE_p             the *elastic* deformation gradient of `this`
    * particle.
-   * @param[out] local_pad       a pad stores info on the 27 neighbor nodes.
-   * They are the (3D) adjacent neighbor nodes of the center node with index
-   * batch_index.
-   * We follow the APIC transfer routine as in equations (172), (173), (189) in
+   * @param[out] local_pad       a pad stores info on the 27 neighbor nodes,
+   * states of `this` particle is accumulated onto this local_pad They are the
+   * (3D) adjacent neighbor nodes of the center node with index batch_index. We
+   * follow the APIC transfer routine as in equations (172), (173), (189) in
    * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf
+   * <-- TODO(zeshunzong): consider removing the dependency on SparseGrid -->
    */
   void SplatToPad(const Vector3<int>& particle_batch_index,
                   const SparseGrid<T>& grid, const T& m_p,
                   const Vector3<T>& x_p, const Vector3<T>& v_p,
                   const Matrix3<T>& C_p, const T& V0_p, const Matrix3<T>& P_p,
                   const Matrix3<T>& FE_p, Pad<T>* local_pad) const {
-    DRAKE_DEMAND(is_up_to_date_);
     int node_index_local;
     Vector3<int> node_index_3d;
 
@@ -135,10 +125,31 @@ class PadSplatter {
     }
   }
 
- private:
-  // becomes outdated whenever particle position changes
-  bool is_up_to_date_ = false;
+  /**
+   * transfer the 27 local grid velocities to particle
+   * more tbd...
+   */
+  Vector3<T> AccumulateToParticle(const Pad<T>& local_pad) {
+    // For each grid node affecting the current particle
+    Vector3<T> vp_new_i;
+    Vector3<T> vp_new = Vector3<T>::Zero();
+    int node_index_local;
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          node_index_local = (c + 1) + 3 * (b + 1) + 9 * (a + 1);
+          vp_new_i = local_pad.pad_velocities[node_index_local] *
+                     weights_[node_index_local];
+          // v_p^{n+1} = \sum v_i^{n+1} N_i(x_p)
+          vp_new += vp_new_i;
+        }
+      }
+    }
 
+    return vp_new;
+  }
+
+ private:
   std::array<size_t, 27> pad_nodes_global_indices_{};
 
   // weights_[i] = w_ip
