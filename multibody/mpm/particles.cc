@@ -5,26 +5,101 @@ namespace multibody {
 namespace mpm {
 
 template <typename T>
-Particles<T>::Particles() : num_particles_(0) {}
+Particles<T>::Particles() {}
 
 template <typename T>
-Particles<T>::Particles(size_t num_particles)
-    : num_particles_(num_particles),
-      positions_(num_particles),
-      velocities_(num_particles),
-      masses_(num_particles),
-      reference_volumes_(num_particles),
-      trial_deformation_gradients_(num_particles),
-      elastic_deformation_gradients_(num_particles),
-      B_matrices_(num_particles),
-      temporary_scalar_field_(num_particles),
-      temporary_vector_field_(num_particles),
-      temporary_matrix_field_(num_particles) {}
+void Particles<T>::AddParticle(const Vector3<T>& position,
+                               const Vector3<T>& velocity, const T& mass,
+                               const T& reference_volume,
+                               const Matrix3<T>& trial_deformation_gradient,
+                               const Matrix3<T>& elastic_deformation_gradient,
+                               const Matrix3<T>& B_matrix) {
+  positions_.emplace_back(position);
+  velocities_.emplace_back(velocity);
+  masses_.emplace_back(mass);
+  reference_volumes_.emplace_back(reference_volume);
+  trial_deformation_gradients_.emplace_back(trial_deformation_gradient);
+  elastic_deformation_gradients_.emplace_back(elastic_deformation_gradient);
+  B_matrices_.emplace_back(B_matrix);
+
+  temporary_scalar_field_.emplace_back();
+  temporary_vector_field_.emplace_back();
+  temporary_matrix_field_.emplace_back();
+  temporary_base_nodes_.emplace_back();
+
+  base_nodes_.emplace_back();
+  weights_.emplace_back();
+
+  permutation_.emplace_back();
+}
+
+template <typename T>
+void Particles<T>::AddParticle(const Vector3<T>& position,
+                               const Vector3<T>& velocity, const T& mass,
+                               const T& reference_volume) {
+  AddParticle(position, velocity, mass, reference_volume,
+              Matrix3<T>::Identity(), Matrix3<T>::Identity(),
+              Matrix3<T>::Zero());
+}
+
+template <typename T>
+void Particles<T>::Finalize() {
+  CheckAttributesSize();
+  // the number of batches must be bounded from above by the number of particles
+  batch_starts_.reserve(num_particles());
+  batch_sizes_.reserve(num_particles());
+}
+
+template <typename T>
+void Particles<T>::Prepare(double h) {
+  DRAKE_DEMAND(num_particles() > 0);
+  // 1) compute the base node for each particle
+  for (size_t p = 0; p < num_particles(); ++p) {
+    base_nodes_[p] = internal::ComputeBaseNodeFromPosition<T>(positions_[p], h);
+  }
+  // 2)
+  // 2.1 get a sorted permutation
+  std::iota(permutation_.begin(), permutation_.end(), 0);
+  std::sort(permutation_.begin(), permutation_.end(),
+            [this](size_t i1, size_t i2) {
+              return internal::CompareIndex3DLexicographically(base_nodes_[i1],
+                                                               base_nodes_[i2]);
+            });
+  // 2.2 shuffle particle data based on permutation
+  Reorder(permutation_);  // including base_nodes_
+  // 2.3 compute batch_starts_ and batch_sizes_
+  batch_starts_.clear();
+  batch_starts_.push_back(0);
+  batch_sizes_.clear();
+  Vector3<int> current_3d_index = base_nodes_[0];
+  size_t count = 1;
+  for (size_t p = 1; p < num_particles(); ++p) {
+    if (base_nodes_[p] == current_3d_index) {
+      ++count;
+    } else {
+      batch_starts_.push_back(p);
+      batch_sizes_.push_back(count);
+      // continue to next batch
+      current_3d_index = base_nodes_[p];
+      count = 1;
+    }
+  }
+  batch_sizes_.push_back(count);
+
+  DRAKE_DEMAND(batch_sizes_.size() == batch_starts_.size());
+
+  // 3. Compute d and dw
+  for (size_t p = 1; p < num_particles(); ++p) {
+    weights_[p].Reset(positions_[p], base_nodes_[p], h);
+  }
+
+  need_reordering_ = false;
+}
 
 template <typename T>
 void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
-  DRAKE_DEMAND((new_order.size()) == num_particles_);
-  for (size_t i = 0; i < num_particles_ - 1; ++i) {
+  DRAKE_DEMAND((new_order.size()) == num_particles());
+  for (size_t i = 0; i < num_particles() - 1; ++i) {
     // don't need to sort the last element if the first (n-1) elements have
     // already been sorted
     size_t ind = new_order[i];
@@ -55,6 +130,8 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
       std::swap(trial_deformation_gradients_[i],
                 trial_deformation_gradients_[ind]);
       std::swap(B_matrices_[i], B_matrices_[ind]);
+
+      std::swap(base_nodes_[i], base_nodes_[ind]);
     } else {
       DRAKE_UNREACHABLE();
     }
@@ -63,63 +140,67 @@ void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
 
 template <typename T>
 void Particles<T>::Reorder2(const std::vector<size_t>& new_order) {
-  DRAKE_DEMAND((new_order.size()) == num_particles_);
+  DRAKE_DEMAND((new_order.size()) == num_particles());
 
-  for (size_t i = 0; i < num_particles_; ++i) {
+  for (size_t i = 0; i < num_particles(); ++i) {
     temporary_scalar_field_[i] = masses_[new_order[i]];
   }
   masses_.swap(temporary_scalar_field_);
 
-  for (size_t i = 0; i < num_particles_; ++i) {
+  for (size_t i = 0; i < num_particles(); ++i) {
     temporary_scalar_field_[i] = reference_volumes_[new_order[i]];
   }
   reference_volumes_.swap(temporary_scalar_field_);
 
-  for (size_t i = 0; i < num_particles_; ++i) {
+  for (size_t i = 0; i < num_particles(); ++i) {
     temporary_vector_field_[i] = positions_[new_order[i]];
   }
   positions_.swap(temporary_vector_field_);
 
-  for (size_t i = 0; i < num_particles_; ++i) {
+  for (size_t i = 0; i < num_particles(); ++i) {
     temporary_vector_field_[i] = velocities_[new_order[i]];
   }
   velocities_.swap(temporary_vector_field_);
 
-  for (size_t i = 0; i < num_particles_; ++i) {
+  for (size_t i = 0; i < num_particles(); ++i) {
     temporary_matrix_field_[i] = trial_deformation_gradients_[new_order[i]];
   }
   trial_deformation_gradients_.swap(temporary_matrix_field_);
 
-  for (size_t i = 0; i < num_particles_; ++i) {
+  for (size_t i = 0; i < num_particles(); ++i) {
     temporary_matrix_field_[i] = elastic_deformation_gradients_[new_order[i]];
   }
   elastic_deformation_gradients_.swap(temporary_matrix_field_);
 
-  for (size_t i = 0; i < num_particles_; ++i) {
+  for (size_t i = 0; i < num_particles(); ++i) {
     temporary_matrix_field_[i] = B_matrices_[new_order[i]];
   }
   B_matrices_.swap(temporary_matrix_field_);
+
+  for (size_t i = 0; i < num_particles(); ++i) {
+    temporary_base_nodes_[i] = base_nodes_[new_order[i]];
+  }
+  base_nodes_.swap(temporary_base_nodes_);
 }
 
 template <typename T>
-void Particles<T>::AddParticle(const Vector3<T>& position,
-                               const Vector3<T>& velocity, const T& mass,
-                               const T& reference_volume,
-                               const Matrix3<T>& trial_deformation_gradient,
-                               const Matrix3<T>& elastic_deformation_gradient,
-                               const Matrix3<T>& B_matrix) {
-  positions_.emplace_back(position);
-  velocities_.emplace_back(velocity);
-  masses_.emplace_back(mass);
-  reference_volumes_.emplace_back(reference_volume);
-  trial_deformation_gradients_.emplace_back(trial_deformation_gradient);
-  elastic_deformation_gradients_.emplace_back(elastic_deformation_gradient);
-  B_matrices_.emplace_back(B_matrix);
-  ++num_particles_;
+void Particles<T>::CheckAttributesSize() const {
+  // by construction num_particles() = positions_.size()
+  DRAKE_DEMAND(num_particles() == velocities_.size());
+  DRAKE_DEMAND(num_particles() == masses_.size());
+  DRAKE_DEMAND(num_particles() == reference_volumes_.size());
+  DRAKE_DEMAND(num_particles() == trial_deformation_gradients_.size());
+  DRAKE_DEMAND(num_particles() == elastic_deformation_gradients_.size());
+  DRAKE_DEMAND(num_particles() == B_matrices_.size());
 
-  temporary_scalar_field_.emplace_back();
-  temporary_vector_field_.emplace_back();
-  temporary_matrix_field_.emplace_back();
+  DRAKE_DEMAND(num_particles() == temporary_scalar_field_.size());
+  DRAKE_DEMAND(num_particles() == temporary_vector_field_.size());
+  DRAKE_DEMAND(num_particles() == temporary_matrix_field_.size());
+
+  DRAKE_DEMAND(num_particles() == base_nodes_.size());
+  DRAKE_DEMAND(num_particles() == weights_.size());
+
+  DRAKE_DEMAND(num_particles() == permutation_.size());
 }
 
 template class Particles<double>;

@@ -1,12 +1,15 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <memory>
+#include <numeric>
 #include <utility>
 #include <vector>
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/mpm/interpolation_weights.h"
 
 namespace drake {
 namespace multibody {
@@ -18,7 +21,7 @@ namespace mpm {
  *
  * The Material Point Method (MPM) consists of a set of particles (implemented
  * in this class) and a background Eulerian grid (implemented in sparse_grid.h).
- * At each time step, particle mass and momentum are transferred to the grid
+ * At each time step, particle masses and momentums are transferred to the grid
  * nodes via a B-spline interpolation function (implemented in
  * internal::b_spline.h).
  */
@@ -30,16 +33,9 @@ class Particles {
   /**
    * Creates a Particles container with 0 particle. All std::vector<> are set
    * to length zero. This, working together with AddParticle(), should be the
-   * default version.
+   * default version to insert particles one after another.
    */
   Particles();
-
-  /**
-   * Creates a Particles container with num_particles particles.
-   * Length of each std::vector is set to num_particles, but zero-initialized.
-   * This will be used sampling info is loaded externally.
-   */
-  explicit Particles(size_t num_particles);
 
   /**
    *  Adds (appends) a particle into Particles with given properties.
@@ -52,77 +48,44 @@ class Particles {
                    const Matrix3<T>& elastic_deformation_gradient,
                    const Matrix3<T>& B_matrix);
 
-  /* Sort the particles into batches based on their positions.
-   Computes base_nodes_, batch_starts_, batch_sizes_.
-   Resets weights_.
-   Sorts the particle attributes based on base nodes. */
+  /**
+   * Adds (appends) a particle into Particles with given properties. We assume
+   * that the particles start from rest shape, so deformation gradient is
+   * identity and B_matrix is zero.
+   */
+  void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
+                   const T& mass, const T& reference_volume);
+
+  /**
+   * Indicates that all particles have been added. Performs size check and
+   * relevant space reservation.
+   * @note as of right now users can invoke other methods without calling
+   * Finalize(); it serves more like an internal checker.
+   */
+  void Finalize();
 
   /**
    * 1) Computes the base node for each particle.
    * 2) Sorts particle attributes lexicographically by their base nodes
-   * positions. 
-   * 3) Computes batch_starts_ and batch_sizes_. 
+   * positions.
+   * 3) Computes batch_starts_ and batch_sizes_.
    * 4) Compute weights and weight gradients
    */
-  void PrepareParticles(double dx) {
-    DRAKE_DEMAND(num_particles()>0);
-    // 1)
-    // put ComputeBaseNode() in mathutils, basically int(position/dx)
-    for (size_t p = 0; p < num_particles(); ++p) {
-      base_nodes_[p] = internal::ComputeBaseNode(positions_[p], dx);
-    }
+  void Prepare(double h);
 
-    // 2)
-    // 2.1 get a sorted permutation
-    std::vector<size_t> permutation(num_particles()); // consider preallocate this as attribute
-    std::iota(permutation.begin(), permutation.end(), 0);
-    std::sort(permutation.begin(), permutation.end(),
-              [this](size_t i1, size_t i2) {
-                return internal::CompareIndex3DLexicographically(
-                    base_nodes_[i1], base_nodes_[i2]);
-              });
-    // 2.2 shuffle particle data based on permutation
-    Reorder(permutation); // including base_nodes_
-    // 2.3 compute batch_starts_ and batch_sizes_
-    batch_starts_.clear();
-    batch_starts_.push_back(0);
-    batch_sizes_.clear();
-    Vector3<int> current_3d_index = base_nodes_[0]
-    size_t count = 1;
-    for (size_t p = 1; p < num_particles(); ++p) {
-      if (base_nodes_[p] == current_3d_index) {
-        ++count;
-      }
-      else {
-        batch_starts_.push_back(p);
-        batch_sizes_.push_back(count);
-        count = 1;
-      }
-    }
-    batch_sizes_.push_back(count);
-
-    // 3. Compute d and dw
-    for (size_t p = 1; p < num_particles(); ++p) {
-      weights_[p].Reset(base_nodes_[p], positions_[p], dx);
-    }
-
-    positions_have_changed_ = false;
-  }
-
-    /* Resizes the given `pads` and writes the particle data into the pads.
-    */
-  void SplatToPads(std::vector<Pad<T>>* pads) const {
-
-    DRAKE_DEMAND(!positions_have_changed_);
-    
+  void SplatToPads(double h, std::vector<Pad<T>>* pads) const {
+    DRAKE_DEMAND(!need_reordering_);
     pads->resize(num_batches());
-    for (int i = 0; i < num_batches(); ++i) {
+    for (size_t i = 0; i < num_batches(); ++i) {
       Pad<T>& pad = (*pads)[i];
-      pad.set_base_node(base_nodes_[i]);
-      const int p_start = batch_starts_[i];
-      const int p_end = p_start + batch_sizes_[i];
-      for (int p = p_start; p < p_end; ++p) {
-        weights_[p].SplatParticleDataToPad(*this, p, &pad);
+      const size_t p_start = batch_starts_[i];
+      const size_t p_end = p_start + batch_sizes_[i];
+      for (size_t p = p_start; p < p_end; ++p) {
+        weights_[p].SplatParticleDataToPad(
+            GetMassAt(p), GetPositionAt(p), GetVelocityAt(p),
+            GetAffineMomentumMatrixAt(p, h), GetReferenceVolumeAt(p),
+            GetPKStressAt(p), GetElasticDeformationGradientAt(p),
+            base_nodes_[i], h, &pad);
       }
     }
   }
@@ -164,12 +127,11 @@ class Particles {
     for (size_t p = 0; p < num_particles(); ++p) {
       positions_[p] += dt * velocities_[p];
     }
-    positions_have_changed_ = true;
+    need_reordering_ = true;
   }
 
   size_t num_particles() const { return positions_.size(); }
-
-  size_t num_batches() const { return base_nodes_.size(); }
+  size_t num_batches() const { return batch_starts_.size(); }
 
   // Disambiguation:
   // positions: a std::vector holding position of all particles.
@@ -244,6 +206,15 @@ class Particles {
   }
 
   /**
+   * Returns the first Piola Kirchhoff stress computed for the p-th particle.
+   * TODO(zeshunzong) implement it. may also change return type
+   */
+  Matrix3<T> GetPKStressAt(size_t p) const {
+    DRAKE_ASSERT(p < num_particles());
+    return Matrix3<T>::Zero();
+  }
+
+  /**
    * Returns the B_matrix of p-th particle. B_matrix is part of the affine
    * momentum matrix C as
    * v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p).
@@ -254,6 +225,17 @@ class Particles {
   const Matrix3<T>& GetBMatrixAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles());
     return B_matrices_[p];
+  }
+
+  /**
+   * Returns the affine momentum matrix C of the p-th particle.
+   * C_p = B_p * D_p^-1. In quadratic B-spline, D_p is a diagonal matrix all
+   * diagonal elements being 0.25*h*h.
+   */
+  Matrix3<T> GetAffineMomentumMatrixAt(size_t p, double h) const {
+    DRAKE_ASSERT(p < num_particles());
+    Matrix3<T> C_matrix = B_matrices_[p] * (4.0 / h / h);
+    return C_matrix;
   }
 
   /**
@@ -291,8 +273,56 @@ class Particles {
     DRAKE_ASSERT(p < num_particles());
     B_matrices_[p] = B_matrix;
   }
+  /**
+   * For computation purpose, particles clustered around one grid node are
+   * classified into one batch (the batch is marked by their center grid node).
+   * Each particle belongs to *exactly* one batch.
+   * After executing Prepare(), the batches and particles look like the
+   * following (schematically in 2D).
+   *
+   *           . ---- . ---- ~ ---- .
+   *           |      |      |9     |
+   *           |2     |64    |      |
+   *           x ---- o ---- + ---- #
+   *           |     3| 5    |7    8|
+   *           |    01|      |      |
+   *           . ---- * ---- . ---- .
+   *
+   * @note particles are sorted lexicographically based on their base nodes.
+   * Therefore, within a batch where the particles share a common base node,
+   * there is no fixed ordering for the particles (but the ordering is
+   * deterministic). base_nodes_[0] = base_nodes_[1] = (the 3d index of) *
+   * base_nodes_[2] = x
+   * base_nodes_[3] = base_nodes_[4] = base_nodes_[5] = base_nodes_[6] = o
+   * base_nodes_[7] = +
+   * base_nodes_[8] = #
+   * base_nodes_[9] = ~
+   * There are a total of num_batches() = six batches.
+   * batch_sizes_[0] = number of particles around * = 2
+   * batch_sizes_[1] = number of particles around x = 1
+   * batch_sizes_[2] = number of particles around o = 4
+   * batch_sizes_[3] = number of particles around + = 1
+   * batch_sizes_[4] = number of particles around # = 1
+   * batch_sizes_[5] = number of particles around ~ = 1
+   * @note the sum of all batch_sizes is equal to num_particles()
+   *
+   * batch_starts_[0] = the first particle in batch * = 0
+   * batch_starts_[1] = the first particle in batch x = 2
+   * batch_starts_[2] = the first particle in batch o = 4
+   * batch_starts_[3] = the first particle in batch + = 7
+   * batch_starts_[4] = the first particle in batch # = 8
+   * batch_starts_[5] = the first particle in batch ~ = 9
+   */
+  const std::vector<Vector3<int>>& base_nodes() { return base_nodes_; }
+  const std::vector<size_t>& batch_starts() { return batch_starts_; }
+  const std::vector<size_t>& batch_sizes() { return batch_sizes_; }
 
  private:
+  // Ensures that all attributes (std::vectors) have correct size. This only
+  // needs to be called when new particles are added.
+  // TODO(zeshunzong): more attributes may come later.
+  void CheckAttributesSize() const;
+
   // particle-wise data
   std::vector<Vector3<T>> positions_{};
   std::vector<Vector3<T>> velocities_{};
@@ -312,28 +342,33 @@ class Particles {
   std::vector<T> temporary_scalar_field_{};
   std::vector<Vector3<T>> temporary_vector_field_{};
   std::vector<Matrix3<T>> temporary_matrix_field_{};
+  std::vector<Vector3<int>> temporary_base_nodes_{};
 
   // particle-wise batch info
   // base_nodes_[i] is the 3d index of the base node of the i-th particle.
   // size = num_particles()
-  std::vector<Vector3<int>> base_nodes_;
+  std::vector<Vector3<int>> base_nodes_{};
 
   // size = num_particles()
-  // but this does not need to be sorted, as whenever sorting is required, this means particle positions change, so weights need to be re-computed
-  std::vector<InterpolationWeights<T>> weights_;
+  // but this does not need to be sorted, as whenever sorting is required, this
+  // means particle positions change, so weights need to be re-computed
+  std::vector<InterpolationWeights<T>> weights_{};
 
   // batch_starts_[i] is the index of the first particle in the i-th batch.
   // size = total number of batches, <= num_particles().
-  std::vector<int> batch_starts_;
+  std::vector<size_t> batch_starts_;
   // batch_sizes_[i] is the number of particles in the i-th batch.
   // size = total number of batches, <= num_particles().
-  std::vector<int> batch_sizes_;
+  std::vector<size_t> batch_sizes_;
 
   // a flag to track necessary updates when particle positions change
   // particle positions can only be changed in
   // 1) AddParticle()
   // 2) AdvectParticles()
-  bool positions_have_changed_ = true;
+  bool need_reordering_ = true;
+
+  // intermediary variable used for sorting particles
+  std::vector<size_t> permutation_;
 };
 }  // namespace mpm
 }  // namespace multibody
