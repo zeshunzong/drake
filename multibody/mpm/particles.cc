@@ -31,6 +31,7 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
   weights_.emplace_back();
 
   permutation_.emplace_back();
+  CheckAttributesSize();
 }
 
 template <typename T>
@@ -43,31 +44,30 @@ void Particles<T>::AddParticle(const Vector3<T>& position,
 }
 
 template <typename T>
-void Particles<T>::Finalize() {
-  CheckAttributesSize();
-  // the number of batches must be bounded from above by the number of particles
-  batch_starts_.reserve(num_particles());
-  batch_sizes_.reserve(num_particles());
-}
-
-template <typename T>
 void Particles<T>::Prepare(double h) {
   DRAKE_DEMAND(num_particles() > 0);
+  // reserve space for batch_starts_ and batch_sizes
+  // they can be upper-bounded by num_particles() as there is no empty batch
+  if (batch_starts_.size() == 0) {
+    batch_starts_.reserve(num_particles());
+    batch_sizes_.reserve(num_particles());
+  }
+
   // 1) compute the base node for each particle
   for (size_t p = 0; p < num_particles(); ++p) {
     base_nodes_[p] = internal::ComputeBaseNodeFromPosition<T>(positions_[p], h);
   }
-  // 2)
-  // 2.1 get a sorted permutation
+  // 2) sorts particle attributes
+  // 2.1) get a sorted permutation
   std::iota(permutation_.begin(), permutation_.end(), 0);
   std::sort(permutation_.begin(), permutation_.end(),
             [this](size_t i1, size_t i2) {
               return internal::CompareIndex3DLexicographically(base_nodes_[i1],
                                                                base_nodes_[i2]);
             });
-  // 2.2 shuffle particle data based on permutation
+  // 2.2) shuffle particle data based on permutation
   Reorder(permutation_);  // including base_nodes_
-  // 2.3 compute batch_starts_ and batch_sizes_
+  // 3) compute batch_starts_ and batch_sizes_
   batch_starts_.clear();
   batch_starts_.push_back(0);
   batch_sizes_.clear();
@@ -88,11 +88,11 @@ void Particles<T>::Prepare(double h) {
 
   DRAKE_DEMAND(batch_sizes_.size() == batch_starts_.size());
 
-  // 3. Compute d and dw
+  // 4) compute d and dw
   for (size_t p = 1; p < num_particles(); ++p) {
     weights_[p].Reset(positions_[p], base_nodes_[p], h);
   }
-
+  // 5) mark that the reordering has been done
   need_reordering_ = false;
 }
 

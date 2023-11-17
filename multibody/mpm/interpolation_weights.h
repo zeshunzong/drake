@@ -39,11 +39,11 @@ template <typename T>
 class InterpolationWeights {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(InterpolationWeights);
-
   /**
-   * Empty constructor.
-  */
-  InterpolationWeights(){}
+   * All weights and weight gradients are initialized to be zero. The weights
+   * will be valid until Reset() is called.
+   */
+  InterpolationWeights() = default;
 
   /**
    * Given the particle's position, computes the weights and weight gradients
@@ -70,7 +70,10 @@ class InterpolationWeights {
         }
       }
     }
+    is_valid_ = true;
   }
+
+  void SetInvalid() { is_valid_ = false; }
 
   /**
    * Accumulates the mass, velocity, and stress from the p-th particle onto a
@@ -87,6 +90,7 @@ class InterpolationWeights {
                               const Matrix3<T>& FE_p,
                               const Vector3<int>& base_node, double h,
                               Pad<T>* pad) const {
+    DRAKE_DEMAND(is_valid_);
     (*pad).base_node = base_node;
     int node_index_local;
     Vector3<int> node_index_3d;
@@ -120,6 +124,7 @@ class InterpolationWeights {
  private:
   std::array<T, 27> weights_{};
   std::array<Vector3<T>, 27> weight_gradients_{};
+  bool is_valid_ = false;
 };
 }  // namespace mpm
 }  // namespace multibody

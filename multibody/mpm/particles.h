@@ -57,19 +57,27 @@ class Particles {
                    const T& mass, const T& reference_volume);
 
   /**
-   * Indicates that all particles have been added. Performs size check and
-   * relevant space reservation.
-   * @note as of right now users can invoke other methods without calling
-   * Finalize(); it serves more like an internal checker.
-   */
-  void Finalize();
-
-  /**
+   * To perform ParticlesToGrid transfer and GridToParticles transfer (as
+   * implemented in mpm_transfer.h), one needs the up-to-date interpolation
+   * weights. Further, to speedup data accessing, particles are also sorted
+   * lexicographically with respect to their positions. This function calculates
+   * the interpolation weights and reorders particles based on current particle
+   * positions, thus providing all necessary ingredients (including
+   * batch_starts_ and batch_sizes_) for transfers.
+   * @note both the particle ordering and the interpolation weights only depend
+   * on particle positions. Hence, this function should be called whenever the
+   * particle positions change.
+   * @note a flag need_reordering_ is (temporarily) used to keep track of the
+   * dependency on particle positions. It will be set to false when this
+   * function executes.
+   *
+   * To be more specific, the following operations are performed:
    * 1) Computes the base node for each particle.
    * 2) Sorts particle attributes lexicographically by their base nodes
    * positions.
    * 3) Computes batch_starts_ and batch_sizes_.
-   * 4) Compute weights and weight gradients
+   * 4) Computes weights and weight gradients
+   * 5) Marks that the reordering has been done.
    */
   void Prepare(double h);
 
@@ -91,41 +99,13 @@ class Particles {
   }
 
   /**
-   * Permutes all states in Particles with respect to the index set new_order.
-   * e.g. given new_order = [2; 0; 1], and the original particle states are
-   * denoted by [p0; p1; p2]. The new particles states after calling Reorder()
-   * will be [p2; p0; p1].
-   * @pre new_order is a permutation of [0, ..., num_particles-1]
-   * @note this algorithm uses index-chasing and might be O(n^2) in worst case.
-   * <!-- TODO(zeshunzong): this algorithm is insanely fast for "simple"
-   * permutations. A standard O(n) algorithm is implemented below in Reorder2().
-   * We should decide on which one to choose once the whole MPM pipeline is
-   * finished. -->
-   * <!-- TODO(zeshunzong): May need to reorder more attributes as more
-   * attributes are added. -->
-   * <!-- TODO(zeshunzong): Make it private -->
-   */
-  void Reorder(const std::vector<size_t>& new_order);
-
-  /**
-   * Performs the same function as Reorder but in a constant O(n) way.
-   * <!-- TODO(zeshunzong): Technically we can reduce the number of copies
-   * introducing a flag and alternatingly return the (currently) ordered
-   * attribute. Since we haven't decided which algorithm to use, for clarity
-   * let's defer this for future. -->
-   * <!-- TODO(zeshunzong): May need to reorder more attributes as more
-   * attributes are added. -->
-   * <!-- TODO(zeshunzong): Make it private -->
-   */
-  void Reorder2(const std::vector<size_t>& new_order);
-
-  /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
    * velocity.
    */
   void AdvectParticles(double dt) {
     for (size_t p = 0; p < num_particles(); ++p) {
       positions_[p] += dt * velocities_[p];
+      weights_[p].SetInvalid();
     }
     need_reordering_ = true;
   }
@@ -321,7 +301,33 @@ class Particles {
   // Ensures that all attributes (std::vectors) have correct size. This only
   // needs to be called when new particles are added.
   // TODO(zeshunzong): more attributes may come later.
+  // TODO(zeshunzong): technically this can be removed. I decided to keep it
+  // only during the current stage where we don't have a final say of the number
+  // of attributes we want.
   void CheckAttributesSize() const;
+
+  // Permutes all states in Particles with respect to the index set new_order.
+  // e.g. given new_order = [2; 0; 1], and the original particle states are
+  // denoted by [p0; p1; p2]. The new particles states after calling Reorder()
+  // will be [p2; p0; p1].
+  // @pre new_order is a permutation of [0, ..., num_particles-1]
+  // @note this algorithm uses index-chasing and might be O(n^2) in worst case.
+  // TODO(zeshunzong): this algorithm is insanely fast for "simple"
+  // permutations. A standard O(n) algorithm is implemented below in Reorder2().
+  // We should decide on which one to choose once the whole MPM pipeline is
+  // finished.
+  // TODO(zeshunzong): May need to reorder more attributes as more
+  // attributes are added.
+  void Reorder(const std::vector<size_t>& new_order);
+
+  // Performs the same function as Reorder but in a constant O(n) way.
+  // TODO(zeshunzong): Technically we can reduce the number of copies
+  // introducing a flag and alternatingly return the (currently) ordered
+  // attribute. Since we haven't decided which algorithm to use, for clarity
+  // let's defer this for future.
+  // TODO(zeshunzong): May need to reorder more attributes as more
+  // attributes are added.
+  void Reorder2(const std::vector<size_t>& new_order);
 
   // particle-wise data
   std::vector<Vector3<T>> positions_{};
