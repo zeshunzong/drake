@@ -41,7 +41,7 @@ class InterpolationWeights {
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(InterpolationWeights);
   /**
    * All weights and weight gradients are initialized to be zero. The weights
-   * will be valid until Reset() is called.
+   * will be invalid until Reset() is called.
    */
   InterpolationWeights() = default;
 
