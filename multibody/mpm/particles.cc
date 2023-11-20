@@ -89,7 +89,7 @@ void Particles<T>::Prepare(double h) {
   DRAKE_DEMAND(batch_sizes_.size() == batch_starts_.size());
 
   // 4) compute d and dw
-  for (size_t p = 1; p < num_particles(); ++p) {
+  for (size_t p = 0; p < num_particles(); ++p) {
     weights_[p].Reset(positions_[p], base_nodes_[p], h);
   }
   // 5) mark that the reordering has been done

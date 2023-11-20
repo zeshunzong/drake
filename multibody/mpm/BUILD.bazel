@@ -28,11 +28,11 @@ drake_cc_library(
         "interpolation_weights.h",
     ],
     deps = [
+        ":pad",
         "//common:autodiff",
         "//common:essential",
         "//multibody/mpm/internal:b_spline",
         "//multibody/mpm/internal:math_utils",
-        ":pad",
     ],
 )
 

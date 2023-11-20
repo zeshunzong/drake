@@ -70,10 +70,7 @@ class InterpolationWeights {
         }
       }
     }
-    is_valid_ = true;
   }
-
-  void SetInvalid() { is_valid_ = false; }
 
   /**
    * Accumulates the mass, velocity, and stress from the p-th particle onto a
@@ -90,7 +87,6 @@ class InterpolationWeights {
                               const Matrix3<T>& FE_p,
                               const Vector3<int>& base_node, double h,
                               Pad<T>* pad) const {
-    DRAKE_DEMAND(is_valid_);
     (*pad).base_node = base_node;
     int node_index_local;
     Vector3<int> node_index_3d;
@@ -124,7 +120,6 @@ class InterpolationWeights {
  private:
   std::array<T, 27> weights_{};
   std::array<Vector3<T>, 27> weight_gradients_{};
-  bool is_valid_ = false;
 };
 }  // namespace mpm
 }  // namespace multibody

@@ -105,7 +105,6 @@ class Particles {
   void AdvectParticles(double dt) {
     for (size_t p = 0; p < num_particles(); ++p) {
       positions_[p] += dt * velocities_[p];
-      weights_[p].SetInvalid();
     }
     need_reordering_ = true;
   }
