@@ -48,10 +48,8 @@ void Particles<T>::Prepare(double h) {
   DRAKE_DEMAND(num_particles() > 0);
   // reserve space for batch_starts_ and batch_sizes
   // they can be upper-bounded by num_particles() as there is no empty batch
-  if (batch_starts_.size() == 0) {
-    batch_starts_.reserve(num_particles());
-    batch_sizes_.reserve(num_particles());
-  }
+  batch_starts_.reserve(num_particles());
+  batch_sizes_.reserve(num_particles());
 
   // 1) compute the base node for each particle
   for (size_t p = 0; p < num_particles(); ++p) {
