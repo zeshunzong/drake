@@ -137,6 +137,31 @@ T CalcExpXMinusExpYOverXMinusY(const T& x, const T& y) {
   return CalcExpXMinus1OverX(p) * exp(y);
 }
 
+// Returns true if index_1 < index_2
+inline bool CompareIndex3DLexicographically(const Vector3<int>& index_1,
+                                            const Vector3<int>& index_2) {
+  if (index_1(0) != index_2(0)) return index_1(0) < index_2(0);
+  if (index_1(1) != index_2(1)) return index_1(1) < index_2(1);
+  return index_1(2) < index_2(2);
+}
+
+// Computes the 3d position of a 3d index.
+// The position for node indexed by (i, j, k) is (ih, jh, kh) by construction.
+inline Vector3<double> ComputePositionFromIndex3D(const Vector3<int>& index,
+                                                  double h) {
+  return Vector3<double>{index(0) * h, index(1) * h, index(2) * h};
+}
+
+// Computes the base node (i.e., the closet h-integral node) of a given
+// position.
+template <typename T>
+Vector3<int> ComputeBaseNodeFromPosition(const Vector3<T>& position, double h) {
+  using std::round;
+  return Vector3<int>{static_cast<int>(round(position(0) / h)),
+                      static_cast<int>(round(position(1) / h)),
+                      static_cast<int>(round(position(2) / h))};
+}
+
 }  // namespace internal
 }  // namespace mpm
 }  // namespace multibody
