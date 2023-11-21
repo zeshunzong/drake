@@ -12,6 +12,31 @@ package(
 )
 
 drake_cc_library(
+    name = "pad",
+    hdrs = [
+        "pad.h",
+    ],
+    deps = [
+        "//common:autodiff",
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "interpolation_weights",
+    hdrs = [
+        "interpolation_weights.h",
+    ],
+    deps = [
+        ":pad",
+        "//common:autodiff",
+        "//common:essential",
+        "//multibody/mpm/internal:b_spline",
+        "//multibody/mpm/internal:math_utils",
+    ],
+)
+
+drake_cc_library(
     name = "particles",
     srcs = [
         "particles.cc",
@@ -20,6 +45,7 @@ drake_cc_library(
         "particles.h",
     ],
     deps = [
+        ":interpolation_weights",
         "//common:autodiff",
         "//common:essential",
     ],
