@@ -51,10 +51,9 @@ class GridData {
   /**
    * Adds mass, momentum, and force to the node at index_1d.
    */
-  void AccumulateAt(
-      size_t index_1d,
-      const std::tuple<T, Vector3<T>, Vector3<T>>& mass_momentum_force) {
-    const auto [mass, momentum, force] = mass_momentum_force;
+  void AccumulateAt(size_t index_1d, const T& mass, const Vector3<T>& momentum,
+                    const Vector3<T>& force) {
+    DRAKE_ASSERT(index_1d < masses_.size());
     masses_[index_1d] += mass;
     momentums_[index_1d] += momentum;
     forces_[index_1d] += force;
@@ -63,7 +62,8 @@ class GridData {
   /**
    * Computes the velocity for momentum for each active grid node.
    * @pre masses_[i] > 0 for all i. This will be satisfied if only active grid
-   * nodes are stored and mass has already been accumulated.
+   * nodes are stored and grid data for each active grid node has already been
+   * accumulated.
    */
   void ComputeVelocitiesFromMomentums() {
     for (size_t i = 0; i < masses_.size(); ++i) {
