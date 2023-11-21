@@ -113,6 +113,8 @@ class SparseGrid {
 
   /// Given a list of base nodes, mark all their neighbors as active nodes, c.f.
   /// Fig. 3. map_3d_to_1d_ and map_1d_to_3d_ are updated accordingly.
+  /// A node is considered active if and only if it's a neighbor of at least one
+  /// node in the *current* base_nodes.
   void MarkActiveNodes(const std::vector<Vector3<int>>& base_nodes);
 
   /// Checks whether the grid node at position (ih, jh, kh) is active or not,
@@ -135,7 +137,7 @@ class SparseGrid {
   }
 
  private:
-  double h_;
+  double h_{};
 
   // maps the 3d index (i,j,k) of a node to its 1d index in the memory
   std::unordered_map<Vector3<int>, size_t> map_3d_to_1d_{};
