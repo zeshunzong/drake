@@ -42,6 +42,43 @@ void SparseGrid<T>::MarkActiveNodes(
   }
 }
 
+template <typename T>
+void SparseGrid<T>::GatherFromPads(const std::vector<Pad<T>>& pads,
+                                   GridData<T>* grid_data) const {
+  grid_data->Reset(num_active_nodes());
+  for (const Pad<T>& pad : pads) {
+    const Vector3<int>& base_node = pad.base_node;
+    // Add pad data to grid data.
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          size_t index_1d = To1DIndex(Vector3<int>(a, b, c) + base_node);
+          grid_data->AccumulateAt(index_1d, pad.GetMassAt(a, b, c),
+                                  pad.GetMomentumAt(a, b, c),
+                                  pad.GetForceAt(a, b, c));
+        }
+      }
+    }
+  }
+  grid_data->ComputeVelocitiesFromMomentums();
+}
+
+template <typename T>
+internal::MassAndMomentum<T> SparseGrid<T>::ComputeTotalMassMomentum(
+    const GridData<T>& grid_data) const {
+  internal::MassAndMomentum<T> total_mass_momentum{};
+  for (size_t i = 0; i < num_active_nodes(); ++i) {
+    total_mass_momentum.total_mass += grid_data.masses_[i];
+    total_mass_momentum.total_momentum +=
+        grid_data.masses_[i] * grid_data.velocities_[i];
+    const Vector3<T> node_position =
+        internal::ComputePositionFromIndex3D(To3DIndex(i), h_);
+    total_mass_momentum.total_angular_momentum +=
+        grid_data.masses_[i] * node_position.cross(grid_data.velocities_[i]);
+  }
+  return total_mass_momentum;
+}
+
 template class SparseGrid<double>;
 template class SparseGrid<AutoDiffXd>;
 
