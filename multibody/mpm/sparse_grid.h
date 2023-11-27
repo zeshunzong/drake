@@ -15,7 +15,7 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
-/*
+/**
  * Implements a (3D) sparse grid that serves as the background Eulerian grid in
  * the Material Point Method. In MPM, a Cartesian grid is used to update
  * particle states. Particles reside in the grid as (schematically in 2D)
@@ -101,12 +101,14 @@ class SparseGrid {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(SparseGrid);
   SparseGrid() = delete;
-  /*
+
+  /**
    * Creates a SparseGrid with grid node spacing h.
    * @pre h > 0.
    */
   explicit SparseGrid(double h);
-  /*
+
+  /**
    * Preallocates memory for the sparse grid, based on a guess capacity of the
    * upper bound of the number of active grid nodes.
    */
@@ -115,7 +117,8 @@ class SparseGrid {
   size_t num_active_nodes() const { return map_1d_to_3d_.size(); }
 
   double h() const { return h_; }
-  /*
+
+  /**
    * Given a list of base nodes, mark all their neighbors as active nodes, c.f.
    * Fig. 3. map_3d_to_1d_ and map_1d_to_3d_ are updated accordingly.
    * A node is considered active if and only if it's a neighbor of at least one
@@ -123,7 +126,7 @@ class SparseGrid {
    */
   void MarkActiveNodes(const std::vector<Vector3<int>>& base_nodes);
 
-  /*
+  /**
    * Checks whether the grid node at position (ih, jh, kh) is active or not,
    * where we denote {i, j, k} = index_3d.
    */
@@ -131,7 +134,7 @@ class SparseGrid {
     return map_3d_to_1d_.count(index_3d) == 1;
   }
 
-  /*
+  /**
    * Given 3d index, returns the corresponding 1d index
    * @throw exception if (ih, jh, kh) is not an active node.
    */
@@ -139,7 +142,7 @@ class SparseGrid {
     return map_3d_to_1d_.at(index_3d);
   }
 
-  /*
+  /**
    * Given 1d index, returns the corresponding 3d index.
    * @pre index_1d < num_active_nodes()
    */
@@ -148,14 +151,14 @@ class SparseGrid {
     return map_1d_to_3d_[index_1d];
   }
 
-  /*
+  /**
    * Computes the states on grid by adding all data stored on pads.
    * @pre Pads doesn't contain data into non-active region of the grid.
    */
   void GatherFromPads(const std::vector<Pad<T>>& pads,
                       GridData<T>* grid_data) const;
 
-  /*
+  /**
    * Computes the mass and momentum of the body embedded in this grid, by
    * summing over all active grid nodes.
    */
