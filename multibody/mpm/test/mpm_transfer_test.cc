@@ -68,14 +68,20 @@ GTEST_TEST(MpmTransferTest, TestP2GMassMomentumConservation) {
   mpm_transfer.SetUpTransfer(&grid, &particles);
   mpm_transfer.P2G(particles, grid, &grid_data);
 
-  // note: invoking p2g multiple types should still be valid
-  mpm_transfer.P2G(particles, grid, &grid_data);
-
   internal::MassAndMomentum<double> mass_and_momentum_from_grid =
       grid.ComputeTotalMassMomentum(grid_data);
 
   CheckConservation(mass_and_momentum_from_particles,
                     mass_and_momentum_from_grid);
+
+  // note: invoking p2g multiple times should still be valid
+  mpm_transfer.P2G(particles, grid, &grid_data);
+
+  internal::MassAndMomentum<double> mass_and_momentum_from_grid2 =
+      grid.ComputeTotalMassMomentum(grid_data);
+
+  CheckConservation(mass_and_momentum_from_particles,
+                    mass_and_momentum_from_grid2);
 }
 
 }  // namespace
