@@ -25,6 +25,10 @@ namespace mpm {
  * At each time step, particle masses and momentums are transferred to the grid
  * nodes via a B-spline interpolation function (implemented in
  * internal::b_spline.h).
+ *
+ * For efficient accessing purpose, particles are classified into batches based
+ * on their positions. See detailed documentation on num_batches(),
+ * base_nodes(), batch_starts(), and batch_sizes().
  */
 template <typename T>
 class Particles {
@@ -83,9 +87,9 @@ class Particles {
   void Prepare(double h);
 
   /**
-   * Splats kinematic data on particles to pads. Particles residing in the same
-   * batch *i* will have their data splat to the i-th pad.
+   * Splats particle data to pads. Particles in batch i will have their
    * @note pads will be cleared and resized to num_batches().
+   * @pre particles need to be *prepared* by Prepare().
    */
   void SplatToPads(double h, std::vector<Pad<T>>* pads) const;
 
@@ -290,6 +294,10 @@ class Particles {
   /**
    * Computes the mass and momentum of the continuum by summing over all
    * particles.
+   * For angular momentum computation, see Jiang, C., Schroeder, C., & Teran, J.
+   * (2017). An angular momentum conserving affine-particle-in-cell method.
+   * Journal of Computational Physics, 338, 137-164. Section 5.3.
+   * https://math.ucdavis.edu/~jteran/papers/JST17.pdf
    */
   internal::MassAndMomentum<T> ComputeTotalMassMomentum() const;
 
