@@ -5,6 +5,7 @@
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/mpm/grid_data.h"
 #include "drake/multibody/mpm/internal/hashing_utils.h"
 #include "drake/multibody/mpm/internal/mass_and_momentum.h"
 #include "drake/multibody/mpm/internal/math_utils.h"
@@ -135,6 +136,16 @@ class SparseGrid {
     DRAKE_ASSERT(index_1d < num_active_nodes());
     return map_1d_to_3d_[index_1d];
   }
+
+  /// Computes the states on grid by adding all data stored on pads.
+  /// @pre Pads doesn't contain data into non-active region of the grid.
+  void GatherFromPads(const std::vector<Pad<T>>& pads,
+                      GridData<T>* grid_data) const;
+
+  /// Computes the mass and momentum of the body embedded in this grid, by
+  /// summing over all active grid nodes.
+  internal::MassAndMomentum<T> ComputeTotalMassMomentum(
+      const GridData<T>& grid_data) const;
 
  private:
   double h_{};

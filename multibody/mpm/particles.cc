@@ -95,6 +95,25 @@ void Particles<T>::Prepare(double h) {
 }
 
 template <typename T>
+void Particles<T>::SplatToPads(double h, std::vector<Pad<T>>* pads) const {
+  DRAKE_DEMAND(!need_reordering_);
+  pads->clear();  // remove existing data
+  pads->resize(num_batches());
+  for (size_t i = 0; i < num_batches(); ++i) {
+    Pad<T>& pad = (*pads)[i];
+    const size_t p_start = batch_starts_[i];
+    const size_t p_end = p_start + batch_sizes_[i];
+    for (size_t p = p_start; p < p_end; ++p) {
+      weights_[p].SplatParticleDataToPad(
+          GetMassAt(p), GetPositionAt(p), GetVelocityAt(p),
+          GetAffineMomentumMatrixAt(p, h), GetReferenceVolumeAt(p),
+          GetPKStressAt(p), GetElasticDeformationGradientAt(p), base_nodes_[i],
+          h, &pad);
+    }
+  }
+}
+
+template <typename T>
 void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
   DRAKE_DEMAND((new_order.size()) == num_particles());
   for (size_t i = 0; i < num_particles() - 1; ++i) {
@@ -199,6 +218,21 @@ void Particles<T>::CheckAttributesSize() const {
   DRAKE_DEMAND(num_particles() == weights_.size());
 
   DRAKE_DEMAND(num_particles() == permutation_.size());
+}
+
+template <typename T>
+internal::MassAndMomentum<T> Particles<T>::ComputeTotalMassMomentum() const {
+  internal::MassAndMomentum<T> total_mass_momentum{};
+  for (size_t p = 0; p < num_particles(); ++p) {
+    total_mass_momentum.total_mass += masses_[p];
+    total_mass_momentum.total_momentum += masses_[p] * velocities_[p];
+    total_mass_momentum.total_angular_momentum +=
+        masses_[p] *
+        (positions_[p].cross(velocities_[p]) +
+         internal::ContractionWithLeviCivita<T>(B_matrices_[p].transpose()));
+  }
+
+  return total_mass_momentum;
 }
 
 template class Particles<double>;

@@ -9,6 +9,7 @@
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/mpm/internal/mass_and_momentum.h"
 #include "drake/multibody/mpm/interpolation_weights.h"
 
 namespace drake {
@@ -81,22 +82,12 @@ class Particles {
    */
   void Prepare(double h);
 
-  void SplatToPads(double h, std::vector<Pad<T>>* pads) const {
-    DRAKE_DEMAND(!need_reordering_);
-    pads->resize(num_batches());
-    for (size_t i = 0; i < num_batches(); ++i) {
-      Pad<T>& pad = (*pads)[i];
-      const size_t p_start = batch_starts_[i];
-      const size_t p_end = p_start + batch_sizes_[i];
-      for (size_t p = p_start; p < p_end; ++p) {
-        weights_[p].SplatParticleDataToPad(
-            GetMassAt(p), GetPositionAt(p), GetVelocityAt(p),
-            GetAffineMomentumMatrixAt(p, h), GetReferenceVolumeAt(p),
-            GetPKStressAt(p), GetElasticDeformationGradientAt(p),
-            base_nodes_[i], h, &pad);
-      }
-    }
-  }
+  /**
+   * Splats kinematic data on particles to pads. Particles residing in the same
+   * batch *i* will have their data splat to the i-th pad.
+   * @note pads will be cleared and resized to num_batches().
+   */
+  void SplatToPads(double h, std::vector<Pad<T>>* pads) const;
 
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
@@ -230,7 +221,7 @@ class Particles {
    * Sets the trial deformation gradient at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetTrialDeformationGradient(size_t p, const Matrix3<T>& F_trial_in) {
+  void SetTrialDeformationGradientAt(size_t p, const Matrix3<T>& F_trial_in) {
     DRAKE_ASSERT(p < num_particles());
     trial_deformation_gradients_[p] = F_trial_in;
   }
@@ -239,7 +230,7 @@ class Particles {
    * Sets the elastic deformation gradient at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetElasticDeformationGradient(size_t p, const Matrix3<T>& FE_in) {
+  void SetElasticDeformationGradientAt(size_t p, const Matrix3<T>& FE_in) {
     DRAKE_ASSERT(p < num_particles());
     elastic_deformation_gradients_[p] = FE_in;
   }
@@ -248,7 +239,7 @@ class Particles {
    * Sets the B_matrix at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetBMatrix(size_t p, const Matrix3<T>& B_matrix) {
+  void SetBMatrixAt(size_t p, const Matrix3<T>& B_matrix) {
     DRAKE_ASSERT(p < num_particles());
     B_matrices_[p] = B_matrix;
   }
@@ -295,6 +286,12 @@ class Particles {
   const std::vector<Vector3<int>>& base_nodes() { return base_nodes_; }
   const std::vector<size_t>& batch_starts() { return batch_starts_; }
   const std::vector<size_t>& batch_sizes() { return batch_sizes_; }
+
+  /**
+   * Computes the mass and momentum of the continuum by summing over all
+   * particles.
+   */
+  internal::MassAndMomentum<T> ComputeTotalMassMomentum() const;
 
  private:
   // Ensures that all attributes (std::vectors) have correct size. This only
