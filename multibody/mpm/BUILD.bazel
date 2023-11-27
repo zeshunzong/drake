@@ -48,6 +48,7 @@ drake_cc_library(
         ":interpolation_weights",
         "//common:autodiff",
         "//common:essential",
+        "//multibody/mpm/internal:mass_and_momentum",
     ],
 )
 
@@ -78,6 +79,7 @@ drake_cc_library(
         "sparse_grid.h",
     ],
     deps = [
+        ":grid_data",
         ":pad",
         "//common:autodiff",
         "//common:essential",
@@ -104,7 +106,18 @@ drake_cc_library(
     ],
     deps = [
         ":grid_data",
+        ":pad",
+        ":particles",
+        ":sparse_grid",
         "//common:essential",
+    ],
+)
+
+drake_cc_googletest(
+    name = "mpm_transfer_test",
+    deps = [
+        ":mpm_transfer",
+        "//common/test_utilities:eigen_matrix_compare",
     ],
 )
 

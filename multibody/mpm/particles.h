@@ -9,6 +9,7 @@
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/mpm/internal/mass_and_momentum.h"
 #include "drake/multibody/mpm/interpolation_weights.h"
 
 namespace drake {
@@ -24,6 +25,47 @@ namespace mpm {
  * At each time step, particle masses and momentums are transferred to the grid
  * nodes via a B-spline interpolation function (implemented in
  * internal::b_spline.h).
+ *
+ * For computation purpose, particles clustered around one grid node are
+ * classified into one batch (the batch is marked by their center grid node).
+ * Each particle belongs to *exactly* one batch.
+ * After executing Prepare(), the batches and particles look like the
+ * following (schematically in 2D).
+ *
+ *           . ---- . ---- ~ ---- .
+ *           |      |      |9     |
+ *           |2     |64    |      |
+ *           x ---- o ---- + ---- #
+ *           |     3| 5    |7    8|
+ *           |    01|      |      |
+ *           . ---- * ---- . ---- .
+ *
+ * @note particles are sorted lexicographically based on their base nodes.
+ * Therefore, within a batch where the particles share a common base node,
+ * there is no fixed ordering for the particles (but the ordering is
+ * deterministic). base_nodes_[0] = base_nodes_[1] = (the 3d index of) *
+ * base_nodes_[2] = x
+ * base_nodes_[3] = base_nodes_[4] = base_nodes_[5] = base_nodes_[6] = o
+ * base_nodes_[7] = +
+ * base_nodes_[8] = #
+ * base_nodes_[9] = ~
+ * There are a total of num_batches() = six batches.
+ * batch_sizes_[0] = number of particles around * = 2
+ * batch_sizes_[1] = number of particles around x = 1
+ * batch_sizes_[2] = number of particles around o = 4
+ * batch_sizes_[3] = number of particles around + = 1
+ * batch_sizes_[4] = number of particles around # = 1
+ * batch_sizes_[5] = number of particles around ~ = 1
+ * @note the sum of all batch_sizes is equal to num_particles()
+ *
+ * batch_starts_[0] = the first particle in batch * = 0
+ * batch_starts_[1] = the first particle in batch x = 2
+ * batch_starts_[2] = the first particle in batch o = 4
+ * batch_starts_[3] = the first particle in batch + = 7
+ * batch_starts_[4] = the first particle in batch # = 8
+ * batch_starts_[5] = the first particle in batch ~ = 9
+ *
+ * num_batches() = 6
  */
 template <typename T>
 class Particles {
@@ -81,22 +123,13 @@ class Particles {
    */
   void Prepare(double h);
 
-  void SplatToPads(double h, std::vector<Pad<T>>* pads) const {
-    DRAKE_DEMAND(!need_reordering_);
-    pads->resize(num_batches());
-    for (size_t i = 0; i < num_batches(); ++i) {
-      Pad<T>& pad = (*pads)[i];
-      const size_t p_start = batch_starts_[i];
-      const size_t p_end = p_start + batch_sizes_[i];
-      for (size_t p = p_start; p < p_end; ++p) {
-        weights_[p].SplatParticleDataToPad(
-            GetMassAt(p), GetPositionAt(p), GetVelocityAt(p),
-            GetAffineMomentumMatrixAt(p, h), GetReferenceVolumeAt(p),
-            GetPKStressAt(p), GetElasticDeformationGradientAt(p),
-            base_nodes_[i], h, &pad);
-      }
-    }
-  }
+  /**
+   * Splats particle data to pads. Particles in batch i will have their
+   * @note pads will be cleared and resized to num_batches().
+   * @pre Prepare() needs to be invoked before the call to SplatToPads().
+   * @pre h > 0
+   */
+  void SplatToPads(double h, std::vector<Pad<T>>* pads) const;
 
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
@@ -230,7 +263,7 @@ class Particles {
    * Sets the trial deformation gradient at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetTrialDeformationGradient(size_t p, const Matrix3<T>& F_trial_in) {
+  void SetTrialDeformationGradientAt(size_t p, const Matrix3<T>& F_trial_in) {
     DRAKE_ASSERT(p < num_particles());
     trial_deformation_gradients_[p] = F_trial_in;
   }
@@ -239,7 +272,7 @@ class Particles {
    * Sets the elastic deformation gradient at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetElasticDeformationGradient(size_t p, const Matrix3<T>& FE_in) {
+  void SetElasticDeformationGradientAt(size_t p, const Matrix3<T>& FE_in) {
     DRAKE_ASSERT(p < num_particles());
     elastic_deformation_gradients_[p] = FE_in;
   }
@@ -248,53 +281,24 @@ class Particles {
    * Sets the B_matrix at p-th particle from input.
    * @pre 0 <= p < num_particles()
    */
-  void SetBMatrix(size_t p, const Matrix3<T>& B_matrix) {
+  void SetBMatrixAt(size_t p, const Matrix3<T>& B_matrix) {
     DRAKE_ASSERT(p < num_particles());
     B_matrices_[p] = B_matrix;
   }
-  /**
-   * For computation purpose, particles clustered around one grid node are
-   * classified into one batch (the batch is marked by their center grid node).
-   * Each particle belongs to *exactly* one batch.
-   * After executing Prepare(), the batches and particles look like the
-   * following (schematically in 2D).
-   *
-   *           . ---- . ---- ~ ---- .
-   *           |      |      |9     |
-   *           |2     |64    |      |
-   *           x ---- o ---- + ---- #
-   *           |     3| 5    |7    8|
-   *           |    01|      |      |
-   *           . ---- * ---- . ---- .
-   *
-   * @note particles are sorted lexicographically based on their base nodes.
-   * Therefore, within a batch where the particles share a common base node,
-   * there is no fixed ordering for the particles (but the ordering is
-   * deterministic). base_nodes_[0] = base_nodes_[1] = (the 3d index of) *
-   * base_nodes_[2] = x
-   * base_nodes_[3] = base_nodes_[4] = base_nodes_[5] = base_nodes_[6] = o
-   * base_nodes_[7] = +
-   * base_nodes_[8] = #
-   * base_nodes_[9] = ~
-   * There are a total of num_batches() = six batches.
-   * batch_sizes_[0] = number of particles around * = 2
-   * batch_sizes_[1] = number of particles around x = 1
-   * batch_sizes_[2] = number of particles around o = 4
-   * batch_sizes_[3] = number of particles around + = 1
-   * batch_sizes_[4] = number of particles around # = 1
-   * batch_sizes_[5] = number of particles around ~ = 1
-   * @note the sum of all batch_sizes is equal to num_particles()
-   *
-   * batch_starts_[0] = the first particle in batch * = 0
-   * batch_starts_[1] = the first particle in batch x = 2
-   * batch_starts_[2] = the first particle in batch o = 4
-   * batch_starts_[3] = the first particle in batch + = 7
-   * batch_starts_[4] = the first particle in batch # = 8
-   * batch_starts_[5] = the first particle in batch ~ = 9
-   */
+
   const std::vector<Vector3<int>>& base_nodes() { return base_nodes_; }
   const std::vector<size_t>& batch_starts() { return batch_starts_; }
   const std::vector<size_t>& batch_sizes() { return batch_sizes_; }
+
+  /**
+   * Computes the mass and momentum of the continuum by summing over all
+   * particles.
+   * For angular momentum computation, see Jiang, C., Schroeder, C., & Teran, J.
+   * (2017). An angular momentum conserving affine-particle-in-cell method.
+   * Journal of Computational Physics, 338, 137-164. Section 5.3.
+   * https://math.ucdavis.edu/~jteran/papers/JST17.pdf
+   */
+  internal::MassAndMomentum<T> ComputeTotalMassMomentum() const;
 
  private:
   // Ensures that all attributes (std::vectors) have correct size. This only
