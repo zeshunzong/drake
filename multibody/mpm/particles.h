@@ -286,9 +286,24 @@ class Particles {
     B_matrices_[p] = B_matrix;
   }
 
+  /**
+   * For particles in the same batch denoted by batch_index, updates their
+   * velocities, B-matrices, and *trial* deformation gradient matrices, using
+   * the revalent grid data stored in batch_pad. Particles in the same batch
+   * (i.e. with the same base_node) are updated from the same 27 grid nodes (a
+   * 3by3by3 cube centered at that base_node). The information for the 27 grid
+   * nodes are stored in batch_pad.
+   * @pre batch_index < num_batches().
+   * @note particle positions are NOT updated in this function!
+   */
+  void UpdateBatchParticlesFromBatchPad(size_t batch_index, double dt,
+                                        const BatchPad<T>& batch_pad);
+
   const std::vector<Vector3<int>>& base_nodes() { return base_nodes_; }
   const std::vector<size_t>& batch_starts() { return batch_starts_; }
   const std::vector<size_t>& batch_sizes() { return batch_sizes_; }
+
+  bool NeedReordering() const { return need_reordering_; }
 
   /**
    * Computes the mass and momentum of the continuum by summing over all

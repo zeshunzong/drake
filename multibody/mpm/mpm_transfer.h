@@ -66,9 +66,21 @@ class MpmTransfer {
   void P2G(const Particles<T>& particles, const SparseGrid<T>& grid,
            GridData<T>* grid_data);
 
+  /**
+   * Grid to particles transfer.
+   * See Section 10.1 and 10.2 in
+   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
+   * Given grid_data, writes to particles.
+   */
+  void G2P(const SparseGrid<T>& grid, const GridData<T>& grid_data, double dt,
+           Particles<T>* particles);
+
  private:
   // scratch pads for transferring states from particles to grid nodes
   std::vector<Pad<T>> pads_{};
+
+  // scratch pad for transferring states from grid nodes to particles
+  BatchPad<T> batch_pad_{};
 };
 
 }  // namespace mpm

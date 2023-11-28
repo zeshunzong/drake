@@ -26,7 +26,7 @@ void CheckConservation(const internal::MassAndMomentum<double>& before,
 // Randomly generate some particles
 // Apply p2g
 // Compare mass and momentum before and after
-GTEST_TEST(MpmTransferTest, TestP2GMassMomentumConservation) {
+GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
   const double h = 0.714285;
 
   SparseGrid<double> grid(h);
@@ -82,6 +82,19 @@ GTEST_TEST(MpmTransferTest, TestP2GMassMomentumConservation) {
 
   CheckConservation(mass_and_momentum_from_particles,
                     mass_and_momentum_from_grid2);
+
+  // now we check G2P
+
+  mpm_transfer.G2P(grid, grid_data, 0.1, &particles);
+
+  internal::MassAndMomentum<double> mass_and_momentum_from_particles2 =
+      particles.ComputeTotalMassMomentum();
+
+  CheckConservation(mass_and_momentum_from_particles2,
+                    mass_and_momentum_from_grid);
+
+  // note: you cannot invoke G2P consecutively multiple times as particle
+  // positions have changed.
 }
 
 }  // namespace

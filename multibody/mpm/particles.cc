@@ -114,6 +114,23 @@ void Particles<T>::SplatToPads(double h, std::vector<Pad<T>>* pads) const {
 }
 
 template <typename T>
+void Particles<T>::UpdateBatchParticlesFromBatchPad(
+    size_t batch_index, double dt, const BatchPad<T>& batch_pad) {
+  DRAKE_ASSERT(batch_index < num_batches());
+  const size_t p_start = batch_starts_[batch_index];
+  const size_t p_end = p_start + batch_sizes_[batch_index];
+  for (size_t p = p_start; p < p_end; ++p) {
+    const ParticleVBGradV<T> particle_v_B_grad_v =
+        weights_[p].AccumulateFromBatchPad(GetPositionAt(p), batch_pad);
+    SetVelocityAt(p, particle_v_B_grad_v.v);
+    SetBMatrixAt(p, particle_v_B_grad_v.B_matrix);
+    SetTrialDeformationGradientAt(
+        p, (Matrix3<T>::Identity() + dt * particle_v_B_grad_v.grad_v) *
+               GetElasticDeformationGradientAt(p));
+  }
+}
+
+template <typename T>
 void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
   DRAKE_DEMAND((new_order.size()) == num_particles());
   for (size_t i = 0; i < num_particles() - 1; ++i) {

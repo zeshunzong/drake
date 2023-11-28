@@ -70,6 +70,14 @@ class GridData {
       velocities_[i] = momentums_[i] / masses_[i];
     }
   }
+
+  /**
+   * @pre index_1d < number of active nodes stored
+   */
+  const Vector3<T>& GetVelocityAt(size_t index_1d) const {
+    DRAKE_ASSERT(index_1d < velocities_.size());
+    return velocities_[index_1d];
+  }
 };
 
 }  // namespace mpm

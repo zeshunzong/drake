@@ -14,6 +14,13 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
+template <typename T>
+struct ParticleVBGradV {
+  Vector3<T> v;         // new particle velocity
+  Matrix3<T> B_matrix;  // new B_matrix
+  Matrix3<T> grad_v;    // grad_v for updating F
+};
+
 /**
  * A class performing the interpolation operations between one particle and its
  * neighboring nodes. In our implementation of MPM, we adopt the quadratic
@@ -115,6 +122,40 @@ class InterpolationWeights {
         }
       }
     }
+  }
+
+  /**
+   * Given the grid data on 27 (3by3by3 cube) nodes stored in batch_pad that are
+   * in the support of p-th particle, computes and returns the new velocity, new
+   * B_matri, and new velocity gradient of the p-th particle.
+   */
+  ParticleVBGradV<T> AccumulateFromBatchPad(const Vector3<T>& x_p,
+                                            const BatchPad<T>& batch_pad) {
+    const std::array<Vector3<T>, 27>& pad_positions = batch_pad.positions;
+    const std::array<Vector3<T>, 27>& pad_velocities = batch_pad.velocities;
+    Vector3<T> vi_new;
+    Vector3<T> vp_new = Vector3<T>::Zero();
+    Matrix3<T> Bp_new = Matrix3<T>::Zero();
+    Matrix3<T> grad_vp_new = Matrix3<T>::Zero();
+    int idx_local;
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          idx_local = (c + 1) + 3 * (b + 1) + 9 * (a + 1);
+
+          vi_new = pad_velocities[idx_local] * weights_[idx_local];
+          // v_p^{n+1} = \sum v_i^{n+1} N_i(x_p)
+          vp_new += vi_new;
+
+          // B_p^{n+1} = \sum v_i^{n+1}*(x_i - x_p^n)^T N_i(x_p)
+          Bp_new += vi_new * (pad_positions[idx_local] - x_p).transpose();
+
+          // Accumulate grad_vp_new: F_p^{n+1} = (I + dt*grad_vp_new)*F_p^n
+          grad_vp_new += vi_new * weight_gradients_[idx_local].transpose();
+        }
+      }
+    }
+    return {vp_new, Bp_new, grad_vp_new};
   }
 
  private:
