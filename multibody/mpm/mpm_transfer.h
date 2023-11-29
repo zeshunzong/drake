@@ -32,12 +32,12 @@ namespace mpm {
  * The above three steps are executed as
  *
  * // must setup the transfer before p2g, or whenever particle positions change
- * transfer.SetUpTransfer(grid, particles);
+ * transfer.SetUpTransfer(&grid, &particles);
  * transfer.P2G(particles, grid, &grid_data); // P2G
  *
  * // grid update tbd
  *
- * // g2p tbd
+ * transfer.G2P(grid, grid_data, dt, &particles); // G2P
  *
  * <-- TODO(zeshunzong): this is not complete and not exactly accurate for
  * implicit -->
