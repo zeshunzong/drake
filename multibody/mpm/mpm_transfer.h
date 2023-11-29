@@ -77,10 +77,10 @@ class MpmTransfer {
 
  private:
   // scratch pads for transferring states from particles to grid nodes
-  std::vector<Pad<T>> pads_{};
+  std::vector<P2gPad<T>> p2g_pads_{};
 
   // scratch pad for transferring states from grid nodes to particles
-  BatchPad<T> batch_pad_{};
+  G2pPad<T> g2p_pad_{};
 };
 
 }  // namespace mpm

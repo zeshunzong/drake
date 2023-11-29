@@ -14,8 +14,8 @@ void MpmTransfer<T>::SetUpTransfer(SparseGrid<T>* grid,
 template <typename T>
 void MpmTransfer<T>::P2G(const Particles<T>& particles,
                          const SparseGrid<T>& grid, GridData<T>* grid_data) {
-  particles.SplatToPads(grid.h(), &pads_);
-  grid.GatherFromPads(pads_, grid_data);
+  particles.SplatToP2gPads(grid.h(), &p2g_pads_);
+  grid.GatherFromP2gPads(p2g_pads_, grid_data);
 }
 
 template <typename T>
@@ -34,8 +34,8 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
   for (size_t i = 0; i < particles->num_batches(); ++i) {
     batch_idx_3d = base_nodes[batch_starts[i]];
 
-    // form the batch_pad for this batch
-    batch_pad_.Reset();
+    // form the g2p_pad for this batch
+    g2p_pad_.Reset();
     for (int a = -1; a <= 1; ++a) {
       for (int b = -1; b <= 1; ++b) {
         for (int c = -1; c <= 1; ++c) {
@@ -46,13 +46,13 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
           const Vector3<T>& velocity =
               grid_data.GetVelocityAt(grid.To1DIndex(idx_3d));
 
-          batch_pad_.SetPositionAndVelocityAt(a, b, c, position, velocity);
+          g2p_pad_.SetPositionAndVelocityAt(a, b, c, position, velocity);
         }
       }
     }
 
     // update particles in this batch, excluding positions
-    particles->UpdateBatchParticlesFromBatchPad(i, dt, batch_pad_);
+    particles->UpdateBatchParticlesFromG2pPad(i, dt, g2p_pad_);
   }
 
   particles->AdvectParticles(dt);

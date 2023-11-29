@@ -12,7 +12,7 @@ namespace multibody {
 namespace mpm {
 
 template <typename T>
-struct Pad {
+struct P2gPad {
   std::array<T, 27> masses{};
   std::array<Vector3<T>, 27> momentums{};
   std::array<Vector3<T>, 27> forces{};
@@ -41,7 +41,7 @@ struct Pad {
 };
 
 template <typename T>
-struct BatchPad {
+struct G2pPad {
   std::array<Vector3<T>, 27> positions{};
   std::array<Vector3<T>, 27> velocities{};
 

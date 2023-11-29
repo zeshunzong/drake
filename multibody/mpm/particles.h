@@ -124,12 +124,12 @@ class Particles {
   void Prepare(double h);
 
   /**
-   * Splats particle data to pads. Particles in batch i will have their
-   * @note pads will be cleared and resized to num_batches().
-   * @pre Prepare() needs to be invoked before the call to SplatToPads().
+   * Splats particle data to p2g_pads. Particles in batch i will have their
+   * @note p2g_pads will be cleared and resized to num_batches().
+   * @pre Prepare() needs to be invoked before the call to SplatToP2gPads().
    * @pre h > 0
    */
-  void SplatToPads(double h, std::vector<Pad<T>>* pads) const;
+  void SplatToP2gPads(double h, std::vector<P2gPad<T>>* p2g_pads) const;
 
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
@@ -289,15 +289,15 @@ class Particles {
   /**
    * For particles in the same batch denoted by batch_index, updates their
    * velocities, B-matrices, and *trial* deformation gradient matrices, using
-   * the revalent grid data stored in batch_pad. Particles in the same batch
+   * the revalent grid data stored in g2p_pad. Particles in the same batch
    * (i.e. with the same base_node) are updated from the same 27 grid nodes (a
    * 3by3by3 cube centered at that base_node). The information for the 27 grid
-   * nodes are stored in batch_pad.
+   * nodes are stored in g2p_pad.
    * @pre batch_index < num_batches().
    * @note particle positions are NOT updated in this function!
    */
-  void UpdateBatchParticlesFromBatchPad(size_t batch_index, double dt,
-                                        const BatchPad<T>& batch_pad);
+  void UpdateBatchParticlesFromG2pPad(size_t batch_index, double dt,
+                                      const G2pPad<T>& g2p_pad);
 
   const std::vector<Vector3<int>>& base_nodes() { return base_nodes_; }
   const std::vector<size_t>& batch_starts() { return batch_starts_; }

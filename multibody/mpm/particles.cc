@@ -95,33 +95,34 @@ void Particles<T>::Prepare(double h) {
 }
 
 template <typename T>
-void Particles<T>::SplatToPads(double h, std::vector<Pad<T>>* pads) const {
+void Particles<T>::SplatToP2gPads(double h,
+                                  std::vector<P2gPad<T>>* p2g_pads) const {
   DRAKE_DEMAND(!need_reordering_);
-  pads->clear();  // remove existing data
-  pads->resize(num_batches());
+  p2g_pads->clear();  // remove existing data
+  p2g_pads->resize(num_batches());
   for (size_t i = 0; i < num_batches(); ++i) {
-    Pad<T>& pad = (*pads)[i];
+    P2gPad<T>& p2g_pad = (*p2g_pads)[i];
     const size_t p_start = batch_starts_[i];
     const size_t p_end = p_start + batch_sizes_[i];
     for (size_t p = p_start; p < p_end; ++p) {
-      weights_[p].SplatParticleDataToPad(
+      weights_[p].SplatParticleDataToP2gPad(
           GetMassAt(p), GetPositionAt(p), GetVelocityAt(p),
           GetAffineMomentumMatrixAt(p, h), GetReferenceVolumeAt(p),
           GetPKStressAt(p), GetElasticDeformationGradientAt(p), base_nodes_[i],
-          h, &pad);
+          h, &p2g_pad);
     }
   }
 }
 
 template <typename T>
-void Particles<T>::UpdateBatchParticlesFromBatchPad(
-    size_t batch_index, double dt, const BatchPad<T>& batch_pad) {
+void Particles<T>::UpdateBatchParticlesFromG2pPad(size_t batch_index, double dt,
+                                                  const G2pPad<T>& g2p_pad) {
   DRAKE_ASSERT(batch_index < num_batches());
   const size_t p_start = batch_starts_[batch_index];
   const size_t p_end = p_start + batch_sizes_[batch_index];
   for (size_t p = p_start; p < p_end; ++p) {
     const ParticleVBGradV<T> particle_v_B_grad_v =
-        weights_[p].AccumulateFromBatchPad(GetPositionAt(p), batch_pad);
+        weights_[p].AccumulateFromG2pPad(GetPositionAt(p), g2p_pad);
     SetVelocityAt(p, particle_v_B_grad_v.v);
     SetBMatrixAt(p, particle_v_B_grad_v.B_matrix);
     SetTrialDeformationGradientAt(
