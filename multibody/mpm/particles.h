@@ -299,9 +299,38 @@ class Particles {
   void UpdateBatchParticlesFromG2pPad(size_t batch_index, double dt,
                                       const G2pPad<T>& g2p_pad);
 
-  const std::vector<Vector3<int>>& base_nodes() { return base_nodes_; }
-  const std::vector<size_t>& batch_starts() { return batch_starts_; }
-  const std::vector<size_t>& batch_sizes() { return batch_sizes_; }
+  /**
+   * write to scratch for time integration
+   * @pre data attributes in scratch all have size num_particles()
+   */
+  void WriteBatchTimeIntegrationScratchFromG2pPad(
+      size_t batch_index, const G2pPad<T>& g2p_pad,
+      TimeIntegrationScratch<T>* scratch) const {
+    DRAKE_ASSERT(batch_index < num_batches());
+    const size_t p_start = batch_starts_[batch_index];
+    const size_t p_end = p_start + batch_sizes_[batch_index];
+    for (size_t p = p_start; p < p_end; ++p) {
+      const ParticleVBGradV<T> particle_v_B_grad_v =
+          weights_[p].AccumulateFromG2pPad(GetPositionAt(p), g2p_pad);
+
+      scratch->particle_velocites_next[p] = particle_v_B_grad_v.v;
+      scratch->particle_B_matrices_next[p] = particle_v_B_grad_v.B_matrix;
+      scratch->particle_grad_v_next[p] = particle_v_B_grad_v.grad_v;
+    }
+  }
+
+  void UpdateTrialDeformationGradients(
+      double dt, const std::vector<Matrix3<T>>& particle_grad_v) {
+    for (size_t p = 0; p < num_particles(); ++p) {
+      SetTrialDeformationGradientAt(
+          p, (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
+                 GetElasticDeformationGradientAt(p));
+    }
+  }
+
+  const std::vector<Vector3<int>>& base_nodes() const { return base_nodes_; }
+  const std::vector<size_t>& batch_starts() const { return batch_starts_; }
+  const std::vector<size_t>& batch_sizes() const { return batch_sizes_; }
 
   bool NeedReordering() const { return need_reordering_; }
 

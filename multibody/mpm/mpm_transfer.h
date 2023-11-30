@@ -75,12 +75,63 @@ class MpmTransfer {
   void G2P(const SparseGrid<T>& grid, const GridData<T>& grid_data, double dt,
            Particles<T>* particles);
 
+  void G2P_another_option(const SparseGrid<T>& grid,
+                          const GridData<T>& grid_data,
+                          const Particles<T>& particles) {
+    DRAKE_DEMAND(!particles.NeedReordering());
+
+    // make sure the scratch_ has compatible size
+    scratch_.Resize(particles.num_particles());
+    
+    Vector3<int> idx_3d;
+
+    // loop over all batches
+    Vector3<int> batch_idx_3d;
+    const std::vector<Vector3<int>>& base_nodes = particles.base_nodes();
+    const std::vector<size_t>& batch_starts = particles.batch_starts();
+    for (size_t i = 0; i < particles.num_batches(); ++i) {
+      batch_idx_3d = base_nodes[batch_starts[i]];
+
+      // form the g2p_pad for this batch
+      g2p_pad_.Reset();
+      for (int a = -1; a <= 1; ++a) {
+        for (int b = -1; b <= 1; ++b) {
+          for (int c = -1; c <= 1; ++c) {
+            idx_3d = Vector3<int>(batch_idx_3d(0) + a, batch_idx_3d(1) + b,
+                                  batch_idx_3d(2) + c);
+            const Vector3<double> position =
+                internal::ComputePositionFromIndex3D(idx_3d, grid.h());
+            const Vector3<T>& velocity =
+                grid_data.GetVelocityAt(grid.To1DIndex(idx_3d));
+
+            g2p_pad_.SetPositionAndVelocityAt(a, b, c, position, velocity);
+          }
+        }
+      }
+
+      // write particle v, B, and grad v to scratch
+      particles.WriteBatchTimeIntegrationScratchFromG2pPad(i, g2p_pad_,
+                                                           &scratch_);
+    }
+  }
+
+  void ParticleTimeIntegrationAndUpdate(double dt, Particles<T>* particles) {
+    // psudo code
+    // particles->velocities = scratch_.particle_velocites_next
+    // particles->B_matrices = scratch_.particle_B_matrices_next
+    particles->AdvectParticles(dt);
+    particles->UpdateTrialDeformationGradients(dt,
+                                               scratch_.particle_grad_v_next);
+  }
+
  private:
   // scratch pads for transferring states from particles to grid nodes
   std::vector<P2gPad<T>> p2g_pads_{};
 
   // scratch pad for transferring states from grid nodes to particles
   G2pPad<T> g2p_pad_{};
+
+  TimeIntegrationScratch<T> scratch_{};
 };
 
 }  // namespace mpm
