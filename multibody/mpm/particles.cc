@@ -132,6 +132,23 @@ void Particles<T>::UpdateBatchParticlesFromG2pPad(size_t batch_index, double dt,
 }
 
 template <typename T>
+void Particles<T>::WriteParticlesDataFromG2pPad(
+    size_t batch_index, const G2pPad<T>& g2p_pad,
+    ParticlesData<T>* particles_data) const {
+  DRAKE_ASSERT(batch_index < num_batches());
+  const size_t p_start = batch_starts_[batch_index];
+  const size_t p_end = p_start + batch_sizes_[batch_index];
+  for (size_t p = p_start; p < p_end; ++p) {
+    const ParticleVBGradV<T> particle_v_B_grad_v =
+        weights_[p].AccumulateFromG2pPad(GetPositionAt(p), g2p_pad);
+
+    particles_data->particle_velocites_next[p] = particle_v_B_grad_v.v;
+    particles_data->particle_B_matrices_next[p] = particle_v_B_grad_v.B_matrix;
+    particles_data->particle_grad_v_next[p] = particle_v_B_grad_v.grad_v;
+  }
+}
+
+template <typename T>
 void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
   DRAKE_DEMAND((new_order.size()) == num_particles());
   for (size_t i = 0; i < num_particles() - 1; ++i) {

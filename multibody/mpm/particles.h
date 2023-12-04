@@ -11,6 +11,7 @@
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/mpm/internal/mass_and_momentum.h"
 #include "drake/multibody/mpm/interpolation_weights.h"
+#include "drake/multibody/mpm/particles_data.h"
 
 namespace drake {
 namespace multibody {
@@ -134,8 +135,11 @@ class Particles {
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
    * velocity.
+   * @pre particles must not need reordering. That is, this function cannot be
+   * called multiple times consecutively.
    */
   void AdvectParticles(double dt) {
+    DRAKE_DEMAND(!need_reordering_);
     for (size_t p = 0; p < num_particles(); ++p) {
       positions_[p] += dt * velocities_[p];
     }
@@ -162,6 +166,16 @@ class Particles {
     return elastic_deformation_gradients_;
   }
   const std::vector<Matrix3<T>>& B_matrices() const { return B_matrices_; }
+
+  void SetBMatrices(const std::vector<Matrix3<T>>& B_matrices_in) {
+    DRAKE_ASSERT(B_matrices_in.size() == num_particles());
+    B_matrices_ = B_matrices_in;
+  }
+
+  void SetVelocities(const std::vector<Vector3<T>>& velocities_in) {
+    DRAKE_ASSERT(velocities_in.size() == num_particles());
+    velocities_ = velocities_in;
+  }
 
   /**
    * Returns the position of p-th particle.
@@ -301,23 +315,11 @@ class Particles {
 
   /**
    * Writes pad data from g2p_pad to scratch for time integration.
-   * @pre data attributes in scratch all have size num_particles()
+   * @pre data attributes in particles_data all have size num_particles()
    */
-  void WriteBatchTimeIntegrationScratchFromG2pPad(
-      size_t batch_index, const G2pPad<T>& g2p_pad,
-      TimeIntegrationScratch<T>* scratch) const {
-    DRAKE_ASSERT(batch_index < num_batches());
-    const size_t p_start = batch_starts_[batch_index];
-    const size_t p_end = p_start + batch_sizes_[batch_index];
-    for (size_t p = p_start; p < p_end; ++p) {
-      const ParticleVBGradV<T> particle_v_B_grad_v =
-          weights_[p].AccumulateFromG2pPad(GetPositionAt(p), g2p_pad);
-
-      scratch->particle_velocites_next[p] = particle_v_B_grad_v.v;
-      scratch->particle_B_matrices_next[p] = particle_v_B_grad_v.B_matrix;
-      scratch->particle_grad_v_next[p] = particle_v_B_grad_v.grad_v;
-    }
-  }
+  void WriteParticlesDataFromG2pPad(size_t batch_index,
+                                    const G2pPad<T>& g2p_pad,
+                                    ParticlesData<T>* particles_data) const;
 
   /**
    * Updates trial deformation gradient from grad_v, the formula is

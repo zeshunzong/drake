@@ -60,23 +60,6 @@ struct G2pPad {
   }
 };
 
-/**
- * Scratch data for time integration.
- * Particle position and deformation gradient updates will base on this.
- */
-template <typename T>
-struct TimeIntegrationScratch {
-  std::vector<Matrix3<T>> particle_B_matrices_next{};
-  std::vector<Vector3<T>> particle_velocites_next{};
-  std::vector<Matrix3<T>> particle_grad_v_next{};
-
-  void Resize(size_t s) {
-    particle_B_matrices_next.resize(s);
-    particle_velocites_next.resize(s);
-    particle_grad_v_next.resize(s);
-  }
-};
-
 }  // namespace mpm
 }  // namespace multibody
 }  // namespace drake

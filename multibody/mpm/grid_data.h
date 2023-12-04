@@ -1,6 +1,5 @@
 #pragma once
 
-#include <tuple>
 #include <vector>
 
 #include "drake/common/autodiff.h"
