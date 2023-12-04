@@ -75,47 +75,25 @@ class MpmTransfer {
   void G2P(const SparseGrid<T>& grid, const GridData<T>& grid_data, double dt,
            Particles<T>* particles);
 
+  /**
+   * Grid to particles transfer.
+   * See Section 10.1 and 10.2 in
+   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
+   * Given grid_data, writes particle v, B, and grad_v to scratch_, awaiting
+   * time integration.
+   */
   void G2P_another_option(const SparseGrid<T>& grid,
                           const GridData<T>& grid_data,
-                          const Particles<T>& particles) {
-    DRAKE_DEMAND(!particles.NeedReordering());
+                          const Particles<T>& particles);
 
-    // make sure the scratch_ has compatible size
-    scratch_.Resize(particles.num_particles());
-    
-    Vector3<int> idx_3d;
-
-    // loop over all batches
-    Vector3<int> batch_idx_3d;
-    const std::vector<Vector3<int>>& base_nodes = particles.base_nodes();
-    const std::vector<size_t>& batch_starts = particles.batch_starts();
-    for (size_t i = 0; i < particles.num_batches(); ++i) {
-      batch_idx_3d = base_nodes[batch_starts[i]];
-
-      // form the g2p_pad for this batch
-      g2p_pad_.Reset();
-      for (int a = -1; a <= 1; ++a) {
-        for (int b = -1; b <= 1; ++b) {
-          for (int c = -1; c <= 1; ++c) {
-            idx_3d = Vector3<int>(batch_idx_3d(0) + a, batch_idx_3d(1) + b,
-                                  batch_idx_3d(2) + c);
-            const Vector3<double> position =
-                internal::ComputePositionFromIndex3D(idx_3d, grid.h());
-            const Vector3<T>& velocity =
-                grid_data.GetVelocityAt(grid.To1DIndex(idx_3d));
-
-            g2p_pad_.SetPositionAndVelocityAt(a, b, c, position, velocity);
-          }
-        }
-      }
-
-      // write particle v, B, and grad v to scratch
-      particles.WriteBatchTimeIntegrationScratchFromG2pPad(i, g2p_pad_,
-                                                           &scratch_);
-    }
-  }
-
-  void ParticleTimeIntegrationAndUpdate(double dt, Particles<T>* particles) {
+  /**
+   * Updates particle states (velocity, B-matrix, trial deformation gradient,
+   * and positoin) to the next time step. velocity and B-matrix come from
+   * scratch_, while position and trial deformation gradient require time
+   * integration.
+   */
+  void ParticleTimeIntegrationAndUpdate(double dt,
+                                        Particles<T>* particles) const {
     // psudo code
     // particles->velocities = scratch_.particle_velocites_next
     // particles->B_matrices = scratch_.particle_B_matrices_next

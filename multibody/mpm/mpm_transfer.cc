@@ -54,8 +54,48 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
     // update particles in this batch, excluding positions
     particles->UpdateBatchParticlesFromG2pPad(i, dt, g2p_pad_);
   }
-
   particles->AdvectParticles(dt);
+}
+
+template <typename T>
+void MpmTransfer<T>::G2P_another_option(const SparseGrid<T>& grid,
+                                        const GridData<T>& grid_data,
+                                        const Particles<T>& particles) {
+  DRAKE_DEMAND(!particles.NeedReordering());
+
+  // make sure the scratch_ has compatible size
+  scratch_.Resize(particles.num_particles());
+
+  Vector3<int> idx_3d;
+
+  // loop over all batches
+  Vector3<int> batch_idx_3d;
+  const std::vector<Vector3<int>>& base_nodes = particles.base_nodes();
+  const std::vector<size_t>& batch_starts = particles.batch_starts();
+  for (size_t i = 0; i < particles.num_batches(); ++i) {
+    batch_idx_3d = base_nodes[batch_starts[i]];
+
+    // form the g2p_pad for this batch
+    g2p_pad_.Reset();
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          idx_3d = Vector3<int>(batch_idx_3d(0) + a, batch_idx_3d(1) + b,
+                                batch_idx_3d(2) + c);
+          const Vector3<double> position =
+              internal::ComputePositionFromIndex3D(idx_3d, grid.h());
+          const Vector3<T>& velocity =
+              grid_data.GetVelocityAt(grid.To1DIndex(idx_3d));
+
+          g2p_pad_.SetPositionAndVelocityAt(a, b, c, position, velocity);
+        }
+      }
+    }
+
+    // write particle v, B, and grad v to scratch
+    particles.WriteBatchTimeIntegrationScratchFromG2pPad(i, g2p_pad_,
+                                                         &scratch_);
+  }
 }
 
 template class MpmTransfer<double>;

@@ -168,8 +168,8 @@ class InterpolationWeights {
           particle_v_B_grad_v.B_matrix +=
               weighted_vi * (pad_positions[idx_local] - x_p).transpose();
 
-          // since vₚ = ∑ᵢ wᵢₚ vᵢ, ∇ vₚ = ∑ᵢ vᵢ ∇ wᵢₚᵀ. This is part of eqn
-          // (181)
+          // Since vₚ = ∑ᵢ wᵢₚ vᵢ, ∇ vₚ = ∑ᵢ vᵢ ∇ wᵢₚᵀ. This is part of eqn
+          // (181).
           particle_v_B_grad_v.grad_v +=
               weighted_vi * weight_gradients_[idx_local].transpose();
         }

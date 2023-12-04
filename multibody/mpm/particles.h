@@ -300,7 +300,7 @@ class Particles {
                                       const G2pPad<T>& g2p_pad);
 
   /**
-   * write to scratch for time integration
+   * Writes pad data from g2p_pad to scratch for time integration.
    * @pre data attributes in scratch all have size num_particles()
    */
   void WriteBatchTimeIntegrationScratchFromG2pPad(
@@ -319,6 +319,12 @@ class Particles {
     }
   }
 
+  /**
+   * Updates trial deformation gradient from grad_v, the formula is
+   * Fₚⁿ⁺¹ = (I + Δ t ⋅ ∑ᵢ vᵢⁿ⁺¹ (∇ wⁿᵢₚ)ᵀ) Fⁿₚ.
+   * See eqn (181) in
+   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
+   */
   void UpdateTrialDeformationGradients(
       double dt, const std::vector<Matrix3<T>>& particle_grad_v) {
     for (size_t p = 0; p < num_particles(); ++p) {
