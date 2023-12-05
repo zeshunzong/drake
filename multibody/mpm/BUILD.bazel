@@ -37,6 +37,16 @@ drake_cc_library(
 )
 
 drake_cc_library(
+    name = "particles_data",
+    hdrs = [
+        "particles_data.h",
+    ],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
     name = "particles",
     srcs = [
         "particles.cc",
@@ -46,6 +56,7 @@ drake_cc_library(
     ],
     deps = [
         ":interpolation_weights",
+        ":particles_data",
         "//common:autodiff",
         "//common:essential",
         "//multibody/mpm/internal:mass_and_momentum",
@@ -108,6 +119,7 @@ drake_cc_library(
         ":grid_data",
         ":pad",
         ":particles",
+        ":particles_data",
         ":sparse_grid",
         "//common:essential",
     ],

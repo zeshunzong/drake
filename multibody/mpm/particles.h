@@ -11,6 +11,7 @@
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/mpm/internal/mass_and_momentum.h"
 #include "drake/multibody/mpm/interpolation_weights.h"
+#include "drake/multibody/mpm/particles_data.h"
 
 namespace drake {
 namespace multibody {
@@ -124,18 +125,21 @@ class Particles {
   void Prepare(double h);
 
   /**
-   * Splats particle data to pads. Particles in batch i will have their
-   * @note pads will be cleared and resized to num_batches().
-   * @pre Prepare() needs to be invoked before the call to SplatToPads().
+   * Splats particle data to p2g_pads. Particles in batch i will have their
+   * @note p2g_pads will be cleared and resized to num_batches().
+   * @pre Prepare() needs to be invoked before the call to SplatToP2gPads().
    * @pre h > 0
    */
-  void SplatToPads(double h, std::vector<Pad<T>>* pads) const;
+  void SplatToP2gPads(double h, std::vector<P2gPad<T>>* p2g_pads) const;
 
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
    * velocity.
+   * @pre particles must not need reordering. That is, this function cannot be
+   * called multiple times consecutively.
    */
   void AdvectParticles(double dt) {
+    DRAKE_DEMAND(!need_reordering_);
     for (size_t p = 0; p < num_particles(); ++p) {
       positions_[p] += dt * velocities_[p];
     }
@@ -162,6 +166,16 @@ class Particles {
     return elastic_deformation_gradients_;
   }
   const std::vector<Matrix3<T>>& B_matrices() const { return B_matrices_; }
+
+  void SetBMatrices(const std::vector<Matrix3<T>>& B_matrices_in) {
+    DRAKE_ASSERT(B_matrices_in.size() == num_particles());
+    B_matrices_ = B_matrices_in;
+  }
+
+  void SetVelocities(const std::vector<Vector3<T>>& velocities_in) {
+    DRAKE_ASSERT(velocities_in.size() == num_particles());
+    velocities_ = velocities_in;
+  }
 
   /**
    * Returns the position of p-th particle.
@@ -286,9 +300,47 @@ class Particles {
     B_matrices_[p] = B_matrix;
   }
 
-  const std::vector<Vector3<int>>& base_nodes() { return base_nodes_; }
-  const std::vector<size_t>& batch_starts() { return batch_starts_; }
-  const std::vector<size_t>& batch_sizes() { return batch_sizes_; }
+  /**
+   * For particles in the same batch denoted by batch_index, updates their
+   * velocities, B-matrices, and *trial* deformation gradient matrices, using
+   * the revalent grid data stored in g2p_pad. Particles in the same batch
+   * (i.e. with the same base_node) are updated from the same 27 grid nodes (a
+   * 3by3by3 cube centered at that base_node). The information for the 27 grid
+   * nodes are stored in g2p_pad.
+   * @pre batch_index < num_batches().
+   * @note particle positions are NOT updated in this function!
+   */
+  void UpdateBatchParticlesFromG2pPad(size_t batch_index, double dt,
+                                      const G2pPad<T>& g2p_pad);
+
+  /**
+   * Writes pad data from g2p_pad to scratch for time integration.
+   * @pre data attributes in particles_data all have size num_particles()
+   */
+  void WriteParticlesDataFromG2pPad(size_t batch_index,
+                                    const G2pPad<T>& g2p_pad,
+                                    ParticlesData<T>* particles_data) const;
+
+  /**
+   * Updates trial deformation gradient from grad_v, the formula is
+   * Fₚⁿ⁺¹ = (I + Δ t ⋅ ∑ᵢ vᵢⁿ⁺¹ (∇ wⁿᵢₚ)ᵀ) Fⁿₚ.
+   * See eqn (181) in
+   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
+   */
+  void UpdateTrialDeformationGradients(
+      double dt, const std::vector<Matrix3<T>>& particle_grad_v) {
+    for (size_t p = 0; p < num_particles(); ++p) {
+      SetTrialDeformationGradientAt(
+          p, (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
+                 GetElasticDeformationGradientAt(p));
+    }
+  }
+
+  const std::vector<Vector3<int>>& base_nodes() const { return base_nodes_; }
+  const std::vector<size_t>& batch_starts() const { return batch_starts_; }
+  const std::vector<size_t>& batch_sizes() const { return batch_sizes_; }
+
+  bool NeedReordering() const { return need_reordering_; }
 
   /**
    * Computes the mass and momentum of the continuum by summing over all
