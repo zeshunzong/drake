@@ -133,17 +133,4 @@ drake_cc_googletest(
     ],
 )
 
-drake_cc_library(
-    name = "mpm_solver",
-    srcs = [
-        "mpm_solver.cc",
-    ],
-    hdrs = [
-        "mpm_solver.h",
-    ],
-    deps = [
-        ":mpm_transfer",
-    ],
-)
-
 add_lint_tests()

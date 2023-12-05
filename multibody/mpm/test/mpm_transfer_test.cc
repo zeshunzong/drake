@@ -88,8 +88,7 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
 
   mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
 
-  mpm_transfer.UpdateParticlesVelocityBMatrixDeformationGradientStress(
-      particles_data, 0.1, &particles);
+  mpm_transfer.UpdateParticlesState(particles_data, 0.1, &particles);
   particles.AdvectParticles(0.1);
 
   internal::MassAndMomentum<double> mass_and_momentum_from_particles2 =

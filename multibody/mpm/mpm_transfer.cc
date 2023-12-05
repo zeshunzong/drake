@@ -50,13 +50,13 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
         }
       }
     }
-    // write particle v, B, and grad v to scratch
+    // write particle v, B, and grad v to particles_data
     particles.WriteParticlesDataFromG2pPad(i, g2p_pad_, particles_data);
   }
 }
 
 template <typename T>
-void MpmTransfer<T>::UpdateParticlesVelocityBMatrixDeformationGradientStress(
+void MpmTransfer<T>::UpdateParticlesState(
     const ParticlesData<T>& particles_data, double dt,
     Particles<T>* particles) const {
   particles->SetVelocities(particles_data.particle_velocites_next);

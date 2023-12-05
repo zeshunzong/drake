@@ -27,42 +27,47 @@ namespace mpm {
  * MpmTransfer<double> mpm_transfer; -- transfer functions
  * ParticlesData<double> particles_data; -- data holder for particles
  *
- * Explicit temporal advancement in psuedo code:
+ * @note Below Gₙ represents grid velocities, Pₙ represents all states stored
+ * on particles.
+ *
  * In: Pₙ particles at tₙ
  * Out: Gₙ₊₁ grid state at tₙ₊₁, Pₙ₊₁ particles at tₙ₊₁.
- * SetupTranfer(Pₙ, ...)
- * Gₙ = P2G(Pₙ)
- * Gₙ₊₁ = Gₙ + dt * g
- * particle_data = G2P(Gₙ₊₁)
- * Pₙ₊₁ = UpdateParticlesVelocityBMatrixDeformationGradientStress(particle_data)
- * Pₙ₊₁.AdvectParticles(dt)
- * Output Gₙ₊₁, Pₙ₊₁.
  *
- *
- * Implicit temporal advancement in psuedo code:
- * In: Pₙ particles at tₙ
- * Out: Gₙ₊₁ grid state at tₙ₊₁, Pₙ₊₁ particles at tₙ₊₁.
- * SetupTranfer(Pₙ, ...)
- * while |dG|>ε:
- *   Gₙ = P2G(Pₙ)
- *   Solve linear system H⋅dG = -f(Gₙ)
- *   Gₙ = Gₙ + dG
- *   particle_data = G2P(Gₙ)
- *   Pₙ = UpdateParticlesVelocityBMatrixDeformationGradientStress(particle_data)
- * end
- * Pₙ.AdvectParticles(dt)
- * Output Gₙ₊₁:=Gₙ, Pₙ₊₁:=Pₙ.
- *
- * In code, preparing for transfer by calling
+ * Explicit temporal advancement:
+ * ```
  * mpm_transfer.SetupTransfer(&sparse_grid, &particles);
- * Performing P2G by calling mpm_transfer.P2G(particles, grid, &grid_data);
- * Performing G2P by calling mpm_transfer.G2P(grid, grid_data, particles,
- * &particles_data);
- * mpm_transfer.UpdateParticlesVelocityBMatrixDeformationGradientStress(particles_data,
- * dt, &particles) writes just enough information in particles for the next
- * while loop in implicit scheme.
- * particles.AdvectParticles(dt) should be called as the very last step in both
- * explicit and implicit schemes.
+ * // Gₙ = P2G(Pₙ)
+ * mpm_transfer.P2G(particles, grid, &grid_data);
+ * // compute Gₙ₊₁
+ * TODO(zeshunzong): mpm_transfer.AddGravity(&grid_data);
+ * // particle_data = G2P(Gₙ₊₁)
+ * mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
+ * // update particles state except for position
+ * mpm_transfer.UpdateParticlesState(particles_data, dt, &particles);
+ * // afterwards we get Pₙ₊₁
+ * particles.AdvectParticles(dt);
+ * ```
+ *
+ * Implicit temporal advancement:
+ * ```
+ * mpm_transfer.SetupTransfer(&sparse_grid, &particles);
+ * dG = ∞
+ * while |dG|>ε:
+ *   // Gₙ = P2G(Pₙ)
+ *   mpm_transfer.P2G(particles, grid, &grid_data);
+ *   // Solve the linear system H(Pₙ)⋅dG = -f(Pₙ)
+ *   @note H and f depend on weights and particle deformation gradients
+ *   TODO(zeshunzong): LinearSolve(H, f, Pₙ, &dg)
+ *   Gₙ = Gₙ + dG
+ *   // particle_data = G2P(Gₙ₊₁)
+ *   mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
+ *   // Pₙ = UpdateParticlesState(particle_data)
+ *   mpm_transfer.UpdateParticlesState(particles_data, dt, &particles);
+ * end
+ * // afterwards we get Pₙ₊₁
+ * particles.AdvectParticles(dt);
+ * Output Gₙ₊₁:=Gₙ, Pₙ₊₁:=Pₙ.
+ * ```
  */
 template <typename T>
 class MpmTransfer {
@@ -105,9 +110,8 @@ class MpmTransfer {
    * @note This updates everything except for particle positions.
    * TODO(zeshunzong): finish return mapping and stress computation
    */
-  void UpdateParticlesVelocityBMatrixDeformationGradientStress(
-      const ParticlesData<T>& particles_data, double dt,
-      Particles<T>* particles) const;
+  void UpdateParticlesState(const ParticlesData<T>& particles_data, double dt,
+                            Particles<T>* particles) const;
 
  private:
   // scratch pads for transferring states from particles to grid nodes
