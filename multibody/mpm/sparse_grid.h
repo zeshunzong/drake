@@ -155,8 +155,8 @@ class SparseGrid {
    * Computes the states on grid by adding all data stored on pads.
    * @pre Pads doesn't contain data into non-active region of the grid.
    */
-  void GatherFromPads(const std::vector<Pad<T>>& pads,
-                      GridData<T>* grid_data) const;
+  void GatherFromP2gPads(const std::vector<P2gPad<T>>& p2g_pads,
+                         GridData<T>* grid_data) const;
 
   /**
    * Computes the mass and momentum of the body embedded in this grid, by
