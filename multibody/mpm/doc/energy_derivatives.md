@@ -24,7 +24,7 @@ The second order derivative (hessian) of energy w.r.t grid positions is
 $$H(x^*)(i\alpha, j\rho) = H(3i+\alpha, 3j+\rho) = \frac{\partial^2 e}{\partial x^*_{j\rho} \partial x^*_{i\alpha}} = \sum_p V_p^0 \sum_{\beta, \gamma } \left\{[\nabla N_i(x_p^0)]_\beta [\nabla N_j(x_p^0)]_\gamma \sum_{\theta, \phi}\left\{[\frac{\partial^2 \psi}{\partial F^2}(F_p(x^*))]_{\alpha\theta, \rho \phi} [F^0_p]_{\beta \theta} [F^0_p]_{\gamma \phi}\right\}\right\}.$$ 
 
 We can also compute the product of the hessian $H(x^*)(i\alpha, j\rho)$ with an arbitrary vector $z$, which is of length 3 * number of nodes. The result is 
-$$y_i = (Hz)[3i:3i+3] = \sum_p V_p^0 A_p {(F^0_p)}^T \nabla N_i(x_p^0),$$
+$$y_i = (Hz)[3i:3i+3] = \sum_p V_p^0 A_p(F(x^*)) (F^0_p)^T \nabla N_i(x_p^0),$$
 where
 $$A_p = \sum_{\tau,\sigma} [\frac{\partial^2 \psi}{\partial F^2}(F_p(x^*))]_{\alpha\beta\tau \sigma} [B_p]_{\tau \sigma},$$
 $$B_p = \sum_j z[3j:3j+3] \nabla N_j(x_p^0)^T F_p^0.$$
