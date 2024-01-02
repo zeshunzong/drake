@@ -132,6 +132,37 @@ class InterpolationWeights {
   }
 
   /**
+   * Accumulates the stress from the p-th particle onto a local p2g_pad, which
+   * stores the grid states for 27 neighbor nodes to the p-th particle.
+   * @note this is a partial version of the function
+   * SplatParticleDataToP2gPad(), where only stress (the input argument P_p) is
+   * operated.
+   * @note data is *accumulated* to p2g_pad.
+   * @note particles in the same batch should accumulate to the same p2g_pad.
+   */
+  void SplatParticleStressToP2gPad(const T& V0_p, const Matrix3<T>& P_p,
+                                   const Matrix3<T>& FE_p,
+                                   const Vector3<int>& base_node,
+                                   P2gPad<T>* p2g_pad) const {
+    (*p2g_pad).base_node = base_node;
+    int node_index_local;
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          // loop over 27 neighbor nodes
+          // node_index_local is from 0 to 26
+          node_index_local = (c + 1) + 3 * (b + 1) + 9 * (a + 1);  // 0-26
+
+          // eqn (188), force
+          (*p2g_pad).forces[node_index_local] +=
+              -V0_p * P_p * FE_p.transpose() *
+              weight_gradients_[node_index_local];
+        }
+      }
+    }
+  }
+
+  /**
    * Given the grid data on 27 (3by3by3 cube) nodes stored in g2p_pad that are
    * in the support of p-th particle, computes and returns the new velocity, new
    * B_matrix, and new velocity gradient of the p-th particle.
@@ -171,11 +202,22 @@ class InterpolationWeights {
           // Since vₚ = ∑ᵢ wᵢₚ vᵢ, ∇ vₚ = ∑ᵢ vᵢ ∇ wᵢₚᵀ. This is part of eqn
           // (181).
           particle_v_B_grad_v.grad_v +=
-              weighted_vi * weight_gradients_[idx_local].transpose();
+              pad_velocities[idx_local] *
+              weight_gradients_[idx_local].transpose();
         }
       }
     }
     return particle_v_B_grad_v;
+  }
+
+  /**
+   * Returns the weight gradient ∇ wᵢₚ for *this* particle p and the
+   * neighbor_node-th node among its 27 neighbor nodes.
+   * @pre neighbor_node < 27.
+   */
+  const Vector3<T>& GetWeightGradientAt(size_t neighbor_node) const {
+    DRAKE_ASSERT(neighbor_node < 27);
+    return weight_gradients_[neighbor_node];
   }
 
  private:

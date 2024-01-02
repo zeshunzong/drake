@@ -6,12 +6,14 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
+#include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
 
 namespace drake {
 namespace multibody {
 namespace mpm {
 namespace {
 
+using drake::multibody::mpm::constitutive_model::CorotatedElasticModel;
 constexpr double kTolerance = 1e-12;
 
 void CheckConservation(const internal::MassAndMomentum<double>& before,
@@ -38,6 +40,8 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
   std::uniform_real_distribution<double> distribution(-5.0, 5.0);
   std::uniform_real_distribution<double> positive_distribution(0.1, 2.0);
 
+  CorotatedElasticModel<double> model(2.0, 0.2);
+
   for (size_t p = 0; p < num_particles; ++p) {
     Vector3<double> position{distribution(generator), distribution(generator),
                              distribution(generator)};
@@ -54,8 +58,8 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
          distribution(generator))
             .finished();
 
-    particles.AddParticle(std::move(position), std::move(velocity), mass,
-                          volume);
+    particles.AddParticle(std::move(position), std::move(velocity),
+                          model.Clone(), mass, volume);
     particles.SetBMatrixAt(p, std::move(B_matrix));
   }
 
