@@ -113,6 +113,26 @@ class MpmTransfer {
   void UpdateParticlesState(const ParticlesData<T>& particles_data, double dt,
                             Particles<T>* particles) const;
 
+  /**
+   * Computes the grid_forces at all active grid nodes.
+   * The formula is eqn (188) in
+   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
+   * @note the computation is similar to P2G, with only grid forces being
+   * computed.
+   * @note the computation depends implicitly on the grid velocities through
+   * PK_stress_all, which should be computed from the grid velocities.
+   * @note the computation depends on the current elastic_deformation_gradient
+   * F₀ stored in particles (for chain rule).
+   * @pre PK_stress_all.size() == particles.num_particles().
+   */
+  void ComputeGridElasticForces(const Particles<T>& particles,
+                                const SparseGrid<T>& grid,
+                                const std::vector<Matrix3<T>>& PK_stress_all,
+                                std::vector<Vector3<T>>* grid_elastic_forces) {
+    particles.SplatStressToP2gPads(PK_stress_all, &p2g_pads_);
+    grid.GatherForceFromP2gPads(p2g_pads_, grid_elastic_forces);
+  }
+
  private:
   // scratch pads for transferring states from particles to grid nodes
   std::vector<P2gPad<T>> p2g_pads_{};
