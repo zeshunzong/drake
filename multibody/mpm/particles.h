@@ -8,7 +8,9 @@
 #include <vector>
 
 #include "drake/common/autodiff.h"
+#include "drake/common/copyable_unique_ptr.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/mpm/constitutive_model/elastoplastic_model.h"
 #include "drake/multibody/mpm/internal/mass_and_momentum.h"
 #include "drake/multibody/mpm/interpolation_weights.h"
 #include "drake/multibody/mpm/particles_data.h"
@@ -16,6 +18,8 @@
 namespace drake {
 namespace multibody {
 namespace mpm {
+
+using drake::multibody::mpm::constitutive_model::ElastoPlasticModel;
 
 /**
  * A Particles class holding particle states as several std::vectors.
@@ -82,21 +86,21 @@ class Particles {
 
   /**
    *  Adds (appends) a particle into Particles with given properties.
-   * <!-- TODO(zeshunzong): More attributes will come later. -->
-   * <!-- TODO(zeshunzong): Do we always start from rest shape? so F=I? -->
    */
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
                    const T& mass, const T& reference_volume,
                    const Matrix3<T>& trial_deformation_gradient,
                    const Matrix3<T>& elastic_deformation_gradient,
-                   const Matrix3<T>& B_matrix);
+                   std::unique_ptr<ElastoPlasticModel<T>> constitutive_model,
+                   const Matrix3<T>& PK_stress, const Matrix3<T>& B_matrix);
 
   /**
    * Adds (appends) a particle into Particles with given properties. We assume
    * that the particles start from rest shape, so deformation gradient is
-   * identity and B_matrix is zero.
+   * identity, stress is zero, and B_matrix is zero.
    */
   void AddParticle(const Vector3<T>& position, const Vector3<T>& velocity,
+                   std::unique_ptr<ElastoPlasticModel<T>> constitutive_model,
                    const T& mass, const T& reference_volume);
 
   /**
@@ -125,12 +129,24 @@ class Particles {
   void Prepare(double h);
 
   /**
-   * Splats particle data to p2g_pads. Particles in batch i will have their
+   * Splats particle data to p2g_pads. Particles in batch i will have their data
+   * splatted to the same p2g_pad.
    * @note p2g_pads will be cleared and resized to num_batches().
    * @pre Prepare() needs to be invoked before the call to SplatToP2gPads().
    * @pre h > 0
    */
   void SplatToP2gPads(double h, std::vector<P2gPad<T>>* p2g_pads) const;
+
+  /**
+   * Splats the first PK stress for each particle from the inputed PK_stress_all
+   * to p2g_pads. Particles in batch i will have their data splatted to the same
+   * p2g_pad.
+   * @note p2g_pads will be cleared and resized to num_batches().
+   * @pre Prepare() needs to be invoked before the call to SplatToP2gPads().
+   * @pre PK_stress_all.size() == num_particles().
+   */
+  void SplatStressToP2gPads(const std::vector<Matrix3<T>>& PK_stress_all,
+                            std::vector<P2gPad<T>>* p2g_pads) const;
 
   /**
    * Advects each particle's position x_p by dt*v_p, where v_p is particle's
@@ -233,11 +249,10 @@ class Particles {
 
   /**
    * Returns the first Piola Kirchhoff stress computed for the p-th particle.
-   * TODO(zeshunzong) implement it. may also change return type
    */
-  Matrix3<T> GetPKStressAt(size_t p) const {
+  const Matrix3<T>& GetPKStressAt(size_t p) const {
     DRAKE_ASSERT(p < num_particles());
-    return Matrix3<T>::Zero();
+    return PK_stresses_[p];
   }
 
   /**
@@ -339,6 +354,7 @@ class Particles {
   const std::vector<Vector3<int>>& base_nodes() const { return base_nodes_; }
   const std::vector<size_t>& batch_starts() const { return batch_starts_; }
   const std::vector<size_t>& batch_sizes() const { return batch_sizes_; }
+  const Vector3<int>& GetBaseNodeAt(size_t p) const { return base_nodes_[p]; }
 
   bool NeedReordering() const { return need_reordering_; }
 
@@ -351,6 +367,58 @@ class Particles {
    * https://math.ucdavis.edu/~jteran/papers/JST17.pdf
    */
   internal::MassAndMomentum<T> ComputeTotalMassMomentum() const;
+
+  /**
+   * Computes the total elastic energy of all particles, using the elastic
+   * deformation gradients of all particles. See accompanied
+   * energy_derivatives.md for formula.
+   * @note F_all stores the *elastic* deformation gradient for all particles
+   * @pre F_all.size() == num_particles()   */
+  T ComputeTotalElasticEnergy(const std::vector<Matrix3<T>>& F_all) const {
+    T sum = 0;
+    for (size_t p = 0; p < num_particles(); ++p) {
+      sum += reference_volumes_[p] *
+             elastoplastic_models_[p]->CalcStrainEnergyDensity(F_all[p]);
+    }
+    return sum;
+  }
+
+  /**
+   * Computes the particle level scratch needed for computing elastic energy and
+   * its derivatives. More specifically, for each particle p, given grad_v for
+   * this particle, we compute:
+   * elastic_F = ReturnMap(F_trial), where F_trial = (I + dt * grad_v) * F₀.
+   * PK_stress = CalcFirstPiolaStress(elastic_F).
+   * dPdF = CalcFirstPiolaStressDerivative(elastic_F).
+   */
+  void ComputeDeformationScratch(const std::vector<Matrix3<T>>& particle_grad_v,
+                                 double dt,
+                                 DeformationScratch<T>* scratch) const {
+    DRAKE_ASSERT(particle_grad_v.size() == num_particles());
+    scratch->Resize(num_particles());
+    std::vector<Matrix3<T>>& elastic_F = scratch->elastic_deformation_gradients;
+    std::vector<Matrix3<T>>& PK_stresses = scratch->PK_stresses;
+    std::vector<Eigen::Matrix<T, 9, 9>>& dPdF = scratch->dPdF;
+    for (size_t p = 0; p < num_particles(); ++p) {
+      elastoplastic_models_[p]->CalcFEFromFtrial(
+          (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
+              GetElasticDeformationGradientAt(p),
+          &(elastic_F[p]));
+      elastoplastic_models_[p]->CalcFirstPiolaStress(elastic_F[p],
+                                                     &(PK_stresses[p]));
+      elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(elastic_F[p],
+                                                               &(dPdF[p]));
+    }
+  }
+
+  /**
+   * Returns the elastoplastic model for the p-th particle.
+   */
+  const copyable_unique_ptr<ElastoPlasticModel<T>> GetElastoplasticModelAt(
+      size_t p) const {
+    DRAKE_ASSERT(p < num_particles());
+    return elastoplastic_models_[p];
+  }
 
  private:
   // Ensures that all attributes (std::vectors) have correct size. This only
@@ -371,8 +439,6 @@ class Particles {
   // permutations. A standard O(n) algorithm is implemented below in Reorder2().
   // We should decide on which one to choose once the whole MPM pipeline is
   // finished.
-  // TODO(zeshunzong): May need to reorder more attributes as more
-  // attributes are added.
   void Reorder(const std::vector<size_t>& new_order);
 
   // Performs the same function as Reorder but in a constant O(n) way.
@@ -380,9 +446,17 @@ class Particles {
   // introducing a flag and alternatingly return the (currently) ordered
   // attribute. Since we haven't decided which algorithm to use, for clarity
   // let's defer this for future.
-  // TODO(zeshunzong): May need to reorder more attributes as more
-  // attributes are added.
+  // TODO(zeshunzong):swap elastoplastic_models_
   void Reorder2(const std::vector<size_t>& new_order);
+
+  // Returns the weight gradient ∇Nᵢ(xₚ), where i is the local index of a
+  // neighbor grid node.
+  // @pre p < num_particles().
+  // @pre neighbor_grid < 27.
+  const Vector3<T>& GetWeightGradientAt(size_t p, size_t neighbor_node) const {
+    DRAKE_ASSERT(p < num_particles());
+    return weights_[p].GetWeightGradientAt(neighbor_node);
+  }
 
   // particle-wise data
   std::vector<Vector3<T>> positions_{};
@@ -397,6 +471,15 @@ class Particles {
   // B_matrix is part of the affine momentum matrix C as
   // v_i = v_p + C_p (x_i - x_p) = v_p + B_p D_p^-1 (x_i - x_p).
   std::vector<Matrix3<T>> B_matrices_{};
+
+  // First Piola Kirchhoff stress. Do not reoder this as this is computed from a
+  // reordered elastoplastic model each time!
+  std::vector<Matrix3<T>> PK_stresses_{};
+
+  // TODO(zeshunzong): this needs to be sorted. Let's assume all particles have
+  // the same elastoplastic model for now.
+  std::vector<copyable_unique_ptr<ElastoPlasticModel<T>>>
+      elastoplastic_models_{};
 
   // TODO(zeshunzong): Consider make struct Scratch and put the buffer data
   // inside scratch for better clarity. for reorder only

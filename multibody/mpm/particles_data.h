@@ -27,6 +27,29 @@ struct ParticlesData {
   }
 };
 
+/**
+ * Intermediary data for computing elastic energy and its derivatives.
+ * Elastic deformation gradient is computed for each particle using grid
+ * velocities, other quantities are derived from the elastic deformation
+ * gradient.
+ * @note elastic F is needed in computing elastic energy.
+ * @note PK_stress is needed in computing grid elastic force.
+ * @note dPdF is needed in computing the hessian of elastic energy w.r.t. grid
+ * positions/velocities.
+ */
+template <typename T>
+struct DeformationScratch {
+  std::vector<Matrix3<T>> elastic_deformation_gradients{};
+  std::vector<Matrix3<T>> PK_stresses{};
+  std::vector<Eigen::Matrix<T, 9, 9>> dPdF{};
+
+  void Resize(size_t s) {
+    elastic_deformation_gradients.resize(s);
+    PK_stresses.resize(s);
+    dPdF.resize(s);
+  }
+};
+
 }  // namespace mpm
 }  // namespace multibody
 }  // namespace drake

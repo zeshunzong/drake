@@ -32,6 +32,8 @@ class GridData {
     forces_.reserve(capacity);
   }
 
+  size_t num_active_nodes() const { return masses_.size(); }
+
   /**
    * Resets the containers to the correct size.
    * Sets all values to zero.
@@ -71,11 +73,19 @@ class GridData {
   }
 
   /**
-   * @pre index_1d < number of active nodes stored
+   * @pre index_1d < num_active_nodes()
    */
   const Vector3<T>& GetVelocityAt(size_t index_1d) const {
     DRAKE_ASSERT(index_1d < velocities_.size());
     return velocities_[index_1d];
+  }
+
+  /**
+   * @pre index_1d < num_active_nodes()
+   */
+  T GetMassAt(size_t index_1d) const {
+    DRAKE_ASSERT(index_1d < masses_.size());
+    return masses_[index_1d];
   }
 };
 
