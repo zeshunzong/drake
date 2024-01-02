@@ -24,6 +24,7 @@ class MpmModel {
     transfer_.P2G(*particles, *sparse_grid, grid_data);
   }
 
+  // TODO(zeshunzong): some extra data is computed and throwed away.
   void ComputeDeformationScratch(const GridData<T>& grid_data,
                                  const SparseGrid<T>& sparse_grid,
                                  const Particles<T>& particles, double dt) {
@@ -56,7 +57,7 @@ class MpmModel {
   }
 
  private:
-  Vector3<T> gravity_{0.0, 0.0, -9.8};
+  Vector3<T> gravity_{0.0, 0.0, -9.81};
   MpmTransfer<T> transfer_;
 
   DeformationScratch<T> scratch_{};

@@ -83,7 +83,7 @@ class GridData {
   /**
    * @pre index_1d < num_active_nodes()
    */
-  T GetMassAt(size_t index_1d) const {
+  const T& GetMassAt(size_t index_1d) const {
     DRAKE_ASSERT(index_1d < masses_.size());
     return masses_[index_1d];
   }
