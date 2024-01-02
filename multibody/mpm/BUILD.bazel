@@ -146,4 +146,13 @@ drake_cc_library(
     ],
 )
 
+drake_cc_googletest(
+    name = "mpm_model_test",
+    deps = [
+        ":mpm_model",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//math:gradient",
+    ],
+)
+
 add_lint_tests()
