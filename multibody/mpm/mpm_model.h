@@ -11,55 +11,67 @@ namespace multibody {
 namespace mpm {
 
 template <typename T>
+class DeformationState {
+ public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(DeformationState);
+
+  DeformationState(size_t num_particles) {
+    Fs_.resize(num_particles);
+    Ps_.resize(num_particles);
+    dPdFs_.resize(num_particles);
+  }
+
+  /**
+   * Computes F, P and dPdF for each particle, from the grid_data
+   * @pre !particles.NeedReordering()
+   * @pre sparse_grid is compatible with current particles
+   */
+  void Update(const GridData<T>& grid_data, const SparseGrid<T>& sparse_grid,
+              const Particles<T>& particles, const MpmTransfer<T>& transfer,
+              double dt, TransferScratch<T>* scratch) {
+    ParticlesData<T> particles_data{};  // TODO(zeshunzong): attribute?
+    transfer.G2P(sparse_grid, grid_data, particles, &particles_data, scratch);
+    particles.ComputeFsPsdPdFs(particles_data.particle_grad_v_next, dt, &Fs_,
+                               &Ps_, &dPdFs_);
+  }
+
+  const std::vector<Matrix3<T>>& Fs() const { return Fs_; }
+  const std::vector<Matrix3<T>>& Ps() const { return Ps_; }
+  const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs() const { return dPdFs_; }
+
+ private:
+  std::vector<Matrix3<T>> Fs_{};
+  std::vector<Matrix3<T>> Ps_{};
+  std::vector<Eigen::Matrix<T, 9, 9>> dPdFs_{};
+};
+
+template <typename T>
 class MpmModel {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(MpmModel);
 
   MpmModel() {}
 
-  void SetUpTransferAndUpdateCurrentGridData(Particles<T>* particles,
-                                             GridData<T>* grid_data,
-                                             SparseGrid<T>* sparse_grid) {
-    transfer_.SetUpTransfer(sparse_grid, particles);
-    transfer_.P2G(*particles, *sparse_grid, grid_data);
-  }
-
-  void ComputeDeformationScratch(const GridData<T>& grid_data,
-                                 const SparseGrid<T>& sparse_grid,
-                                 const Particles<T>& particles, double dt) {
-    ParticlesData<T> particles_data{};  // TODO(zeshunzong): attribute?
-    transfer_.G2P(sparse_grid, grid_data, particles, &particles_data);
-    particles.ComputeDeformationScratch(particles_data.particle_grad_v_next, dt,
-                                        &scratch_);
-                                        // F, P, dPdF
+  T ComputeElasticEnergy(const Particles<T>& particles,
+                         const DeformationState<T>& deformation_state) const {
+    return particles.ComputeTotalElasticEnergy(deformation_state.Fs());
   }
 
   /**
-   * Computes the elastic energy due to deformation.
-   * @pre scratch_ has been computed from grid velocity.
-   */
-  T ComputeElasticEnergy(const Particles<T>& particles) const {
-    return particles.ComputeTotalElasticEnergy(
-        scratch_.elastic_deformation_gradients);
-  }
-
-  /**
-   * Computes the elastic force due to elastic deformation. It implicitly
-   * depends on current_grid (grid velocites) through scratch_.PK_stresses.
-   * @pre scratch_ has been computed from grid velocity.
+   * Computes the elastic force due to elastic deformation.
    */
   void ComputeElasticForce(const Particles<T>& particles,
                            const SparseGrid<T>& sparse_grid,
-                           std::vector<Vector3<T>>* grid_forces) {
-    transfer_.ComputeGridElasticForces(particles, sparse_grid,
-                                       scratch_.PK_stresses, grid_forces);
+                           const MpmTransfer<T>& transfer,
+                           const DeformationState<T>& deformation_state,
+                           std::vector<Vector3<T>>* grid_forces,
+                           TransferScratch<T>* scratch) const {
+    transfer.ComputeGridElasticForces(
+        particles, sparse_grid, deformation_state.Ps(), grid_forces, scratch);
   }
 
  private:
-  Vector3<T> gravity_{0.0, 0.0, -9.8};
-  MpmTransfer<T> transfer_;
-
-  DeformationScratch<T> scratch_{};
+  Vector3<T> gravity_{0.0, 0.0, -9.81};
 };
 
 }  // namespace mpm

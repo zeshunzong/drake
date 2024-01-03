@@ -4,6 +4,8 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
+using drake::multibody::mpm::constitutive_model::ElastoPlasticModel;
+
 template <typename T>
 Particles<T>::Particles() {}
 
@@ -13,15 +15,22 @@ void Particles<T>::AddParticle(
     const T& reference_volume, const Matrix3<T>& trial_deformation_gradient,
     const Matrix3<T>& elastic_deformation_gradient,
     std::unique_ptr<ElastoPlasticModel<T>> constitutive_model,
-    const Matrix3<T>& PK_stress, const Matrix3<T>& B_matrix) {
+    const Matrix3<T>& B_matrix) {
   positions_.emplace_back(position);
   velocities_.emplace_back(velocity);
   masses_.emplace_back(mass);
   reference_volumes_.emplace_back(reference_volume);
   trial_deformation_gradients_.emplace_back(trial_deformation_gradient);
   elastic_deformation_gradients_.emplace_back(elastic_deformation_gradient);
+
   elastoplastic_models_.emplace_back(std::move(constitutive_model));
-  PK_stresses_.emplace_back(PK_stress);
+
+  Matrix3<T> P;
+  elastoplastic_models_.back()->CalcFirstPiolaStress(
+      elastic_deformation_gradient, &P);
+  PK_stresses_.emplace_back(P);
+
+  PK_stresses_.emplace_back();
   B_matrices_.emplace_back(B_matrix);
 
   temporary_scalar_field_.emplace_back();
@@ -43,8 +52,7 @@ void Particles<T>::AddParticle(
     const T& reference_volume) {
   AddParticle(position, velocity, mass, reference_volume,
               Matrix3<T>::Identity(), Matrix3<T>::Identity(),
-              std::move(constitutive_model), Matrix3<T>::Zero(),
-              Matrix3<T>::Zero());
+              std::move(constitutive_model), Matrix3<T>::Zero());
 }
 
 template <typename T>
@@ -106,7 +114,7 @@ void Particles<T>::SplatToP2gPads(double h,
   p2g_pads->resize(num_batches());
   for (size_t i = 0; i < num_batches(); ++i) {
     P2gPad<T>& p2g_pad = (*p2g_pads)[i];
-    p2g_pad.Reset();  // initialize to zero
+    p2g_pad.SetZero();  // initialize to zero
     const size_t p_start = batch_starts_[i];
     const size_t p_end = p_start + batch_sizes_[i];
     for (size_t p = p_start; p < p_end; ++p) {
@@ -121,20 +129,19 @@ void Particles<T>::SplatToP2gPads(double h,
 
 template <typename T>
 void Particles<T>::SplatStressToP2gPads(
-    const std::vector<Matrix3<T>>& PK_stress_all,
-    std::vector<P2gPad<T>>* p2g_pads) const {
+    const std::vector<Matrix3<T>>& Ps, std::vector<P2gPad<T>>* p2g_pads) const {
   DRAKE_DEMAND(!need_reordering_);
-  DRAKE_ASSERT(PK_stress_all.size() == num_particles());
+  DRAKE_ASSERT(Ps.size() == num_particles());
   p2g_pads->resize(num_batches());
   for (size_t i = 0; i < num_batches(); ++i) {
     P2gPad<T>& p2g_pad = (*p2g_pads)[i];
-    p2g_pad.Reset();  // initialize to zero
+    p2g_pad.SetZero();  // initialize to zero
     const size_t p_start = batch_starts_[i];
     const size_t p_end = p_start + batch_sizes_[i];
     for (size_t p = p_start; p < p_end; ++p) {
       weights_[p].SplatParticleStressToP2gPad(
-          GetReferenceVolumeAt(p), PK_stress_all[p],
-          GetElasticDeformationGradientAt(p), base_nodes_[i], &p2g_pad);
+          GetReferenceVolumeAt(p), Ps[p], GetElasticDeformationGradientAt(p),
+          base_nodes_[i], &p2g_pad);
     }
   }
 }

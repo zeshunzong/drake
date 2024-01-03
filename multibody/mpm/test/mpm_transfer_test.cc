@@ -63,6 +63,7 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
     particles.SetBMatrixAt(p, std::move(B_matrix));
   }
 
+  TransferScratch<double> scratch{};
   MpmTransfer<double> mpm_transfer{};
   GridData<double> grid_data{};
   ParticlesData<double> particles_data{};
@@ -71,7 +72,7 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
       particles.ComputeTotalMassMomentum();
 
   mpm_transfer.SetUpTransfer(&grid, &particles);
-  mpm_transfer.P2G(particles, grid, &grid_data);
+  mpm_transfer.P2G(particles, grid, &grid_data, &scratch);
 
   internal::MassAndMomentum<double> mass_and_momentum_from_grid =
       grid.ComputeTotalMassMomentum(grid_data);
@@ -80,7 +81,7 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
                     mass_and_momentum_from_grid);
 
   // note: invoking p2g multiple times should still be valid
-  mpm_transfer.P2G(particles, grid, &grid_data);
+  mpm_transfer.P2G(particles, grid, &grid_data, &scratch);
 
   internal::MassAndMomentum<double> mass_and_momentum_from_grid2 =
       grid.ComputeTotalMassMomentum(grid_data);
@@ -90,7 +91,7 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
 
   // now we check G2P
 
-  mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
+  mpm_transfer.G2P(grid, grid_data, particles, &particles_data, &scratch);
 
   mpm_transfer.UpdateParticlesState(particles_data, 0.1, &particles);
   particles.AdvectParticles(0.1);

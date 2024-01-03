@@ -50,6 +50,7 @@ struct ParticleVBGradV {
  */
 template <typename T>
 class InterpolationWeights {
+  // TODO(zeshunzong): move implementation to .cc
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(InterpolationWeights);
   /**
@@ -100,7 +101,7 @@ class InterpolationWeights {
                                  const Matrix3<T>& FE_p,
                                  const Vector3<int>& base_node, double h,
                                  P2gPad<T>* p2g_pad) const {
-    (*p2g_pad).base_node = base_node;
+    p2g_pad->base_node = base_node;
     int node_index_local;
     Vector3<int> node_index_3d;
     Vector3<T> node_position;

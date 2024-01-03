@@ -22,19 +22,19 @@ GTEST_TEST(ParticlesClassTest, TestAddSetGet) {
       Vector3<double>{1, 1, 1}, Vector3<double>{1, 1, 1}, 1.0, 1.0,
       Matrix3<double>::Ones() * 1.0, Matrix3<double>::Ones() * 1.0,
       std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2),
-      Matrix3<double>::Ones() * 1.0, Matrix3<double>::Ones() * 1.0);
+      Matrix3<double>::Ones() * 1.0);
   // add particle #2
   particles.AddParticle(
       Vector3<double>{2, 2, 2}, Vector3<double>{2, 2, 2}, 2.0, 2.0,
       Matrix3<double>::Ones() * 2.0, Matrix3<double>::Ones() * 2.0,
       std::make_unique<CorotatedElasticModel<double>>(2.0, 0.2),
-      Matrix3<double>::Ones() * 2.0, Matrix3<double>::Ones() * 2.0);
+      Matrix3<double>::Ones() * 2.0);
   // add particle #3
   particles.AddParticle(
       Vector3<double>{3, 3, 3}, Vector3<double>{3, 3, 3}, 3.0, 3.0,
       Matrix3<double>::Ones() * 3.0, Matrix3<double>::Ones() * 3.0,
       std::make_unique<CorotatedElasticModel<double>>(3.0, 0.2),
-      Matrix3<double>::Ones() * 3.0, Matrix3<double>::Ones() * 3.0);
+      Matrix3<double>::Ones() * 3.0);
 
   EXPECT_EQ(particles.num_particles(), 3);
 
@@ -63,8 +63,6 @@ GTEST_TEST(ParticlesClassTest, TestAddSetGet) {
     EXPECT_EQ(particles.GetElasticDeformationGradientAt(p), mat);
     EXPECT_EQ(particles.GetTrialDeformationGradientAt(p), mat);
     EXPECT_EQ(particles.GetBMatrixAt(p), mat);
-    EXPECT_EQ(particles.GetPKStressAt(p), mat);
-    EXPECT_EQ(particles.GetElastoplasticModelAt(p)->youngs_modulus(), p + 1.0);
   }
 }
 

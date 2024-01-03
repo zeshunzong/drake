@@ -68,8 +68,7 @@ void SparseGrid<T>::GatherForceFromP2gPads(
     const std::vector<P2gPad<T>>& p2g_pads,
     std::vector<Vector3<T>>* grid_forces) const {
   std::vector<Vector3<T>>& grid_forces_ref = *grid_forces;
-  grid_forces_ref.resize(num_active_nodes());
-  std::fill(grid_forces_ref.begin(), grid_forces_ref.end(), Vector3<T>::Zero());
+  grid_forces_ref.resize(num_active_nodes(), Vector3<T>::Zero());
 
   for (const P2gPad<T>& p2g_pad : p2g_pads) {
     const Vector3<int>& base_node = p2g_pad.base_node;

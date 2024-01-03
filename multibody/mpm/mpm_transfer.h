@@ -15,6 +15,14 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
+template <typename T>
+struct TransferScratch {
+  // scratch pads for transferring states from particles to grid nodes
+  std::vector<P2gPad<T>> p2g_pads{};
+  // scratch pad for transferring states from grid nodes to particles
+  G2pPad<T> g2p_pad{};
+};
+
 /**
  * An implementation of MPM's transfer schemes. We follow Section 10.5 in
  * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
@@ -91,7 +99,7 @@ class MpmTransfer {
    * grid_data.
    */
   void P2G(const Particles<T>& particles, const SparseGrid<T>& grid,
-           GridData<T>* grid_data);
+           GridData<T>* grid_data, TransferScratch<T>* scratch) const;
 
   /**
    * Grid to particles transfer.
@@ -100,7 +108,8 @@ class MpmTransfer {
    * Given grid_data, writes particle v, B, and grad_v to particles_data.
    */
   void G2P(const SparseGrid<T>& grid, const GridData<T>& grid_data,
-           const Particles<T>& particles, ParticlesData<T>* particles_data);
+           const Particles<T>& particles, ParticlesData<T>* particles_data,
+           TransferScratch<T>* scratch) const;
 
   /**
    * Updates velocity, B-matrix, trial deformation gradient, elastic deformation
@@ -128,17 +137,11 @@ class MpmTransfer {
   void ComputeGridElasticForces(const Particles<T>& particles,
                                 const SparseGrid<T>& grid,
                                 const std::vector<Matrix3<T>>& PK_stress_all,
-                                std::vector<Vector3<T>>* grid_elastic_forces) {
-    particles.SplatStressToP2gPads(PK_stress_all, &p2g_pads_);
-    grid.GatherForceFromP2gPads(p2g_pads_, grid_elastic_forces);
+                                std::vector<Vector3<T>>* grid_elastic_forces,
+                                TransferScratch<T>* scratch) const {
+    particles.SplatStressToP2gPads(PK_stress_all, &(scratch->p2g_pads));
+    grid.GatherForceFromP2gPads(scratch->p2g_pads, grid_elastic_forces);
   }
-
- private:
-  // scratch pads for transferring states from particles to grid nodes
-  std::vector<P2gPad<T>> p2g_pads_{};
-
-  // scratch pad for transferring states from grid nodes to particles
-  G2pPad<T> g2p_pad_{};
 };
 
 }  // namespace mpm

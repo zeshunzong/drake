@@ -60,6 +60,7 @@ Eigen::Matrix3X<AutoDiffXd> MakeMatrix3XWithDerivatives() {
 GTEST_TEST(MpmModelTest, TestEnergyAndForceAndHessian) {
   // setup some particles and a grid.
   const double h = 0.2;
+  double dt = 0.1;
   Particles<AutoDiffXd> particles = Particles<AutoDiffXd>();
   particles.AddParticle(
       Vector3<AutoDiffXd>(0.01, 0.01, 0.01), Vector3<AutoDiffXd>(0.0, 0.0, 0.0),
@@ -73,42 +74,46 @@ GTEST_TEST(MpmModelTest, TestEnergyAndForceAndHessian) {
   particles.AddParticle(
       Vector3<AutoDiffXd>(-1.2, 0.0, 0.4), Vector3<AutoDiffXd>(0.0, 0.0, 0.0),
       std::make_unique<CorotatedElasticModel<AutoDiffXd>>(5.0, 0.2), 1.0, 1.0);
+
   SparseGrid<AutoDiffXd> sparse_grid(h);
+  GridData<AutoDiffXd> grid_data{};
+
+  MpmTransfer<AutoDiffXd> mpm_transfer{};
+  TransferScratch<AutoDiffXd> transfer_scratch{};
+  DeformationState<AutoDiffXd> deformation_state(particles.num_particles());
 
   // setup mpm_model and auxiliary scratch
   MpmModel<AutoDiffXd> mpm_model{};
 
-  GridData<AutoDiffXd> current_grid_data{};
-  GridData<AutoDiffXd> new_grid_data{};
+  // given current particles (say just advect positions)
+  mpm_transfer.SetUpTransfer(&sparse_grid, &particles);
+  mpm_transfer.P2G(particles, sparse_grid, &grid_data, &transfer_scratch);
+  EXPECT_EQ(grid_data.num_active_nodes(), num_active_nodes);
+  // now we have G, can enter while loop
 
-  // prepare the current grid_data
-  mpm_model.SetUpTransferAndUpdateCurrentGridData(
-      &particles, &current_grid_data, &sparse_grid);
-
-  // just make sure the new_grid_data has the correct size
-  new_grid_data = current_grid_data;
-
-  EXPECT_EQ(new_grid_data.num_active_nodes(), num_active_nodes);
-
+  // say we figured out a dG, let's get the new G
   // Manually fill in new_grid_data with random grid velocities
   Eigen::Matrix3X<AutoDiffXd> Vi = MakeMatrix3XWithDerivatives();
   std::vector<Vector3<AutoDiffXd>> grid_velocities_input{};
   for (int i = 0; i < num_active_nodes; i++) {
     grid_velocities_input.push_back(Vi.col(i));
   }
-  new_grid_data.velocities_ = grid_velocities_input;
+  grid_data.velocities_ = grid_velocities_input;
 
-  double dt = 0.1;
+  // now we can compute the energy and force for the next while loop
+  deformation_state.Update(grid_data, sparse_grid, particles, mpm_transfer, dt,
+                           &transfer_scratch);
 
   // check that elastic force is derivative of elastic energy (d energy / dx)
 
-  mpm_model.ComputeDeformationScratch(new_grid_data, sparse_grid, particles,
-                                      dt);
-  // compute energy
-  AutoDiffXd energy = mpm_model.ComputeElasticEnergy(particles);
-  // compute force
+  // energy
+  AutoDiffXd energy =
+      mpm_model.ComputeElasticEnergy(particles, deformation_state);
+  // force
   std::vector<Vector3<AutoDiffXd>> elastic_forces;
-  mpm_model.ComputeElasticForce(particles, sparse_grid, &elastic_forces);
+  mpm_model.ComputeElasticForce(particles, sparse_grid, mpm_transfer,
+                                deformation_state, &elastic_forces,
+                                &transfer_scratch);
 
   Eigen::VectorX<AutoDiffXd> dEnergydV = energy.derivatives();
   // this should be of size num_active_nodes * 3
