@@ -80,7 +80,8 @@ GTEST_TEST(MpmModelTest, TestEnergyAndForceAndHessian) {
 
   MpmTransfer<AutoDiffXd> mpm_transfer{};
   TransferScratch<AutoDiffXd> transfer_scratch{};
-  DeformationState<AutoDiffXd> deformation_state(particles.num_particles());
+  DeformationState<AutoDiffXd> deformation_state(particles, sparse_grid,
+                                                 grid_data);
 
   // setup mpm_model and auxiliary scratch
   MpmModel<AutoDiffXd> mpm_model{};
@@ -92,7 +93,7 @@ GTEST_TEST(MpmModelTest, TestEnergyAndForceAndHessian) {
   // now we have G, can enter while loop
 
   // say we figured out a dG, let's get the new G
-  // Manually fill in new_grid_data with random grid velocities
+  // Manually fill in grid_data with random grid velocities
   Eigen::Matrix3X<AutoDiffXd> Vi = MakeMatrix3XWithDerivatives();
   std::vector<Vector3<AutoDiffXd>> grid_velocities_input{};
   for (int i = 0; i < num_active_nodes; i++) {
@@ -101,19 +102,16 @@ GTEST_TEST(MpmModelTest, TestEnergyAndForceAndHessian) {
   grid_data.velocities_ = grid_velocities_input;
 
   // now we can compute the energy and force for the next while loop
-  deformation_state.Update(grid_data, sparse_grid, particles, mpm_transfer, dt,
-                           &transfer_scratch);
+  deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
 
   // check that elastic force is derivative of elastic energy (d energy / dx)
 
   // energy
-  AutoDiffXd energy =
-      mpm_model.ComputeElasticEnergy(particles, deformation_state);
+  AutoDiffXd energy = mpm_model.ComputeElasticEnergy(deformation_state);
   // force
   std::vector<Vector3<AutoDiffXd>> elastic_forces;
-  mpm_model.ComputeElasticForce(particles, sparse_grid, mpm_transfer,
-                                deformation_state, &elastic_forces,
-                                &transfer_scratch);
+  mpm_model.ComputeElasticForce(mpm_transfer, deformation_state,
+                                &elastic_forces, &transfer_scratch);
 
   Eigen::VectorX<AutoDiffXd> dEnergydV = energy.derivatives();
   // this should be of size num_active_nodes * 3

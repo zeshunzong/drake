@@ -26,56 +26,6 @@ struct TransferScratch {
 /**
  * An implementation of MPM's transfer schemes. We follow Section 10.5 in
  * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
- *
- * Have the following things in hand to advance from tₙ to tₙ₊₁:
- *
- * Particles<double> particles; -- carries state of Lagrangian particles at tₙ
- * SparseGrid<double> sparse_grid; -- auxiliary structure for indexing
- * GridData<double> grid_data; -- zero-initialized, to hold grid state
- * MpmTransfer<double> mpm_transfer; -- transfer functions
- * ParticlesData<double> particles_data; -- data holder for particles
- *
- * @note Below Gₙ represents grid velocities, Pₙ represents all states stored
- * on particles.
- *
- * In: Pₙ particles at tₙ
- * Out: Gₙ₊₁ grid state at tₙ₊₁, Pₙ₊₁ particles at tₙ₊₁.
- *
- * Explicit temporal advancement:
- * ```
- * mpm_transfer.SetupTransfer(&sparse_grid, &particles);
- * // Gₙ = P2G(Pₙ)
- * mpm_transfer.P2G(particles, grid, &grid_data);
- * // compute Gₙ₊₁
- * TODO(zeshunzong): mpm_transfer.AddGravity(&grid_data);
- * // particle_data = G2P(Gₙ₊₁)
- * mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
- * // update particles state except for position
- * mpm_transfer.UpdateParticlesState(particles_data, dt, &particles);
- * // afterwards we get Pₙ₊₁
- * particles.AdvectParticles(dt);
- * ```
- *
- * Implicit temporal advancement:
- * ```
- * mpm_transfer.SetupTransfer(&sparse_grid, &particles);
- * dG = ∞
- * while |dG|>ε:
- *   // Gₙ = P2G(Pₙ)
- *   mpm_transfer.P2G(particles, grid, &grid_data);
- *   // Solve the linear system H(Pₙ)⋅dG = -f(Pₙ)
- *   @note H and f depend on weights and particle deformation gradients
- *   TODO(zeshunzong): LinearSolve(H, f, Pₙ, &dg)
- *   Gₙ = Gₙ + dG
- *   // particle_data = G2P(Gₙ₊₁)
- *   mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
- *   // Pₙ = UpdateParticlesState(particle_data)
- *   mpm_transfer.UpdateParticlesState(particles_data, dt, &particles);
- * end
- * // afterwards we get Pₙ₊₁
- * particles.AdvectParticles(dt);
- * Output Gₙ₊₁:=Gₙ, Pₙ₊₁:=Pₙ.
- * ```
  */
 template <typename T>
 class MpmTransfer {
@@ -124,22 +74,22 @@ class MpmTransfer {
 
   /**
    * Computes the grid_forces at all active grid nodes.
-   * The formula is eqn (188) in
-   * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
+   * fᵢ = − ∑ₚ V⁰ₚ P F₀ᵀ ∇ wᵢₚ
+   * Also see the accompanied energy_derivatives.md.
    * @note the computation is similar to P2G, with only grid forces being
    * computed.
    * @note the computation depends implicitly on the grid velocities through
-   * PK_stress_all, which should be computed from the grid velocities.
+   * the first Piola-Kirchhoff stresses `Ps`, which should be computed from the grid velocities.
    * @note the computation depends on the current elastic_deformation_gradient
    * F₀ stored in particles (for chain rule).
-   * @pre PK_stress_all.size() == particles.num_particles().
+   * @pre Ps.size() == particles.num_particles().
    */
   void ComputeGridElasticForces(const Particles<T>& particles,
                                 const SparseGrid<T>& grid,
-                                const std::vector<Matrix3<T>>& PK_stress_all,
+                                const std::vector<Matrix3<T>>& Ps,
                                 std::vector<Vector3<T>>* grid_elastic_forces,
                                 TransferScratch<T>* scratch) const {
-    particles.SplatStressToP2gPads(PK_stress_all, &(scratch->p2g_pads));
+    particles.SplatStressToP2gPads(Ps, &(scratch->p2g_pads));
     grid.GatherForceFromP2gPads(scratch->p2g_pads, grid_elastic_forces);
   }
 };
