@@ -145,7 +145,7 @@ class InterpolationWeights {
                                    const Matrix3<T>& FE_p,
                                    const Vector3<int>& base_node,
                                    P2gPad<T>* p2g_pad) const {
-    (*p2g_pad).base_node = base_node;
+    p2g_pad->base_node = base_node;
     int node_index_local;
     for (int a = -1; a <= 1; ++a) {
       for (int b = -1; b <= 1; ++b) {

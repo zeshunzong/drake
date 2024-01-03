@@ -18,6 +18,7 @@ namespace mpm {
 template <typename T>
 struct TransferScratch {
   // scratch pads for transferring states from particles to grid nodes
+  // there will be one pad for each particle
   std::vector<P2gPad<T>> p2g_pads{};
   // scratch pad for transferring states from grid nodes to particles
   G2pPad<T> g2p_pad{};
@@ -79,7 +80,8 @@ class MpmTransfer {
    * @note the computation is similar to P2G, with only grid forces being
    * computed.
    * @note the computation depends implicitly on the grid velocities through
-   * the first Piola-Kirchhoff stresses `Ps`, which should be computed from the grid velocities.
+   * the first Piola-Kirchhoff stresses `Ps`, which should be computed from the
+   * grid velocities.
    * @note the computation depends on the current elastic_deformation_gradient
    * F₀ stored in particles (for chain rule).
    * @pre Ps.size() == particles.num_particles().

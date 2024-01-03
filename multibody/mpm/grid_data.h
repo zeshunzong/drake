@@ -20,11 +20,6 @@ namespace mpm {
 template <typename T>
 class GridData {
  public:
-  std::vector<T> masses_;
-  std::vector<Vector3<T>> momentums_;
-  std::vector<Vector3<T>> velocities_;
-  std::vector<Vector3<T>> forces_;
-
   void Reserve(size_t capacity) {
     masses_.reserve(capacity);
     momentums_.reserve(capacity);
@@ -83,10 +78,24 @@ class GridData {
   /**
    * @pre index_1d < num_active_nodes()
    */
-  T GetMassAt(size_t index_1d) const {
+  const T& GetMassAt(size_t index_1d) const {
     DRAKE_ASSERT(index_1d < masses_.size());
     return masses_[index_1d];
   }
+
+  const std::vector<T>& masses() const { return masses_; }
+  const std::vector<Vector3<T>>& momentums() const { return momentums_; }
+  const std::vector<Vector3<T>>& velocities() const { return velocities_; }
+
+  void SetVelocities(const std::vector<Vector3<T>>& velocities) {
+    velocities_ = velocities;
+  }
+
+ private:
+  std::vector<T> masses_;
+  std::vector<Vector3<T>> momentums_;
+  std::vector<Vector3<T>> velocities_;
+  std::vector<Vector3<T>> forces_;
 };
 
 }  // namespace mpm

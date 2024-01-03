@@ -25,6 +25,48 @@ void CheckConservation(const internal::MassAndMomentum<double>& before,
                               after.total_angular_momentum, kTolerance));
 }
 
+// say the velocity field is (2x, 2y, 0)
+Vector3<double> GetVelocityField(const Vector3<double> position) {
+  Vector3<double> v;
+  v(0) = 2.0 * position(0);
+  v(1) = 2.0 * position(1);
+  v(2) = 0.0;
+  return v;
+}
+
+GTEST_TEST(MpmTransferTest, TestGradV) {
+  const double h = 0.1;
+
+  SparseGrid<double> grid(h);
+  Particles<double> particles = Particles<double>();
+  particles.AddParticle(
+      Vector3<double>(0.5, 0.5, 0.5), Vector3<double>(0.0, 0.0, 0.0),
+      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2), 1.0, 1.0);
+  TransferScratch<double> scratch{};
+  MpmTransfer<double> mpm_transfer{};
+  GridData<double> grid_data{};
+  ParticlesData<double> particles_data{};
+  mpm_transfer.SetUpTransfer(&grid, &particles);
+  mpm_transfer.P2G(particles, grid, &grid_data, &scratch);
+
+  // manually change grid v
+  std::vector<Vector3<double>> test_v_field;
+  for (int i = 0; i < 27; ++i) {
+    const Vector3<double> position =
+        internal::ComputePositionFromIndex3D(grid.To3DIndex(i), grid.h());
+    test_v_field.emplace_back(GetVelocityField(position));
+  }
+  grid_data.SetVelocities(test_v_field);
+
+  mpm_transfer.G2P(grid, grid_data, particles, &particles_data, &scratch);
+
+  Matrix3<double> correct_grad_v = Matrix3<double>::Zero();
+  correct_grad_v(0, 0) = 2.0;
+  correct_grad_v(1, 1) = 2.0;
+  EXPECT_TRUE(CompareMatrices(particles_data.particle_grad_v_next[0],
+                              correct_grad_v, kTolerance));
+}
+
 // Randomly generate some particles
 // Apply p2g
 // Compare mass and momentum before and after

@@ -464,8 +464,6 @@ class Particles {
   // reordered elastoplastic model each time!
   std::vector<Matrix3<T>> PK_stresses_{};
 
-  // TODO(zeshunzong): this needs to be sorted. Let's assume all particles have
-  // the same elastoplastic model for now.
   std::vector<
       copyable_unique_ptr<mpm::constitutive_model::ElastoPlasticModel<T>>>
       elastoplastic_models_{};

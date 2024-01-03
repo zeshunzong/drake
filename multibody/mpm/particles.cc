@@ -29,8 +29,6 @@ void Particles<T>::AddParticle(
   elastoplastic_models_.back()->CalcFirstPiolaStress(
       elastic_deformation_gradient, &P);
   PK_stresses_.emplace_back(P);
-
-  PK_stresses_.emplace_back();
   B_matrices_.emplace_back(B_matrix);
 
   temporary_scalar_field_.emplace_back();

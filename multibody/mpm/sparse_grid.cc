@@ -89,13 +89,13 @@ internal::MassAndMomentum<T> SparseGrid<T>::ComputeTotalMassMomentum(
     const GridData<T>& grid_data) const {
   internal::MassAndMomentum<T> total_mass_momentum{};
   for (size_t i = 0; i < num_active_nodes(); ++i) {
-    total_mass_momentum.total_mass += grid_data.masses_[i];
+    total_mass_momentum.total_mass += grid_data.masses()[i];
     total_mass_momentum.total_momentum +=
-        grid_data.masses_[i] * grid_data.velocities_[i];
+        grid_data.masses()[i] * grid_data.velocities()[i];
     const Vector3<T> node_position =
         internal::ComputePositionFromIndex3D(To3DIndex(i), h_);
     total_mass_momentum.total_angular_momentum +=
-        grid_data.masses_[i] * node_position.cross(grid_data.velocities_[i]);
+        grid_data.masses()[i] * node_position.cross(grid_data.velocities()[i]);
   }
   return total_mass_momentum;
 }

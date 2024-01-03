@@ -16,7 +16,8 @@ namespace {
 using drake::multibody::mpm::constitutive_model::CorotatedElasticModel;
 constexpr double kTolerance = 1e-10;
 constexpr int num_active_nodes = 63;
-// constexpr int num_active_nodes = 27;
+// for the three particular particles we add, there will be a total of 63 active
+// nodes.
 
 template <typename T>
 void VecXToStdvecVec3(const Eigen::VectorX<AutoDiffXd> input,
@@ -99,7 +100,7 @@ GTEST_TEST(MpmModelTest, TestEnergyAndForceAndHessian) {
   for (int i = 0; i < num_active_nodes; i++) {
     grid_velocities_input.push_back(Vi.col(i));
   }
-  grid_data.velocities_ = grid_velocities_input;
+  grid_data.SetVelocities(grid_velocities_input);
 
   // now we can compute the energy and force for the next while loop
   deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
