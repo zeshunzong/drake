@@ -408,6 +408,29 @@ class Particles {
     }
   }
 
+  /**
+   * Computes the part of elastic hessian (denoted `pad_hessian`) contributed by
+   * particles in the batch_i-th batch. This will be non-zero for the 27 grid
+   * nodes neighboring to the common base_node that this batch of particles
+   * share. Thus, the result is stored in a (27*3)by(27*3) matrix.
+   * pad_hessian(3*i+α, 3*j+β) = d²e / dxᵢₐdxⱼᵦ, where e is the elastic energy
+   * restricted to the particles in this batch, and i and j are the local index
+   * relative to the shared base_node (0-26) of the grid nodes.
+   */
+  void ComputePadHessianForOneBatch(
+      size_t batch_i,
+      const std::vector<Eigen::Matrix<T, 9, 9>>& dPdF_contractF0_contractF0,
+      MatrixX<T>* pad_hessian) const;
+
+  /**
+   * For each particle, computes dPdF:F₀:F₀, and return the stored result.
+   * The formula is resultₐᵦᵨᵧ = ∑ⱼₗ dPdFₐᵢᵨⱼ * F₀ᵧⱼ * F₀ᵦᵢ.
+   * @note recall for a 4D tensor stored as a 9by9 matrix, the ordering is Aᵢⱼₖₗ
+   * = A(i+3j, k+3l)
+   */
+  std::vector<Eigen::Matrix<T, 9, 9>> ComputeDPDFContractF0ContractF0(
+      const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs) const;
+
  private:
   // Ensures that all attributes (std::vectors) have correct size. This only
   // needs to be called when new particles are added.
@@ -445,6 +468,11 @@ class Particles {
     DRAKE_ASSERT(p < num_particles());
     return weights_[p].GetWeightGradientAt(neighbor_node);
   }
+
+  // For each particle p, computes dPdF_contractF0_contractF0[p](3β+α, 3γ+ρ) =
+  // [∑ᵢⱼ (dPₐᵢ/dFᵨⱼ) * Fᵧⱼ * Fᵦᵢ] * Vₚ⁰ i and j are θ and ϕ in accompanied
+  // ElasticEnergyDerivatives.md. The result is stored as A_(alpha beta, rho
+  // gamma), where alpha and rho are the outer (block) row and column indices.
 
   // particle-wise data
   std::vector<Vector3<T>> positions_{};

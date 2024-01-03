@@ -127,7 +127,11 @@ class MpmModel {
    */
   void ComputeElasticHessian(const MpmTransfer<T>& transfer,
                              const DeformationState<T>& deformation_state,
-                             MatrixX<T>* hessian) const;
+                             MatrixX<T>* hessian) const {
+    transfer.ComputeGridElasticHessian(deformation_state.particles(),
+                                       deformation_state.sparse_grid(),
+                                       deformation_state.dPdFs(), hessian);
+  }
 
  private:
   Vector3<T> gravity_{0.0, 0.0, -9.81};

@@ -123,6 +123,24 @@ GTEST_TEST(MpmModelTest, TestEnergyAndForceAndHessian) {
     Eigen::VectorX<AutoDiffXd> dEnergydXi = dEnergydX.segment(3 * i, 3);
     EXPECT_TRUE(CompareMatrices(-dEnergydXi, elastic_forces[i], kTolerance));
   }
+
+  // ---------------- check hessian = d^2 e d x^2 ------------
+  MatrixX<AutoDiffXd> hessian;
+  mpm_model.ComputeElasticHessian(mpm_transfer, deformation_state, &hessian);
+  for (int i = 0; i < num_active_nodes; ++i) {
+    for (int alpha = 0; alpha < 1; ++alpha) {
+      Eigen::VectorX<AutoDiffXd> hessian_slice = hessian.col(
+          i * 3 +
+          alpha);  //.col or .row should be the same, since it is symmetric
+      Eigen::VectorX<AutoDiffXd> grid_force_i = elastic_forces[i];
+      MatrixX<AutoDiffXd> d_grid_force_ialpha_d_V =
+          grid_force_i(alpha).derivatives();  // 1 by 3*num_active_grids
+      MatrixX<AutoDiffXd> d_grid_force_ialpha_d_X =
+          d_grid_force_ialpha_d_V / dt;  // chain rule
+      EXPECT_TRUE(
+          CompareMatrices(hessian_slice, -d_grid_force_ialpha_d_X, kTolerance));
+    }
+  }
 }
 
 }  // namespace

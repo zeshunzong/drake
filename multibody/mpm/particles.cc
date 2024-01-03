@@ -179,6 +179,78 @@ void Particles<T>::WriteParticlesDataFromG2pPad(
 }
 
 template <typename T>
+void Particles<T>::ComputePadHessianForOneBatch(
+    size_t batch_i,
+    const std::vector<Eigen::Matrix<T, 9, 9>>& dPdF_contractF0_contractF0,
+    MatrixX<T>* pad_hessian) const {
+  DRAKE_ASSERT(pad_hessian != nullptr);
+  pad_hessian->resize(27 * 3, 27 * 3);
+  pad_hessian->setZero();
+
+  // loop over all particles in this batch_i
+  for (size_t p = batch_starts_[batch_i];
+       p < batch_starts_[batch_i] + batch_sizes_[batch_i]; ++p) {
+    // loop over each i of 27 neighboring nodes in the numerator and each
+    // dimension α
+    for (size_t i = 0; i < 27; ++i) {
+      for (size_t alpha = 0; alpha < 3; ++alpha) {
+        // loop over each j of 27 neighboring nodes in the denominator and
+        // each dimension rho
+        for (size_t j = 0; j < 27; ++j) {
+          for (size_t rho = 0; rho < 3; ++rho) {
+            const Vector3<T>& gradNi_p = GetWeightGradientAt(p, i);
+            const Vector3<T>& gradNj_p = GetWeightGradientAt(p, j);
+            // The matrix for this particle, the indexing is A(α+3β, ρ+3γ)
+            const Eigen::Matrix<T, 9, 9>& A_alphabeta_rhogamma =
+                dPdF_contractF0_contractF0[p];
+            // compute ∑ᵦᵧ A(α+3β, ρ+3γ) ⋅ ∇Nᵢ(xₚ)[β] ⋅ ∇Nⱼ(xₚ)[γ]
+            for (size_t beta = 0; beta < 3; ++beta) {
+              for (size_t gamma = 0; gamma < 3; ++gamma) {
+                (*pad_hessian)(alpha + 3 * i, rho + 3 * j) +=
+                    gradNi_p(beta) *
+                    A_alphabeta_rhogamma(alpha + 3 * beta, rho + gamma * 3) *
+                    gradNj_p(gamma) * GetReferenceVolumeAt(p);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+template <typename T>
+std::vector<Eigen::Matrix<T, 9, 9>>
+Particles<T>::ComputeDPDFContractF0ContractF0(
+    const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs) const {
+  std::vector<Eigen::Matrix<T, 9, 9>> dPdF_contractF0_contractF0(
+      num_particles());
+  for (size_t p = 0; p < num_particles(); ++p) {
+    Eigen::Matrix<T, 9, 9>& matrix_p = dPdF_contractF0_contractF0[p];
+    const Matrix3<T>& F0 = elastic_deformation_gradients_[p];
+    // initialize
+    matrix_p.setZero();
+    // next contract with F0 twice
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        for (int alpha = 0; alpha < 3; ++alpha) {
+          for (int beta = 0; beta < 3; ++beta) {
+            for (int gamma = 0; gamma < 3; ++gamma) {
+              for (int rho = 0; rho < 3; ++rho) {
+                matrix_p(alpha + 3 * beta, rho + 3 * gamma) +=
+                    dPdFs[p](alpha + 3 * i, rho + 3 * j) * F0(gamma, j) *
+                    F0(beta, i);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return dPdF_contractF0_contractF0;
+}
+
+template <typename T>
 void Particles<T>::Reorder(const std::vector<size_t>& new_order) {
   DRAKE_DEMAND((new_order.size()) == num_particles());
   for (size_t i = 0; i < num_particles() - 1; ++i) {

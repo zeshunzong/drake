@@ -94,6 +94,39 @@ class MpmTransfer {
     particles.SplatStressToP2gPads(Ps, &(scratch->p2g_pads));
     grid.GatherForceFromP2gPads(scratch->p2g_pads, grid_elastic_forces);
   }
+
+  void ComputeGridElasticHessian(
+      const Particles<T>& particles, const SparseGrid<T>& grid,
+      const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs,
+      MatrixX<T>* hessian) const {
+    DRAKE_ASSERT(hessian != nullptr);
+    // initialize
+    hessian->resize(grid.num_active_nodes() * 3, grid.num_active_nodes() * 3);
+    hessian->setZero();
+
+    std::vector<Eigen::Matrix<T, 9, 9>> dPdF_contractF0_contractF0 =
+        particles.ComputeDPDFContractF0ContractF0(dPdFs);
+    // loop over each batch
+    const std::vector<Vector3<int>>& base_nodes = particles.base_nodes();
+    const std::vector<size_t>& batch_starts = particles.batch_starts();
+    MatrixX<T> pad_hessian;
+    for (size_t i = 0; i < particles.num_batches(); ++i) {
+      // compute pad_hessian for this batch
+      particles.ComputePadHessianForOneBatch(i, dPdF_contractF0_contractF0,
+                                             &pad_hessian);
+      // write pad_hessian to global hessian
+      AddPadHessianToHessian(base_nodes[batch_starts[i]], grid, pad_hessian,
+                             hessian);
+    }
+  }
+
+ private:
+  // Adds the batch_index_3d-th pad hessian (of elastic energy w.r.t grid
+  // positions) to the hessian.
+  void AddPadHessianToHessian(const Vector3<int> batch_index_3d,
+                              const SparseGrid<T>& grid,
+                              const MatrixX<T>& pad_hessian,
+                              MatrixX<T>* hessian) const;
 };
 
 }  // namespace mpm

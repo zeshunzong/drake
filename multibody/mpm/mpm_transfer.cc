@@ -69,6 +69,44 @@ void MpmTransfer<T>::UpdateParticlesState(
   // TODO(zeshunzong): compute new projected F and new stress
 }
 
+template <typename T>
+void MpmTransfer<T>::AddPadHessianToHessian(const Vector3<int> batch_index_3d,
+                                            const SparseGrid<T>& grid,
+                                            const MatrixX<T>& pad_hessian,
+                                            MatrixX<T>* hessian) const {
+  // temporary variables
+  int idx_local_i, idx_local_j;
+  Vector3<int> node_i_idx_3d, node_j_idx_3d;
+
+  for (int ia = -1; ia <= 1; ++ia) {
+    for (int ib = -1; ib <= 1; ++ib) {
+      for (int ic = -1; ic <= 1; ++ic) {
+        idx_local_i = 9 * (ia + 1) + 3 * (ib + 1) + (ic + 1);
+        // local index 0-26
+        node_i_idx_3d = batch_index_3d + Vector3<int>(ia, ib, ic);
+        // global 3d index of node i
+
+        for (int ja = -1; ja <= 1; ++ja) {
+          for (int jb = -1; jb <= 1; ++jb) {
+            for (int jc = -1; jc <= 1; ++jc) {
+              idx_local_j = 9 * (ja + 1) + 3 * (jb + 1) + (jc + 1);
+              // local index 0-26
+              node_j_idx_3d = batch_index_3d + Vector3<int>(ja, jb, jc);
+              // global 3d index of node i
+              const auto& dfi_dvj_block = pad_hessian.template block<3, 3>(
+                  idx_local_i * 3, idx_local_j * 3);
+              // get the local dfi_dvj block
+              (*hessian).block(grid.To1DIndex(node_i_idx_3d) * 3,
+                               grid.To1DIndex(node_j_idx_3d) * 3, 3, 3) +=
+                  dfi_dvj_block;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 template class MpmTransfer<double>;
 template class MpmTransfer<AutoDiffXd>;
 
