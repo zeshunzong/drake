@@ -26,7 +26,7 @@ void CheckConservation(const internal::MassAndMomentum<double>& before,
 }
 
 // say the velocity field is (2x, 2y, 0)
-Vector3<double> GetVelocityField(const Vector3<double> position) {
+Vector3<double> GetVelocityField(const Vector3<double>& position) {
   Vector3<double> v;
   v(0) = 2.0 * position(0);
   v(1) = 2.0 * position(1);
@@ -65,6 +65,8 @@ GTEST_TEST(MpmTransferTest, TestGradV) {
   correct_grad_v(1, 1) = 2.0;
   EXPECT_TRUE(CompareMatrices(particles_data.particle_grad_v_next[0],
                               correct_grad_v, kTolerance));
+  // note: for a linear velocity field (we use (2x, 2y, 0) here) the grad_v
+  // computed should in theory be exact, except for tiny numerical errors.
 }
 
 // Randomly generate some particles
