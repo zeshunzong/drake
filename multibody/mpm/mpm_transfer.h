@@ -95,30 +95,23 @@ class MpmTransfer {
     grid.GatherForceFromP2gPads(scratch->p2g_pads, grid_elastic_forces);
   }
 
+  /**
+   * Computes the second order derivative of elastic energy w.r.t. grid
+   * positions. See the accompanied energy_derivatives.md.
+   */
   void ComputeGridElasticHessian(
       const Particles<T>& particles, const SparseGrid<T>& grid,
       const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs,
-      MatrixX<T>* hessian) const {
-    DRAKE_ASSERT(hessian != nullptr);
-    // initialize
-    hessian->resize(grid.num_active_nodes() * 3, grid.num_active_nodes() * 3);
-    hessian->setZero();
+      MatrixX<T>* hessian) const;
 
-    std::vector<Eigen::Matrix<T, 9, 9>> dPdF_contractF0_contractF0 =
-        particles.ComputeDPDFContractF0ContractF0(dPdFs);
-    // loop over each batch
-    const std::vector<Vector3<int>>& base_nodes = particles.base_nodes();
-    const std::vector<size_t>& batch_starts = particles.batch_starts();
-    MatrixX<T> pad_hessian;
-    for (size_t i = 0; i < particles.num_batches(); ++i) {
-      // compute pad_hessian for this batch
-      particles.ComputePadHessianForOneBatch(i, dPdF_contractF0_contractF0,
-                                             &pad_hessian);
-      // write pad_hessian to global hessian
-      AddPadHessianToHessian(base_nodes[batch_starts[i]], grid, pad_hessian,
-                             hessian);
-    }
-  }
+  /**
+   * Computes the product of the grid elastic hessian matrix times a vector `z`.
+   */
+  void ComputeGridElasticHessianTimesZ(
+      const std::vector<Vector3<T>>& z, const Particles<T>& particles,
+      const SparseGrid<T>& grid,
+      const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs,
+      std::vector<Vector3<T>>* result) const;
 
  private:
   // Adds the batch_index_3d-th pad hessian (of elastic energy w.r.t grid
@@ -127,6 +120,12 @@ class MpmTransfer {
                               const SparseGrid<T>& grid,
                               const MatrixX<T>& pad_hessian,
                               MatrixX<T>* hessian) const;
+
+  // Computes the matrix A in the computation of ElasticHessianTimesZ, for
+  // particle p. See energy_derivatives.md for details.
+  void ComputeAp(size_t p, const std::vector<Vector3<T>>& z,
+                 const Particles<T>& particles, const SparseGrid<T>& grid,
+                 const Eigen::Matrix<T, 9, 9>& dPdF, Matrix3<T>* Ap) const;
 };
 
 }  // namespace mpm

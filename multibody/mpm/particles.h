@@ -395,18 +395,7 @@ class Particles {
   void ComputeFsPsdPdFs(const std::vector<Matrix3<T>>& particle_grad_v,
                         double dt, std::vector<Matrix3<T>>* Fs,
                         std::vector<Matrix3<T>>* Ps,
-                        std::vector<Eigen::Matrix<T, 9, 9>>* dPdFs) const {
-    DRAKE_ASSERT(particle_grad_v.size() == num_particles());
-    for (size_t p = 0; p < num_particles(); ++p) {
-      Matrix3<T>& F = (*Fs)[p];
-      Matrix3<T>& P = (*Ps)[p];
-      Eigen::Matrix<T, 9, 9>& dPdF = (*dPdFs)[p];
-      F = (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
-          GetElasticDeformationGradientAt(p);
-      elastoplastic_models_[p]->CalcFirstPiolaStress(F, &P);
-      elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(F, &dPdF);
-    }
-  }
+                        std::vector<Eigen::Matrix<T, 9, 9>>* dPdFs) const;
 
   /**
    * Computes the part of elastic hessian (denoted `pad_hessian`) contributed by
@@ -430,6 +419,17 @@ class Particles {
    */
   std::vector<Eigen::Matrix<T, 9, 9>> ComputeDPDFContractF0ContractF0(
       const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs) const;
+
+  /**
+   * Returns the weight gradient ∇Nᵢ(xₚ), where i is the local index of a
+   * neighbor grid node.
+   * @pre p < num_particles().
+   * @pre neighbor_grid < 27.
+   */
+  const Vector3<T>& GetWeightGradientAt(size_t p, size_t neighbor_node) const {
+    DRAKE_ASSERT(p < num_particles());
+    return weights_[p].GetWeightGradientAt(neighbor_node);
+  }
 
  private:
   // Ensures that all attributes (std::vectors) have correct size. This only
@@ -459,15 +459,6 @@ class Particles {
   // let's defer this for future.
   // TODO(zeshunzong):swap elastoplastic_models_
   void Reorder2(const std::vector<size_t>& new_order);
-
-  // Returns the weight gradient ∇Nᵢ(xₚ), where i is the local index of a
-  // neighbor grid node.
-  // @pre p < num_particles().
-  // @pre neighbor_grid < 27.
-  const Vector3<T>& GetWeightGradientAt(size_t p, size_t neighbor_node) const {
-    DRAKE_ASSERT(p < num_particles());
-    return weights_[p].GetWeightGradientAt(neighbor_node);
-  }
 
   // For each particle p, computes dPdF_contractF0_contractF0[p](3β+α, 3γ+ρ) =
   // [∑ᵢⱼ (dPₐᵢ/dFᵨⱼ) * Fᵧⱼ * Fᵦᵢ] * Vₚ⁰ i and j are θ and ϕ in accompanied

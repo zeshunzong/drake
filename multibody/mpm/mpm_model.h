@@ -133,6 +133,15 @@ class MpmModel {
                                        deformation_state.dPdFs(), hessian);
   }
 
+  void ComputeElasticHessianTimesZ(
+      const std::vector<Vector3<T>>& z, const MpmTransfer<T>& transfer,
+      const DeformationState<T>& deformation_state,
+      std::vector<Vector3<T>>* hessian_times_z) const {
+    transfer.ComputeGridElasticHessianTimesZ(
+        z, deformation_state.particles(), deformation_state.sparse_grid(),
+        deformation_state.dPdFs(), hessian_times_z);
+  }
+
  private:
   Vector3<T> gravity_{0.0, 0.0, -9.81};
 };

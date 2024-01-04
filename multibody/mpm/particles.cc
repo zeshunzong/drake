@@ -179,6 +179,23 @@ void Particles<T>::WriteParticlesDataFromG2pPad(
 }
 
 template <typename T>
+void Particles<T>::ComputeFsPsdPdFs(
+    const std::vector<Matrix3<T>>& particle_grad_v, double dt,
+    std::vector<Matrix3<T>>* Fs, std::vector<Matrix3<T>>* Ps,
+    std::vector<Eigen::Matrix<T, 9, 9>>* dPdFs) const {
+  DRAKE_ASSERT(particle_grad_v.size() == num_particles());
+  for (size_t p = 0; p < num_particles(); ++p) {
+    Matrix3<T>& F = (*Fs)[p];
+    Matrix3<T>& P = (*Ps)[p];
+    Eigen::Matrix<T, 9, 9>& dPdF = (*dPdFs)[p];
+    F = (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
+        GetElasticDeformationGradientAt(p);
+    elastoplastic_models_[p]->CalcFirstPiolaStress(F, &P);
+    elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(F, &dPdF);
+  }
+}
+
+template <typename T>
 void Particles<T>::ComputePadHessianForOneBatch(
     size_t batch_i,
     const std::vector<Eigen::Matrix<T, 9, 9>>& dPdF_contractF0_contractF0,
