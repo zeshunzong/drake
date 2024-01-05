@@ -91,6 +91,24 @@ class GridData {
     velocities_ = velocities;
   }
 
+  void AddDKineticEnergyDV(std::vector<Vector3<T>>* result) const {
+    DRAKE_ASSERT(result != nullptr);
+    DRAKE_ASSERT(result->size() == num_active_nodes());
+
+    for (size_t i = 0; i < num_active_nodes(); ++i) {
+      (*result)[i] += GetMassAt(i) * velocities_[i];
+    }
+  }
+
+  void AddDGravitationalEnergyDV(std::vector<Vector3<T>>* result) const {
+    DRAKE_ASSERT(result != nullptr);
+    DRAKE_ASSERT(result->size() == num_active_nodes());
+    for (size_t i = 0; i < num_active_nodes(); ++i) {
+      (*result)[i] += GetMassAt(i) * velocities_[i];
+    }
+
+  }
+
  private:
   std::vector<T> masses_;
   std::vector<Vector3<T>> momentums_;

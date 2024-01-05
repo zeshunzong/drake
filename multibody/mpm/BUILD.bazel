@@ -138,6 +138,9 @@ drake_cc_googletest(
 
 drake_cc_library(
     name = "mpm_model",
+    srcs = [
+        "mpm_model.cc",
+    ],
     hdrs = [
         "mpm_model.h",
     ],

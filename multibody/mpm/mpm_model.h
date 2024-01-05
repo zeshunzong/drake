@@ -87,6 +87,7 @@ class DeformationState {
 
   const Particles<T>& particles() const { return particles_; }
   const SparseGrid<T>& sparse_grid() const { return sparse_grid_; }
+  const GridData<T>& grid_data() const { return grid_data_; }
 
  private:
   std::vector<Matrix3<T>> Fs_{};
@@ -105,6 +106,46 @@ class MpmModel {
 
   MpmModel() {}
 
+  /**
+   * Total energy = elastic energy + kinetic energy + gravitational energy.
+   */
+  T ComputeEnergy(const std::vector<Vector3<T>>& v_prev,
+                  const DeformationState<T>& deformation_state,
+                  double dt) const {
+    return ComputeElasticEnergy(deformation_state) +
+           ComputeKineticAndGravitationalEnergy(v_prev, deformation_state, dt);
+  }
+
+  /**
+   * Computes - d(total_energy)/dv = -d(elastic_energy)/dv -
+   * d(kinetic_energy)/dv - d(gravitational_energy)/dv.
+   */
+  void ComputeMinusDEnergyDV(const MpmTransfer<T>& transfer,
+                             const std::vector<Vector3<T>>& v_prev,
+                             const DeformationState<T>& deformation_state,
+                             double dt, std::vector<Vector3<T>>* dEnergydV,
+                             TransferScratch<T>* scratch) const;
+
+  /**
+   * Computes the 3*num_active_nodes()by3*num_active_nodes() hessian matrix d^2
+   * (total_energy) / dv^2
+   */
+  void ComputeD2EnergyDV2(const MpmTransfer<T>& transfer,
+                          const DeformationState<T>& deformation_state,
+                          double dt, MatrixX<T>* hessian) const;
+
+  /**
+   * This is equivalent to ComputeD2EnergyDV2() * z.
+   */
+  void ComputeD2EnergyDV2TimesZ(const std::vector<Vector3<T>>& z,
+                                const MpmTransfer<T>& transfer,
+                                const DeformationState<T>& deformation_state,
+                                double dt,
+                                std::vector<Vector3<T>>* hessian_times_z) const;
+
+  /**
+   * elastic energy = ∑ₚ V⁰ₚ ψ(Fₚ), where Fₚ depends on grid velocities
+   */
   T ComputeElasticEnergy(const DeformationState<T>& deformation_state) const {
     return deformation_state.particles().ComputeTotalElasticEnergy(
         deformation_state.Fs());
@@ -112,6 +153,8 @@ class MpmModel {
 
   /**
    * Computes the elastic force due to elastic deformation.
+   * This is -d(elastic_energy)/dx
+   * @note dx/dv = dt
    */
   void ComputeElasticForce(const MpmTransfer<T>& transfer,
                            const DeformationState<T>& deformation_state,
@@ -133,6 +176,9 @@ class MpmModel {
                                        deformation_state.dPdFs(), hessian);
   }
 
+  /**
+   * This is equivalent to ComputeElasticHessian() * z.
+   */
   void ComputeElasticHessianTimesZ(
       const std::vector<Vector3<T>>& z, const MpmTransfer<T>& transfer,
       const DeformationState<T>& deformation_state,
@@ -143,6 +189,31 @@ class MpmModel {
   }
 
  private:
+  // Kinetic energy = 0.5 * m * (v - v_prev)ᵀ(v - v_prev).
+  // Gravitational energy = - m*dt*gᵀv. Since we only care about its gradient, we
+  // can do - m*dt*gᵀ(v - v_prev).
+  T ComputeKineticAndGravitationalEnergy(
+      const std::vector<Vector3<T>>& v_prev,
+      const DeformationState<T>& deformation_state, double dt) const;
+
+  // -d(kinetic_energy)/dv = - m * (v - v₀).
+  // -d(gravitational_energy)/dv = dt * mg.
+  void MinusDKineticEnergyDVAndDGravitationalEnergyDV(
+      const std::vector<Vector3<T>>& v_prev,
+      const DeformationState<T>& deformation_state, double dt,
+      std::vector<Vector3<T>>* dEnergydV) const;
+
+  // Computes -d(elastic_energy)/dv
+  void ComputeMinusDElasticEnergyDV(
+      const MpmTransfer<T>& transfer,
+      const DeformationState<T>& deformation_state, double dt,
+      std::vector<Vector3<T>>* dEnergydV, TransferScratch<T>* scratch) const;
+
+  // Computes -d^2(elastic_energy)/dv^2
+  void ComputeD2ElasticEnergyDV2(const MpmTransfer<T>& transfer,
+                                 const DeformationState<T>& deformation_state,
+                                 double dt, MatrixX<T>* hessian) const;
+
   Vector3<T> gravity_{0.0, 0.0, -9.81};
 };
 
