@@ -158,4 +158,39 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "matrix_replacement",
+    hdrs = [
+        "matrix_replacement.h",
+    ],
+    deps = [
+        ":mpm_model",
+    ],
+)
+
+drake_cc_googletest(
+    name = "linear_solver_test",
+    deps = [
+        ":matrix_replacement",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_driver",
+    hdrs = [
+        "mpm_driver.h",
+    ],
+    deps = [
+        ":matrix_replacement",
+    ],
+)
+
+drake_cc_googletest(
+    name = "mpm_driver_test",
+    deps = [
+        ":mpm_driver",
+    ],
+)
+
 add_lint_tests()

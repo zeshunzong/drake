@@ -33,7 +33,7 @@ namespace mpm {
  *
  * DeformationState<double> state(particles, sparse_grid, grid_data);
  * while |dG|>ε:
- *    state.Update(mpm_transfer, dt, scratch);
+ *    state.Update(mpm_transfer, dt, &scratch);
  *    energy = mpm_model.ComputeEnergy(state);
  *    force = mpm_model.ComputeForce(state, mpm_transfer, scratch);
  *    hessian = mpm_model.ComputeHessian(state, mpm_transfer);
@@ -143,6 +143,28 @@ class MpmModel {
                                 double dt,
                                 std::vector<Vector3<T>>* hessian_times_z) const;
 
+  void AddD2EnergyDV2TimesZ(const Eigen::VectorX<T>& z,
+                              const MpmTransfer<T>& transfer,
+                              const DeformationState<T>& deformation_state,
+                              double dt,
+                              Eigen::VectorX<T>* hessian_times_z) const {
+    std::vector<Vector3<T>> z_stdvec(z.size() / 3);
+    for (size_t i = 0; i < z_stdvec.size(); ++i) {
+      z_stdvec[i] = Vector3<T>(z(3 * i), z(3 * i + 1), z(3 * i + 2));
+    }
+    std::vector<Vector3<T>> hessian_times_z_stdvec;
+    ComputeD2EnergyDV2TimesZ(z_stdvec, transfer, deformation_state, dt,
+                                &hessian_times_z_stdvec);
+    Eigen::VectorX<T>& hessian_times_z_ref = *hessian_times_z;
+    DRAKE_DEMAND(hessian_times_z_ref.size() == z.size());
+    // hessian_times_z_ref.resize(z.size());
+    for (size_t i = 0; i < hessian_times_z_stdvec.size(); ++i) {
+      hessian_times_z_ref(3 * i) += hessian_times_z_stdvec[i](0);
+      hessian_times_z_ref(3 * i + 1) += hessian_times_z_stdvec[i](1);
+      hessian_times_z_ref(3 * i + 2) += hessian_times_z_stdvec[i](2);
+    }
+  }
+
   /**
    * elastic energy = ∑ₚ V⁰ₚ ψ(Fₚ), where Fₚ depends on grid velocities
    */
@@ -188,10 +210,31 @@ class MpmModel {
         deformation_state.dPdFs(), hessian_times_z);
   }
 
+  // TODO(zeshunozng): rewrite and cleanup
+  void AddElasticHessianTimesZEigen(
+      const Eigen::VectorX<T>& z, const MpmTransfer<T>& transfer,
+      const DeformationState<T>& deformation_state,
+      Eigen::VectorX<T>* hessian_times_z) const {
+    std::vector<Vector3<T>> z_stdvec(z.size() / 3);
+    for (size_t i = 0; i < z_stdvec.size(); ++i) {
+      z_stdvec[i] = Vector3<T>(z(3 * i), z(3 * i + 1), z(3 * i + 2));
+    }
+    std::vector<Vector3<T>> hessian_times_z_stdvec;
+    ComputeElasticHessianTimesZ(z_stdvec, transfer, deformation_state,
+                                &hessian_times_z_stdvec);
+    Eigen::VectorX<T>& hessian_times_z_ref = *hessian_times_z;
+    hessian_times_z_ref.resize(z.size());
+    for (size_t i = 0; i < hessian_times_z_stdvec.size(); ++i) {
+      hessian_times_z_ref(3 * i) += hessian_times_z_stdvec[i](0);
+      hessian_times_z_ref(3 * i + 1) += hessian_times_z_stdvec[i](1);
+      hessian_times_z_ref(3 * i + 2) += hessian_times_z_stdvec[i](2);
+    }
+  }
+
  private:
   // Kinetic energy = 0.5 * m * (v - v_prev)ᵀ(v - v_prev).
-  // Gravitational energy = - m*dt*gᵀv. Since we only care about its gradient, we
-  // can do - m*dt*gᵀ(v - v_prev).
+  // Gravitational energy = - m*dt*gᵀv. Since we only care about its gradient,
+  // we can do - m*dt*gᵀ(v - v_prev).
   T ComputeKineticAndGravitationalEnergy(
       const std::vector<Vector3<T>>& v_prev,
       const DeformationState<T>& deformation_state, double dt) const;

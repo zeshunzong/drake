@@ -45,6 +45,16 @@ class GridData {
   }
 
   /**
+   * Increments velocity to each grid node component.
+  */
+  void AddDG(const Eigen::VectorX<T>& dG) {
+    DRAKE_ASSERT(dG.size() == num_active_nodes()*3);
+    for (size_t i = 0; i < num_active_nodes(); ++i) {
+      velocities_[i] += dG.segment(3*i, 3);
+    }
+  }
+
+  /**
    * Adds mass, momentum, and force to the node at index_1d.
    */
   void AccumulateAt(size_t index_1d, const T& mass, const Vector3<T>& momentum,
