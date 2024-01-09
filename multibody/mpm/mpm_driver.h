@@ -34,7 +34,6 @@ class MpmDriver {
     // TODO(zeshunzong): precondition
     // TODO(zeshunzong): line search
     // TODO(zeshunzong): projection
-    // TODO(zeshunzong): test matrix free or not
     int num_newtons = ComputeGridVelocities();
     std::cout << "num newtons: " << num_newtons << std::endl;
     // now we have G
@@ -102,6 +101,26 @@ class MpmDriver {
   }
 
  private:
+
+  // TODO(zeshunzong): only sticky ground right now
+  void UpdateCollisionNodesWithGround(){
+    collision_nodes_.clear();
+    for (size_t i = 0; i < sparse_grid_.num_active_nodes(); ++i) {
+      if (sparse_grid_.To3DIndex(i)(2) <= 0) {
+        collision_nodes_.push_back(i);
+      }
+    }
+  }
+
+  void ProjectCollisionGround(Vector3<T>* v) const {
+    if (sticky_ground_) {
+      v->setZero();
+    }
+    else {
+      (*v)(2) = 0.0;
+    }
+  }
+
   double dt_ = 0.0;
 
   Particles<T> particles_;
@@ -109,6 +128,8 @@ class MpmDriver {
   GridData<T> grid_data_;
   std::vector<Vector3<T>> v_prev_;
   ParticlesData<T> particles_data_;
+
+  std::vector<size_t> collision_nodes_;
 
   MpmModel<T> model_;
 
@@ -124,6 +145,8 @@ class MpmDriver {
   MatrixX<T> d2Edv2_;
 
   bool matrix_free_ = false;
+
+  bool sticky_ground_ = true;
 
   Eigen::ConjugateGradient<MatrixReplacement<T>, Eigen::Lower | Eigen::Upper,
                            Eigen::IdentityPreconditioner>
