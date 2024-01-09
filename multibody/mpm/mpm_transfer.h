@@ -64,11 +64,10 @@ class MpmTransfer {
 
   /**
    * Updates velocity, B-matrix, trial deformation gradient, elastic deformation
-   * gradient, and stress τ for all particles.
+   * gradient, and stress P for all particles.
    * @note Return mapping and constitutive model are invoked to get elastic
    * deformation gradient and stress.
    * @note This updates everything except for particle positions.
-   * TODO(zeshunzong): finish return mapping and stress computation
    */
   void UpdateParticlesState(const ParticlesData<T>& particles_data, double dt,
                             Particles<T>* particles) const;
@@ -85,11 +84,12 @@ class MpmTransfer {
    * @note the computation depends on the current elastic_deformation_gradient
    * F₀ stored in particles (for chain rule).
    * @pre Ps.size() == particles.num_particles().
+   * @note fᵢₐ = grid_elastic_forces(3*i+a).
    */
   void ComputeGridElasticForces(const Particles<T>& particles,
                                 const SparseGrid<T>& grid,
                                 const std::vector<Matrix3<T>>& Ps,
-                                std::vector<Vector3<T>>* grid_elastic_forces,
+                                Eigen::VectorX<T>* grid_elastic_forces,
                                 TransferScratch<T>* scratch) const {
     particles.SplatStressToP2gPads(Ps, &(scratch->p2g_pads));
     grid.GatherForceFromP2gPads(scratch->p2g_pads, grid_elastic_forces);
@@ -105,13 +105,14 @@ class MpmTransfer {
       MatrixX<T>* hessian) const;
 
   /**
-   * Computes the product of the grid elastic hessian matrix times a vector `z`.
+   * Computes result += d2(elastic_energy)/dv2 * z.
+   * @note d2(elastic_energy)/dv2 = ComputeGridElasticHessian() * dt * dt.
    */
-  void ComputeGridElasticHessianTimesZ(
-      const std::vector<Vector3<T>>& z, const Particles<T>& particles,
+  void AddD2ElasticEnergyDV2TimesZ(
+      const Eigen::VectorX<T>& z, const Particles<T>& particles,
       const SparseGrid<T>& grid,
-      const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs,
-      std::vector<Vector3<T>>* result) const;
+      const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs, double dt,
+      Eigen::VectorX<T>* result) const;
 
  private:
   // Adds the batch_index_3d-th pad hessian (of elastic energy w.r.t grid
@@ -123,7 +124,7 @@ class MpmTransfer {
 
   // Computes the matrix A in the computation of ElasticHessianTimesZ, for
   // particle p. See energy_derivatives.md for details.
-  void ComputeAp(size_t p, const std::vector<Vector3<T>>& z,
+  void ComputeAp(size_t p, const Eigen::VectorX<T>& z,
                  const Particles<T>& particles, const SparseGrid<T>& grid,
                  const Eigen::Matrix<T, 9, 9>& dPdF, Matrix3<T>* Ap) const;
 };

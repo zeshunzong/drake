@@ -27,7 +27,6 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
                          TransferScratch<T>* scratch) const {
   DRAKE_DEMAND(!particles.NeedReordering());
   particles_data->Resize(particles.num_particles());
-
   Vector3<int> idx_3d;
   // loop over all batches
   Vector3<int> batch_idx_3d;
@@ -47,12 +46,12 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
               internal::ComputePositionFromIndex3D(idx_3d, grid.h());
           const Vector3<T>& velocity =
               grid_data.GetVelocityAt(grid.To1DIndex(idx_3d));
-
           scratch->g2p_pad.SetPositionAndVelocityAt(a, b, c, position,
                                                     velocity);
         }
       }
     }
+
     // write particle v, B, and grad v to particles_data
     particles.WriteParticlesDataFromG2pPad(i, scratch->g2p_pad, particles_data);
   }
@@ -66,7 +65,7 @@ void MpmTransfer<T>::UpdateParticlesState(
   particles->SetBMatrices(particles_data.particle_B_matrices_next);
   particles->UpdateTrialDeformationGradients(
       dt, particles_data.particle_grad_v_next);
-  // TODO(zeshunzong): compute new projected F and new stress
+  particles->UpdateElasticDeformationGradientsAndStresses();
 }
 
 template <typename T>
@@ -134,15 +133,11 @@ void MpmTransfer<T>::AddPadHessianToHessian(const Vector3<int> batch_index_3d,
 }
 
 template <typename T>
-void MpmTransfer<T>::ComputeGridElasticHessianTimesZ(
-    const std::vector<Vector3<T>>& z, const Particles<T>& particles,
+void MpmTransfer<T>::AddD2ElasticEnergyDV2TimesZ(
+    const Eigen::VectorX<T>& z, const Particles<T>& particles,
     const SparseGrid<T>& grid, const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs,
-    std::vector<Vector3<T>>* result) const {
-  // initialize
-  std::vector<Vector3<T>>& result_ref = *result;
-
-  result_ref.resize(z.size());
-  std::fill(result_ref.begin(), result_ref.end(), Vector3<T>::Zero());
+    double dt, Eigen::VectorX<T>* result) const {
+  DRAKE_ASSERT(result->size() == z.size());
 
   Matrix3<T> Ap;  // the matrix A in energy_derivatives.md
   for (size_t p = 0; p < particles.num_particles(); ++p) {
@@ -155,8 +150,8 @@ void MpmTransfer<T>::ComputeGridElasticHessianTimesZ(
           int node_local = 9 * (a + 1) + 3 * (b + 1) + (c + 1);  // 0-26
           size_t node_global =
               grid.To1DIndex(base_node_p + Vector3<int>(a, b, c));
-          result_ref[node_global] +=
-              particles.GetReferenceVolumeAt(p) * Ap *
+          result->segment(3 * node_global, 3) +=
+              dt * dt * particles.GetReferenceVolumeAt(p) * Ap *
               particles.GetElasticDeformationGradientAt(p).transpose() *
               particles.GetWeightGradientAt(p, node_local);
         }
@@ -166,7 +161,7 @@ void MpmTransfer<T>::ComputeGridElasticHessianTimesZ(
 }
 
 template <typename T>
-void MpmTransfer<T>::ComputeAp(size_t p, const std::vector<Vector3<T>>& z,
+void MpmTransfer<T>::ComputeAp(size_t p, const Eigen::VectorX<T>& z,
                                const Particles<T>& particles,
                                const SparseGrid<T>& grid,
                                const Eigen::Matrix<T, 9, 9>& dPdF,
@@ -182,7 +177,7 @@ void MpmTransfer<T>::ComputeAp(size_t p, const std::vector<Vector3<T>>& z,
         int node_local = 9 * (a + 1) + 3 * (b + 1) + (c + 1);  // 0-26
         size_t node_global =
             grid.To1DIndex(base_node_p + Vector3<int>(a, b, c));
-        const Vector3<T>& z_j = z[node_global];
+        const Vector3<T>& z_j = z.segment(3 * node_global, 3);
         B_p += z_j * particles.GetWeightGradientAt(p, node_local).transpose() *
                particles.GetElasticDeformationGradientAt(p);
       }

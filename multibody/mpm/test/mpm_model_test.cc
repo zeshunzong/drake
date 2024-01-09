@@ -19,30 +19,6 @@ constexpr int num_active_nodes = 63;
 // for the three particular particles we add, there will be a total of 63 active
 // nodes.
 
-template <typename T>
-void VecXToStdvecVec3(const Eigen::VectorX<T> input,
-                      std::vector<Vector3<T>>* output) {
-  size_t length = input.size() / 3;
-  std::vector<Vector3<T>>& output_ref = *output;
-  output->resize(length);
-  for (size_t i = 0; i < length; ++i) {
-    output_ref[i] =
-        Vector3<T>(input(3 * i), input(3 * i + 1), input(3 * i + 2));
-  }
-}
-
-template <typename T>
-void StdvecVec3ToVecX(const std::vector<Vector3<T>>& input,
-                      Eigen::VectorX<T>* output) {
-  Eigen::VectorX<T>& output_ref = *output;
-  output_ref.resize(input.size() * 3);
-  for (size_t i = 0; i < input.size(); ++i) {
-    output_ref(3 * i) = input[i](0);
-    output_ref(3 * i + 1) = input[i](1);
-    output_ref(3 * i + 2) = input[i](2);
-  }
-}
-
 Eigen::Matrix3X<AutoDiffXd> MakeMatrix3XWithDerivatives() {
   constexpr int columns = num_active_nodes;
   Eigen::Matrix3Xd X = Eigen::MatrixXd::Random(3, columns);
@@ -58,7 +34,7 @@ Eigen::Matrix3X<AutoDiffXd> MakeMatrix3XWithDerivatives() {
   return X_autodiff;
 }
 
-GTEST_TEST(MpmModelTest, TestEnergyAndForce) {
+GTEST_TEST(MpmModelTest, TestEnergyAndItsDerivatives) {
   // setup some particles and a grid.
   const double h = 0.2;
   double dt = 0.1;
@@ -109,83 +85,59 @@ GTEST_TEST(MpmModelTest, TestEnergyAndForce) {
   deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
   // now we are ready to compute energy and its derivatives
 
-  // first test elastic energy, elastic force, and elastic hessian.
+  // first test elastic energy and its derivatives
   // they are the main components of total energy
   // @note elastic energy does not depend on v_prev
 
-  // check that elastic force is derivative of elastic energy (d energy / dx)
-  // energy
+  // check that ComputeMinusDElasticEnergyDV() = - d (elastic_energy) / dv
   AutoDiffXd elastic_energy = mpm_model.ComputeElasticEnergy(deformation_state);
-  // force
-  std::vector<Vector3<AutoDiffXd>> elastic_forces;
-  mpm_model.ComputeElasticForce(mpm_transfer, deformation_state,
-                                &elastic_forces, &transfer_scratch);
+  Eigen::VectorX<double> d_elastic_energy_dv = elastic_energy.derivatives();
+  Eigen::VectorX<AutoDiffXd> minus_d_elastic_energy_dv;
+  mpm_model.ComputeMinusDElasticEnergyDV(mpm_transfer, deformation_state, dt,
+                                         &minus_d_elastic_energy_dv,
+                                         &transfer_scratch);
+  EXPECT_TRUE(CompareMatrices(-d_elastic_energy_dv, minus_d_elastic_energy_dv,
+                              kTolerance));
 
-  Eigen::VectorX<AutoDiffXd> d_elastic_energy_dv = elastic_energy.derivatives();
-  // this should be of size num_active_nodes * 3
-  Eigen::VectorX<AutoDiffXd> d_elastic_energy_dx = d_elastic_energy_dv / dt;
-  // chain rule
-
-  // ---------------- check elastic force = -d_elastic_energy_dx ------------
-  for (int i = 0; i < num_active_nodes; ++i) {
-    Eigen::VectorX<AutoDiffXd> d_elastic_energy_dxi =
-        d_elastic_energy_dx.segment(3 * i, 3);
-    EXPECT_TRUE(
-        CompareMatrices(-d_elastic_energy_dxi, elastic_forces[i], kTolerance));
-  }
-
-  // ---------------- check elastic hessian = d^2 elastic_energy d x^2 -----
-  MatrixX<AutoDiffXd> elastic_hessian;
-  mpm_model.ComputeElasticHessian(mpm_transfer, deformation_state,
-                                  &elastic_hessian);
+  // check that ComputeD2ElasticEnergyDV2() is correct
+  MatrixX<AutoDiffXd> d2_elastic_energy_dv2;
+  mpm_model.ComputeD2ElasticEnergyDV2(mpm_transfer, deformation_state, dt,
+                                      &d2_elastic_energy_dv2);
   for (int i = 0; i < num_active_nodes; ++i) {
     for (int alpha = 0; alpha < 3; ++alpha) {
       Eigen::VectorX<AutoDiffXd> hessian_slice =
-          elastic_hessian.col(i * 3 + alpha);
+          d2_elastic_energy_dv2.col(i * 3 + alpha);
       // .col or .row should be the same, since it is symmetric
-      Eigen::VectorX<AutoDiffXd> grid_force_i = elastic_forces[i];
-      MatrixX<AutoDiffXd> d_grid_force_ialpha_d_V =
-          grid_force_i(alpha).derivatives();  // 1 by 3*num_active_grids
-      MatrixX<AutoDiffXd> d_grid_force_ialpha_d_X =
-          d_grid_force_ialpha_d_V / dt;  // chain rule
-      EXPECT_TRUE(
-          CompareMatrices(hessian_slice, -d_grid_force_ialpha_d_X, kTolerance));
+      Eigen::VectorX<double> d_minus_d_elastic_energy_dv_i_alpha_dv =
+          minus_d_elastic_energy_dv(3 * i + alpha).derivatives();
+
+      EXPECT_TRUE(CompareMatrices(
+          hessian_slice, -d_minus_d_elastic_energy_dv_i_alpha_dv, kTolerance));
     }
   }
 
-  // next we test the total energy, which involves v_prev
+  // next we test the total energy, which involves v_prev, save flow as above
   // energy
   AutoDiffXd energy = mpm_model.ComputeEnergy(v_prev, deformation_state, dt);
   // -dedv
-  std::vector<Vector3<AutoDiffXd>> minus_d_energy_dv;
+  Eigen::VectorX<AutoDiffXd> minus_d_energy_dv;
   mpm_model.ComputeMinusDEnergyDV(mpm_transfer, v_prev, deformation_state, dt,
                                   &minus_d_energy_dv, &transfer_scratch);
 
-  Eigen::VectorX<AutoDiffXd> d_energy_dv = energy.derivatives();
-  // this should be of size num_active_nodes * 3
+  Eigen::VectorX<double> d_energy_dv = energy.derivatives();
+  EXPECT_TRUE(CompareMatrices(-d_energy_dv, minus_d_energy_dv, kTolerance));
 
-  // ---------------- check minus_dEnergydV = -dedv ------------
-  for (int i = 0; i < num_active_nodes; ++i) {
-    Eigen::VectorX<AutoDiffXd> d_energy_dvi = d_energy_dv.segment(3 * i, 3);
-    EXPECT_TRUE(
-        CompareMatrices(-d_energy_dvi, minus_d_energy_dv[i], kTolerance));
-  }
-
-  // ---------------- check d2EnergydV2 = - d/dv (minus_dEnergydV)
-  MatrixX<AutoDiffXd> d2_energy_dv2;
-  mpm_model.ComputeD2EnergyDV2(mpm_transfer, deformation_state, dt,
-                               &d2_energy_dv2);
+  MatrixX<AutoDiffXd> d2edv2;
+  mpm_model.ComputeD2EnergyDV2(mpm_transfer, deformation_state, dt, &d2edv2);
   for (int i = 0; i < num_active_nodes; ++i) {
     for (int alpha = 0; alpha < 3; ++alpha) {
-      Eigen::VectorX<AutoDiffXd> hessian_slice =
-          d2_energy_dv2.col(i * 3 + alpha);
+      Eigen::VectorX<AutoDiffXd> hessian_slice = d2edv2.col(i * 3 + alpha);
       // .col or .row should be the same, since it is symmetric
-      Eigen::VectorX<AutoDiffXd> minus_d_energy_dvi = minus_d_energy_dv[i];
-      MatrixX<AutoDiffXd> d_minus_d_energy_dv_dv =
-          minus_d_energy_dvi(alpha).derivatives();  // 1 by 3*num_active_grids
+      Eigen::VectorX<double> d_minus_d_energy_dv_i_alpha_dv =
+          minus_d_energy_dv(3 * i + alpha).derivatives();
 
-      EXPECT_TRUE(
-          CompareMatrices(hessian_slice, -d_minus_d_energy_dv_dv, kTolerance));
+      EXPECT_TRUE(CompareMatrices(hessian_slice,
+                                  -d_minus_d_energy_dv_i_alpha_dv, kTolerance));
     }
   }
 }
@@ -233,47 +185,37 @@ GTEST_TEST(MpmModelTest, TestHessianTimesZ) {
   grid_data.SetVelocities(grid_velocities_input);
   deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
 
-  Eigen::VectorX<double> z_vec(3 * sparse_grid.num_active_nodes());
-  // z_vec.resize(3 * sparse_grid.num_active_nodes());
-  std::vector<Vector3<double>> z_stdvec;
-  std::vector<Vector3<double>> hessian_times_z_computed;
-  Eigen::VectorX<double> hessian_times_z_computed_vec;
+  Eigen::VectorXd z(3 * sparse_grid.num_active_nodes());
+  Eigen::VectorXd hessian_times_z(3 * sparse_grid.num_active_nodes());
 
   // elastic hessian
   MatrixX<double> elastic_hessian;
-  mpm_model.ComputeElasticHessian(mpm_transfer, deformation_state,
-                                  &elastic_hessian);
+  mpm_model.ComputeD2ElasticEnergyDV2(mpm_transfer, deformation_state, dt,
+                                      &elastic_hessian);
 
   // test a few random vectors
   for (int i = 0; i < 20; ++i) {
-    z_vec.setRandom();
-    VecXToStdvecVec3<double>(z_vec, &z_stdvec);
-    mpm_model.ComputeElasticHessianTimesZ(
-        z_stdvec, mpm_transfer, deformation_state, &hessian_times_z_computed);
+    z.setRandom();
+    hessian_times_z.setZero();
+    mpm_model.AddD2ElasticEnergyDV2TimesZ(z, mpm_transfer, deformation_state,
+                                          dt, &hessian_times_z);
 
-    StdvecVec3ToVecX<double>(hessian_times_z_computed,
-                             &hessian_times_z_computed_vec);
-    EXPECT_TRUE(CompareMatrices(elastic_hessian * z_vec,
-                                hessian_times_z_computed_vec, kTolerance));
+    EXPECT_TRUE(
+        CompareMatrices(elastic_hessian * z, hessian_times_z, kTolerance));
   }
 
   // total hessian
-
   MatrixX<double> hessian;
   mpm_model.ComputeD2EnergyDV2(mpm_transfer, deformation_state, dt, &hessian);
 
   // test a few random vectors
   for (int i = 0; i < 20; ++i) {
-    z_vec.setRandom();
-    VecXToStdvecVec3<double>(z_vec, &z_stdvec);
-    mpm_model.ComputeD2EnergyDV2TimesZ(z_stdvec, mpm_transfer,
-                                       deformation_state, dt,
-                                       &hessian_times_z_computed);
+    z.setRandom();
+    hessian_times_z.setZero();
+    mpm_model.AddD2EnergyDV2TimesZ(z, mpm_transfer, deformation_state, dt,
+                                   &hessian_times_z);
 
-    StdvecVec3ToVecX<double>(hessian_times_z_computed,
-                             &hessian_times_z_computed_vec);
-    EXPECT_TRUE(CompareMatrices(hessian * z_vec, hessian_times_z_computed_vec,
-                                kTolerance));
+    EXPECT_TRUE(CompareMatrices(hessian * z, hessian_times_z, kTolerance));
   }
 }
 

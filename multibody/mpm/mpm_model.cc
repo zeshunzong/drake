@@ -5,65 +5,29 @@ namespace multibody {
 namespace mpm {
 
 template <typename T>
-T MpmModel<T>::ComputeKineticAndGravitationalEnergy(
-    const std::vector<Vector3<T>>& v_prev,
-    const DeformationState<T>& deformation_state, double dt) const {
-  T sum = 0;
-  for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
-       ++i) {
-    const Vector3<T>& dv =
-        deformation_state.grid_data().GetVelocityAt(i) - v_prev[i];
-    sum +=
-        0.5 * deformation_state.grid_data().GetMassAt(i) * (dv).squaredNorm();
-    sum -= dt * deformation_state.grid_data().GetMassAt(i) * dv.dot(gravity_);
-  }
-  return sum;
-}
-
-template <typename T>
 void MpmModel<T>::ComputeMinusDEnergyDV(
     const MpmTransfer<T>& transfer, const std::vector<Vector3<T>>& v_prev,
     const DeformationState<T>& deformation_state, double dt,
-    std::vector<Vector3<T>>* dEnergydV, TransferScratch<T>* scratch) const {
-  DRAKE_ASSERT(dEnergydV != nullptr);
+    Eigen::VectorX<T>* minus_dedv, TransferScratch<T>* scratch) const {
+  DRAKE_ASSERT(minus_dedv != nullptr);
   DRAKE_ASSERT(scratch != nullptr);
-  ComputeMinusDElasticEnergyDV(transfer, deformation_state, dt, dEnergydV,
+  ComputeMinusDElasticEnergyDV(transfer, deformation_state, dt, minus_dedv,
                                scratch);
   MinusDKineticEnergyDVAndDGravitationalEnergyDV(v_prev, deformation_state, dt,
-                                                 dEnergydV);
+                                                 minus_dedv);
 }
 
 template <typename T>
 void MpmModel<T>::ComputeMinusDElasticEnergyDV(
     const MpmTransfer<T>& transfer,
     const DeformationState<T>& deformation_state, double dt,
-    std::vector<Vector3<T>>* dEnergydV, TransferScratch<T>* scratch) const {
+    Eigen::VectorX<T>* minus_dedv, TransferScratch<T>* scratch) const {
   // -dedx
-  transfer.ComputeGridElasticForces(deformation_state.particles(),
-                                    deformation_state.sparse_grid(),
-                                    deformation_state.Ps(), dEnergydV, scratch);
+  transfer.ComputeGridElasticForces(
+      deformation_state.particles(), deformation_state.sparse_grid(),
+      deformation_state.Ps(), minus_dedv, scratch);
   // transform to -dedv, differ by a scale of dt due to chain rule
-  for (size_t i = 0; i < dEnergydV->size(); ++i) {
-    (*dEnergydV)[i] *= dt;
-  }
-}
-
-template <typename T>
-void MpmModel<T>::MinusDKineticEnergyDVAndDGravitationalEnergyDV(
-    const std::vector<Vector3<T>>& v_prev,
-    const DeformationState<T>& deformation_state, double dt,
-    std::vector<Vector3<T>>* dEnergydV) const {
-  DRAKE_ASSERT(dEnergydV != nullptr);
-  DRAKE_ASSERT(dEnergydV->size() ==
-               deformation_state.grid_data().num_active_nodes());
-  for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
-       ++i) {
-    const Vector3<T>& dv =
-        deformation_state.grid_data().GetVelocityAt(i) - v_prev[i];
-    (*dEnergydV)[i] -=
-        (deformation_state.grid_data().GetMassAt(i) * dv -
-         dt * deformation_state.grid_data().GetMassAt(i) * gravity_);
-  }
+  (*minus_dedv) *= dt;
 }
 
 template <typename T>
@@ -83,25 +47,70 @@ void MpmModel<T>::ComputeD2EnergyDV2(
 }
 
 template <typename T>
-void MpmModel<T>::ComputeD2EnergyDV2TimesZ(
-    const std::vector<Vector3<T>>& z, const MpmTransfer<T>& transfer,
-    const DeformationState<T>& deformation_state, double dt,
-    std::vector<Vector3<T>>* hessian_times_z) const {
-  ComputeElasticHessianTimesZ(z, transfer, deformation_state, hessian_times_z);
-  for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
-       ++i) {
-    (*hessian_times_z)[i] *= (dt * dt);
-    (*hessian_times_z)[i] += deformation_state.grid_data().GetMassAt(i) * z[i];
-  }
-}
-
-template <typename T>
 void MpmModel<T>::ComputeD2ElasticEnergyDV2(
     const MpmTransfer<T>& transfer,
     const DeformationState<T>& deformation_state, double dt,
     MatrixX<T>* hessian) const {
-  ComputeElasticHessian(transfer, deformation_state, hessian);
+  transfer.ComputeGridElasticHessian(deformation_state.particles(),
+                                     deformation_state.sparse_grid(),
+                                     deformation_state.dPdFs(), hessian);
   (*hessian) *= (dt * dt);
+}
+
+template <typename T>
+void MpmModel<T>::AddD2EnergyDV2TimesZ(
+    const Eigen::VectorX<T>& z, const MpmTransfer<T>& transfer,
+    const DeformationState<T>& deformation_state, double dt,
+    Eigen::VectorX<T>* result) const {
+  transfer.AddD2ElasticEnergyDV2TimesZ(z, deformation_state.particles(),
+                                       deformation_state.sparse_grid(),
+                                       deformation_state.dPdFs(), dt, result);
+  for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
+       ++i) {
+    (*result).segment(3 * i, 3) +=
+        deformation_state.grid_data().GetMassAt(i) * z.segment(3 * i, 3);
+  }
+}
+
+template <typename T>
+void MpmModel<T>::AddD2ElasticEnergyDV2TimesZ(
+    const Eigen::VectorX<T>& z, const MpmTransfer<T>& transfer,
+    const DeformationState<T>& deformation_state, double dt,
+    Eigen::VectorX<T>* result) const {
+  transfer.AddD2ElasticEnergyDV2TimesZ(z, deformation_state.particles(),
+                                       deformation_state.sparse_grid(),
+                                       deformation_state.dPdFs(), dt, result);
+}
+
+template <typename T>
+T MpmModel<T>::ComputeKineticAndGravitationalEnergy(
+    const std::vector<Vector3<T>>& v_prev,
+    const DeformationState<T>& deformation_state, double dt) const {
+  T sum = 0;
+  for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
+       ++i) {
+    const Vector3<T>& dv =
+        deformation_state.grid_data().GetVelocityAt(i) - v_prev[i];
+    sum +=
+        0.5 * deformation_state.grid_data().GetMassAt(i) * (dv).squaredNorm();
+    sum -= dt * deformation_state.grid_data().GetMassAt(i) * dv.dot(gravity_);
+  }
+  return sum;
+}
+
+template <typename T>
+void MpmModel<T>::MinusDKineticEnergyDVAndDGravitationalEnergyDV(
+    const std::vector<Vector3<T>>& v_prev,
+    const DeformationState<T>& deformation_state, double dt,
+    Eigen::VectorX<T>* result) const {
+  for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
+       ++i) {
+    const Vector3<T>& dv =
+        deformation_state.grid_data().GetVelocityAt(i) - v_prev[i];
+    (*result).segment(3 * i, 3) -=
+        (deformation_state.grid_data().GetMassAt(i) * dv -
+         dt * deformation_state.grid_data().GetMassAt(i) * gravity_);
+  }
 }
 
 template class MpmModel<double>;

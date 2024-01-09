@@ -16,7 +16,6 @@ using drake::multibody::mpm::constitutive_model::CorotatedElasticModel;
 constexpr double kTolerance = 1e-10;
 
 GTEST_TEST(LinearSolverTest, TestCG) {
-
   const double h = 0.2;
   double dt = 0.1;
   Particles<double> particles = Particles<double>();

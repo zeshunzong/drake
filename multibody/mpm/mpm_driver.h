@@ -2,7 +2,9 @@
 
 #include <array>
 #include <iostream>
+#include <limits>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "drake/multibody/mpm/matrix_replacement.h"
@@ -29,46 +31,49 @@ class MpmDriver {
   }
 
   int AdvanceDt() {
+    // TODO(zeshunzong): precondition
+    // TODO(zeshunzong): line search
+    // TODO(zeshunzong): projection
+    // TODO(zeshunzong): test matrix free or not
+    int num_newtons = ComputeGridVelocities();
+    std::cout << "num newtons: " << num_newtons << std::endl;
+    // now we have G
+    // SAP can take G and modify it if needed
+    UpdateParticlesFromGridData();
+
+    return num_newtons;
+  }
+
+  int ComputeGridVelocities() {
     transfer_.SetUpTransfer(&sparse_grid_, &particles_);
     transfer_.P2G(particles_, sparse_grid_, &grid_data_, &scratch_);
-
     DeformationState<T> deformation_state(particles_, sparse_grid_, grid_data_);
+   
     v_prev_ = grid_data_.velocities();
-    dG_.resize(sparse_grid_.num_active_nodes() * 3);  // optional?
 
     int count = 0;
-
+    dG_norm_ = std::numeric_limits<T>::infinity();
     while (dG_norm_ > newton_epsilon_) {
       if (count > max_newton_iter_) {
         break;
       }
       deformation_state.Update(transfer_, dt_, &scratch_);
-
       // find minus_gradient
       model_.ComputeMinusDEnergyDV(transfer_, v_prev_, deformation_state, dt_,
                                    &minus_dEdv_, &scratch_);
 
-      Eigen::VectorX<T> minus_gradient(grid_data_.num_active_nodes() * 3);
-      for (size_t i = 0; i < grid_data_.num_active_nodes(); ++i) {
-        minus_gradient.segment(3 * i, 3) = minus_dEdv_[i];
-      }
-
-      // find hessian^-1 * minus_gradient
+      // find dG_ = hessian^-1 * minus_gradient
       if (matrix_free_) {
         MatrixReplacement<T> hessian_operator =
             MatrixReplacement<T>(model_, deformation_state, transfer_, dt_);
         cg_matrix_free_.compute(hessian_operator);
-        dG_ = cg_matrix_free_.solve(minus_gradient);
-        std::cout << "#iterations:     " << cg_matrix_free_.iterations() <<
-        std::endl; std::cout << "estimated error: " <<
-        cg_matrix_free_.error() << std::endl;
+        dG_ = cg_matrix_free_.solve(minus_dEdv_);
+
       } else {
         model_.ComputeD2EnergyDV2(transfer_, deformation_state, dt_, &d2Edv2_);
+
         cg_dense_.compute(d2Edv2_);
-        dG_ = cg_dense_.solve(minus_gradient);
-        // std::cout << "#iterations:     " << cg_dense_.iterations() <<
-        // std::endl; std::cout << "estimated error: " << cg_dense_.error() <<
-        // std::endl;
+        dG_ = cg_dense_.solve(minus_dEdv_);
       }
 
       grid_data_.AddDG(dG_);
@@ -76,26 +81,24 @@ class MpmDriver {
 
       ++count;
     }
+    return count;
+  }
 
-    // now we have dG, give it back to particles
-    ParticlesData<T> particles_data;
-    transfer_.G2P(sparse_grid_, grid_data_, particles_, &particles_data,
+  void UpdateParticlesFromGridData() {
+    transfer_.G2P(sparse_grid_, grid_data_, particles_, &particles_data_,
                   &scratch_);
 
-    std::cout << particles_data.particle_velocites_next[0](0) << " "
-              << particles_data.particle_velocites_next[0](1) << " "
-              << particles_data.particle_velocites_next[0](2) << " "
-              << std::endl;
-    return count;
+    // update F_trial, F_elastic, stress, B_matrix
+    transfer_.UpdateParticlesState(particles_data_, dt_, &particles_);
+    // update particle position, this is the last step
+    particles_.AdvectParticles(dt_);
+  }
 
-    // TODO: hessian times Z for wrapper rewrite for eigenXd
-    // TODO: compute gradient for eigenXd
-    // TODO: multiple steps
-    // TODO: precondition
-    // TODO: line search
-    // TODO: projection
-    // TODO: test matrix free or not
-    // TODO: set gravity
+  const Particles<T>& particles() const { return particles_; }
+  const MpmModel<T>& mpm_model() const { return model_; }
+
+  void SetMatrixFree(bool matrix_free) {
+    matrix_free_ = matrix_free;
   }
 
  private:
@@ -105,6 +108,7 @@ class MpmDriver {
   SparseGrid<T> sparse_grid_;
   GridData<T> grid_data_;
   std::vector<Vector3<T>> v_prev_;
+  ParticlesData<T> particles_data_;
 
   MpmModel<T> model_;
 
@@ -116,10 +120,10 @@ class MpmDriver {
   Eigen::VectorX<T> dG_;
   T dG_norm_ = std::numeric_limits<T>::infinity();
 
-  std::vector<Vector3<T>> minus_dEdv_;
+  Eigen::VectorX<T> minus_dEdv_;
   MatrixX<T> d2Edv2_;
 
-  bool matrix_free_ = true;
+  bool matrix_free_ = false;
 
   Eigen::ConjugateGradient<MatrixReplacement<T>, Eigen::Lower | Eigen::Upper,
                            Eigen::IdentityPreconditioner>

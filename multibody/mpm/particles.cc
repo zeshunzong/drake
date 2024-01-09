@@ -188,6 +188,7 @@ void Particles<T>::ComputeFsPsdPdFs(
     Matrix3<T>& F = (*Fs)[p];
     Matrix3<T>& P = (*Ps)[p];
     Eigen::Matrix<T, 9, 9>& dPdF = (*dPdFs)[p];
+
     F = (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
         GetElasticDeformationGradientAt(p);
     elastoplastic_models_[p]->CalcFirstPiolaStress(F, &P);

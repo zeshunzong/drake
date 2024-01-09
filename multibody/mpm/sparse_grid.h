@@ -165,7 +165,7 @@ class SparseGrid {
    * @pre Pads doesn't contain data into non-active region of the grid.
    */
   void GatherForceFromP2gPads(const std::vector<P2gPad<T>>& p2g_pads,
-                              std::vector<Vector3<T>>* grid_forces) const;
+                              Eigen::VectorX<T>* grid_forces) const;
 
   /**
    * Computes the mass and momentum of the body embedded in this grid, by

@@ -352,6 +352,20 @@ class Particles {
     }
   }
 
+  /**
+   * Updates elastic_F = ReturnMap(F_trial)
+   *         PK_stress = ComputeStress(elastic_F)
+   */
+  void UpdateElasticDeformationGradientsAndStresses() {
+    for (size_t p = 0; p < num_particles(); ++p) {
+      elastoplastic_models_[p]->CalcFEFromFtrial(
+          trial_deformation_gradients_[p],
+          &(elastic_deformation_gradients_[p]));
+      elastoplastic_models_[p]->CalcFirstPiolaStress(
+          elastic_deformation_gradients_[p], &(PK_stresses_[p]));
+    }
+  }
+
   const std::vector<Vector3<int>>& base_nodes() const { return base_nodes_; }
   const std::vector<size_t>& batch_starts() const { return batch_starts_; }
   const std::vector<size_t>& batch_sizes() const { return batch_sizes_; }

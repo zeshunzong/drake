@@ -108,11 +108,6 @@ struct generic_product_impl<drake::multibody::mpm::MatrixReplacement<T>, Rhs,
     assert(alpha == Scalar(1) && "scaling is not implemented");
     EIGEN_ONLY_USED_FOR_DEBUG(alpha);
 
-    // // Here we could simply call dst.noalias() += lhs.my_matrix() * rhs,
-    // // but let's do something fancier (and less efficient):
-    // for (Index i = 0; i < lhs.cols(); ++i)
-    //   dst += rhs(i) * lhs.my_matrix().col(i);
-
     lhs.model().AddD2EnergyDV2TimesZ(rhs, lhs.transfer(), lhs.state(), lhs.dt(),
                                      &dst);
   }

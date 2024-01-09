@@ -117,55 +117,6 @@ class MpmModel {
   }
 
   /**
-   * Computes - d(total_energy)/dv = -d(elastic_energy)/dv -
-   * d(kinetic_energy)/dv - d(gravitational_energy)/dv.
-   */
-  void ComputeMinusDEnergyDV(const MpmTransfer<T>& transfer,
-                             const std::vector<Vector3<T>>& v_prev,
-                             const DeformationState<T>& deformation_state,
-                             double dt, std::vector<Vector3<T>>* dEnergydV,
-                             TransferScratch<T>* scratch) const;
-
-  /**
-   * Computes the 3*num_active_nodes()by3*num_active_nodes() hessian matrix d^2
-   * (total_energy) / dv^2
-   */
-  void ComputeD2EnergyDV2(const MpmTransfer<T>& transfer,
-                          const DeformationState<T>& deformation_state,
-                          double dt, MatrixX<T>* hessian) const;
-
-  /**
-   * This is equivalent to ComputeD2EnergyDV2() * z.
-   */
-  void ComputeD2EnergyDV2TimesZ(const std::vector<Vector3<T>>& z,
-                                const MpmTransfer<T>& transfer,
-                                const DeformationState<T>& deformation_state,
-                                double dt,
-                                std::vector<Vector3<T>>* hessian_times_z) const;
-
-  void AddD2EnergyDV2TimesZ(const Eigen::VectorX<T>& z,
-                              const MpmTransfer<T>& transfer,
-                              const DeformationState<T>& deformation_state,
-                              double dt,
-                              Eigen::VectorX<T>* hessian_times_z) const {
-    std::vector<Vector3<T>> z_stdvec(z.size() / 3);
-    for (size_t i = 0; i < z_stdvec.size(); ++i) {
-      z_stdvec[i] = Vector3<T>(z(3 * i), z(3 * i + 1), z(3 * i + 2));
-    }
-    std::vector<Vector3<T>> hessian_times_z_stdvec;
-    ComputeD2EnergyDV2TimesZ(z_stdvec, transfer, deformation_state, dt,
-                                &hessian_times_z_stdvec);
-    Eigen::VectorX<T>& hessian_times_z_ref = *hessian_times_z;
-    DRAKE_DEMAND(hessian_times_z_ref.size() == z.size());
-    // hessian_times_z_ref.resize(z.size());
-    for (size_t i = 0; i < hessian_times_z_stdvec.size(); ++i) {
-      hessian_times_z_ref(3 * i) += hessian_times_z_stdvec[i](0);
-      hessian_times_z_ref(3 * i + 1) += hessian_times_z_stdvec[i](1);
-      hessian_times_z_ref(3 * i + 2) += hessian_times_z_stdvec[i](2);
-    }
-  }
-
-  /**
    * elastic energy = ∑ₚ V⁰ₚ ψ(Fₚ), where Fₚ depends on grid velocities
    */
   T ComputeElasticEnergy(const DeformationState<T>& deformation_state) const {
@@ -174,62 +125,58 @@ class MpmModel {
   }
 
   /**
-   * Computes the elastic force due to elastic deformation.
-   * This is -d(elastic_energy)/dx
-   * @note dx/dv = dt
+   * Computes - d(total_energy)/dv = -d(elastic_energy)/dv -
+   * d(kinetic_energy)/dv - d(gravitational_energy)/dv.
    */
-  void ComputeElasticForce(const MpmTransfer<T>& transfer,
-                           const DeformationState<T>& deformation_state,
-                           std::vector<Vector3<T>>* grid_forces,
-                           TransferScratch<T>* scratch) const {
-    transfer.ComputeGridElasticForces(
-        deformation_state.particles(), deformation_state.sparse_grid(),
-        deformation_state.Ps(), grid_forces, scratch);
-  }
-
-  /**
-   * Computes the minus of the derivative force w.r.t. grid positions.
-   */
-  void ComputeElasticHessian(const MpmTransfer<T>& transfer,
+  void ComputeMinusDEnergyDV(const MpmTransfer<T>& transfer,
+                             const std::vector<Vector3<T>>& v_prev,
                              const DeformationState<T>& deformation_state,
-                             MatrixX<T>* hessian) const {
-    transfer.ComputeGridElasticHessian(deformation_state.particles(),
-                                       deformation_state.sparse_grid(),
-                                       deformation_state.dPdFs(), hessian);
-  }
+                             double dt, Eigen::VectorX<T>* minus_dedv,
+                             TransferScratch<T>* scratch) const;
 
   /**
-   * This is equivalent to ComputeElasticHessian() * z.
+   * Computes -d(elastic_energy)/dv.
    */
-  void ComputeElasticHessianTimesZ(
-      const std::vector<Vector3<T>>& z, const MpmTransfer<T>& transfer,
-      const DeformationState<T>& deformation_state,
-      std::vector<Vector3<T>>* hessian_times_z) const {
-    transfer.ComputeGridElasticHessianTimesZ(
-        z, deformation_state.particles(), deformation_state.sparse_grid(),
-        deformation_state.dPdFs(), hessian_times_z);
-  }
+  void ComputeMinusDElasticEnergyDV(
+      const MpmTransfer<T>& transfer,
+      const DeformationState<T>& deformation_state, double dt,
+      Eigen::VectorX<T>* dEnergydV, TransferScratch<T>* scratch) const;
 
-  // TODO(zeshunozng): rewrite and cleanup
-  void AddElasticHessianTimesZEigen(
-      const Eigen::VectorX<T>& z, const MpmTransfer<T>& transfer,
-      const DeformationState<T>& deformation_state,
-      Eigen::VectorX<T>* hessian_times_z) const {
-    std::vector<Vector3<T>> z_stdvec(z.size() / 3);
-    for (size_t i = 0; i < z_stdvec.size(); ++i) {
-      z_stdvec[i] = Vector3<T>(z(3 * i), z(3 * i + 1), z(3 * i + 2));
-    }
-    std::vector<Vector3<T>> hessian_times_z_stdvec;
-    ComputeElasticHessianTimesZ(z_stdvec, transfer, deformation_state,
-                                &hessian_times_z_stdvec);
-    Eigen::VectorX<T>& hessian_times_z_ref = *hessian_times_z;
-    hessian_times_z_ref.resize(z.size());
-    for (size_t i = 0; i < hessian_times_z_stdvec.size(); ++i) {
-      hessian_times_z_ref(3 * i) += hessian_times_z_stdvec[i](0);
-      hessian_times_z_ref(3 * i + 1) += hessian_times_z_stdvec[i](1);
-      hessian_times_z_ref(3 * i + 2) += hessian_times_z_stdvec[i](2);
-    }
-  }
+  /**
+   * Computes the 3*num_active_nodes()by3*num_active_nodes() hessian matrix d^2
+   * (total_energy) / dv^2.
+   */
+  void ComputeD2EnergyDV2(const MpmTransfer<T>& transfer,
+                          const DeformationState<T>& deformation_state,
+                          double dt, MatrixX<T>* hessian) const;
+
+  /**
+   * Computes the 3*num_active_nodes()by3*num_active_nodes() hessian matrix d^2
+   * (elastic_energy) / dv^2.
+   */
+  void ComputeD2ElasticEnergyDV2(const MpmTransfer<T>& transfer,
+                                 const DeformationState<T>& deformation_state,
+                                 double dt, MatrixX<T>* hessian) const;
+
+  /**
+   * Computes result += ComputeD2EnergyDV2() * z.
+   */
+  void AddD2EnergyDV2TimesZ(const Eigen::VectorX<T>& z,
+                            const MpmTransfer<T>& transfer,
+                            const DeformationState<T>& deformation_state,
+                            double dt, Eigen::VectorX<T>* result) const;
+
+  /**
+   * Computes result += ComputeD2ElasticEnergyDV2() * z.
+   */
+  void AddD2ElasticEnergyDV2TimesZ(const Eigen::VectorX<T>& z,
+                                   const MpmTransfer<T>& transfer,
+                                   const DeformationState<T>& deformation_state,
+                                   double dt, Eigen::VectorX<T>* result) const;
+
+  void SetGravity(const Vector3<T>& g) { gravity_ = g; }
+
+  const Vector3<T>& gravity() const { return gravity_; }
 
  private:
   // Kinetic energy = 0.5 * m * (v - v_prev)ᵀ(v - v_prev).
@@ -241,21 +188,11 @@ class MpmModel {
 
   // -d(kinetic_energy)/dv = - m * (v - v₀).
   // -d(gravitational_energy)/dv = dt * mg.
+  // result = result -d(kinetic_energy)/dv -d(gravitational_energy)/dv
   void MinusDKineticEnergyDVAndDGravitationalEnergyDV(
       const std::vector<Vector3<T>>& v_prev,
       const DeformationState<T>& deformation_state, double dt,
-      std::vector<Vector3<T>>* dEnergydV) const;
-
-  // Computes -d(elastic_energy)/dv
-  void ComputeMinusDElasticEnergyDV(
-      const MpmTransfer<T>& transfer,
-      const DeformationState<T>& deformation_state, double dt,
-      std::vector<Vector3<T>>* dEnergydV, TransferScratch<T>* scratch) const;
-
-  // Computes -d^2(elastic_energy)/dv^2
-  void ComputeD2ElasticEnergyDV2(const MpmTransfer<T>& transfer,
-                                 const DeformationState<T>& deformation_state,
-                                 double dt, MatrixX<T>* hessian) const;
+      Eigen::VectorX<T>* result) const;
 
   Vector3<T> gravity_{0.0, 0.0, -9.81};
 };
