@@ -36,7 +36,7 @@ GTEST_TEST(MpmDriverTest, FreeFallTest) {
   driver.AddParticle(Vector3<double>(-0.5, -0.5, -0.5), initial_v,
                      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2),
                      1.0, 1.0);
-
+  driver.WriteParticlesToBgeo(0);
   for (int step = 1; step < 10; ++step) {
     driver.AdvanceDt();
     double current_time = step * dt;
@@ -53,6 +53,8 @@ GTEST_TEST(MpmDriverTest, FreeFallTest) {
       EXPECT_TRUE(CompareMatrices(
           v_t, initial_v + driver.mpm_model().gravity() * current_time, kTolerance));
     }
+
+    driver.WriteParticlesToBgeo(step);
   }
 }
 

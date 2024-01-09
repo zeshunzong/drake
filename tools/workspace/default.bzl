@@ -1,3 +1,4 @@
+load("@drake//tools/workspace/partio:repository.bzl", "partio_repository")
 load("//tools/workspace:mirrors.bzl", "DEFAULT_MIRRORS")
 load("//tools/workspace:os.bzl", "os_repository")
 load("//tools/workspace/abseil_cpp_internal:repository.bzl", "abseil_cpp_internal_repository")  # noqa
@@ -284,6 +285,8 @@ def add_default_repositories(excludes = [], mirrors = DEFAULT_MIRRORS):
         org_apache_xmlgraphics_commons_repository(name = "org_apache_xmlgraphics_commons", mirrors = mirrors)  # noqa
     if "osqp_internal" not in excludes:
         osqp_internal_repository(name = "osqp_internal", mirrors = mirrors)
+    if "partio" not in excludes:
+        partio_repository(name = "partio", mirrors = mirrors)
     if "petsc" not in excludes:
         # The @petsc external is deprecated in Drake's WORKSPACE and will be
         # removed on or after 2023-11-01.

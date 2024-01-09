@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "drake/multibody/mpm/matrix_replacement.h"
+#include "drake/multibody/mpm/particles_to_bgeo.h"
 
 namespace drake {
 namespace multibody {
@@ -99,6 +100,14 @@ class MpmDriver {
   void SetMatrixFree(bool matrix_free) {
     matrix_free_ = matrix_free;
   }
+
+  void WriteParticlesToBgeo(int io_step) {
+    std::string output_filename = "./f"
+                                + std::to_string(io_step) + ".bgeo";
+    internal::WriteParticlesToBgeo(output_filename, particles_.positions(),
+                                                    particles_.velocities(),
+                                                    particles_.masses());
+}
 
  private:
 

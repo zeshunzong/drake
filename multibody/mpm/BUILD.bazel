@@ -177,11 +177,23 @@ drake_cc_googletest(
 )
 
 drake_cc_library(
+    name = "particles_to_bgeo",
+    hdrs = [
+        "particles_to_bgeo.h",
+    ],
+    deps = [
+        "//common:essential",
+        "@partio",
+    ],
+)
+
+drake_cc_library(
     name = "mpm_driver",
     hdrs = [
         "mpm_driver.h",
     ],
     deps = [
+        ":particles_to_bgeo",
         ":matrix_replacement",
     ],
 )
