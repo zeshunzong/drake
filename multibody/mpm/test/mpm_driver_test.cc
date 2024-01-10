@@ -16,7 +16,7 @@ using drake::multibody::mpm::constitutive_model::CorotatedElasticModel;
 constexpr double kTolerance = 1e-10;
 
 // GTEST_TEST(MpmDriverTest, FreeFallTest) {
-//   const double h = 0.2;
+//   const double h = 0.197;
 //   double dt = 0.1;
 //   MpmDriver<double> driver = MpmDriver<double>(h, dt);
 //   // test free fall with three particles
@@ -25,36 +25,47 @@ constexpr double kTolerance = 1e-10;
 //   // give them same initial v so that there should be no deformation
 //   Vector3<double> initial_v(0.0, 0.0, 0.0);
 
-//   driver.AddParticle(Vector3<double>(0.0, 0.0, 0.0), initial_v,
-//                      std::make_unique<CorotatedElasticModel<double>>(1.0,
-//                      0.2), 100.0, 100.0);
+//   // driver.AddParticle(Vector3<double>(0.0, 0.0, 0.0), initial_v,
+//   //                    std::make_unique<CorotatedElasticModel<double>>(1.0,
+//   //                    0.2), 100.0, 100.0);
 //   driver.AddParticle(Vector3<double>(0.1, 0.15, 0.07), initial_v,
 //                      std::make_unique<CorotatedElasticModel<double>>(1.0,
 //                      0.2), 100.0, 100.0);
-//   driver.AddParticle(Vector3<double>(-0.5, -0.5, -0.5), initial_v,
+//   // driver.AddParticle(Vector3<double>(-0.5, -0.5, -0.5), initial_v,
+//   //                    std::make_unique<CorotatedElasticModel<double>>(1.0,
+//   //                    0.2), 1.0, 1.0);
+//   driver.AddParticle(Vector3<double>(-0.48, -0.5, -0.5), initial_v,
 //                      std::make_unique<CorotatedElasticModel<double>>(1.0,
 //                      0.2), 1.0, 1.0);
-//   driver.WriteParticlesToBgeo(0);
-//   for (int step = 1; step < 10; ++step) {
-//     driver.AdvanceDt();
-//     double current_time = step * dt;
-//     const Particles<double>& particles_at_current_time = driver.particles();
+//   driver.AddParticle(Vector3<double>(-0.48, -0.55, -0.5), initial_v,
+//                      std::make_unique<CorotatedElasticModel<double>>(1.0,
+//                      0.2), 1.0, 1.0);
+//   driver.AdvanceDt();
+//   const Particles<double>& particles = driver.particles();
+//   std::cout << particles.base_nodes()[0](0) << " " << particles.base_nodes()[0](1) << " " << particles.base_nodes()[0](2) <<std::endl;
+//   std::cout << particles.base_nodes()[1](0) << " " << particles.base_nodes()[1](1) << " " << particles.base_nodes()[1](2) <<std::endl;
+//   std::cout << particles.base_nodes()[2](0) << " " << particles.base_nodes()[2](1) << " " << particles.base_nodes()[2](2) <<std::endl;
+//   // driver.WriteParticlesToBgeo(0);
+//   // for (int step = 1; step < 10; ++step) {
+//   //   driver.AdvanceDt();
+//   //   double current_time = step * dt;
+//   //   const Particles<double>& particles_at_current_time = driver.particles();
 
-//     // switch to full hessian solver halfway to test both
-//     if (step == 5) {
-//       driver.SetMatrixFree(false);
-//     }
+//   //   // switch to full hessian solver halfway to test both
+//   //   if (step == 5) {
+//   //     driver.SetMatrixFree(false);
+//   //   }
 
-//     // v_t should be v0 + gt
-//     for (int p = 0; p < 3; ++p) {
-//       const Vector3<double> v_t = particles_at_current_time.velocities()[p];
-//       EXPECT_TRUE(CompareMatrices(
-//           v_t, initial_v + driver.mpm_model().gravity() * current_time,
-//           kTolerance));
-//     }
+//   //   // v_t should be v0 + gt
+//   //   for (int p = 0; p < 3; ++p) {
+//   //     const Vector3<double> v_t = particles_at_current_time.velocities()[p];
+//   //     EXPECT_TRUE(CompareMatrices(
+//   //         v_t, initial_v + driver.mpm_model().gravity() * current_time,
+//   //         kTolerance));
+//   //   }
 
-//     driver.WriteParticlesToBgeo(step);
-//   }
+//   //   driver.WriteParticlesToBgeo(step);
+//   // }
 // }
 
 GTEST_TEST(MpmDriverTest, FreeFallTest) {
@@ -62,16 +73,16 @@ GTEST_TEST(MpmDriverTest, FreeFallTest) {
   drake::multibody::mpm::internal::BoxLevelSet level_set(Vector3<double>(0.1,0.1,0.1));
   CorotatedElasticModel<double> elastoplatic_model(10, 0.2);
 
-  const double h = 0.147;
+  const double h = 0.149;
   double dt = 0.01;
   MpmDriver<double> driver = MpmDriver<double>(h, dt);
 
-  Vector3<double> translation = {0.0, 0.0, 5.0};
-  math::RigidTransform<double> pose = math::RigidTransform<double>(translation);
+  //Vector3<double> translation = {0.0, 0.0, 5.0};
+  math::RigidTransform<double> pose;// = math::RigidTransform<double>(translation);
 
   driver.AddParticlesViaPoissonDiskSampling(level_set, pose, elastoplatic_model);
 
-  driver.WriteParticlesToBgeo(0);
+  // driver.WriteParticlesToBgeo(0);
   // for (int step = 1; step < 50; ++step) {
   //   driver.AdvanceDt();
   //   driver.WriteParticlesToBgeo(step);
