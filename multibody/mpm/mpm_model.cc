@@ -13,7 +13,6 @@ void MpmModel<T>::ComputeMinusDEnergyDV(
   DRAKE_ASSERT(scratch != nullptr);
   ComputeMinusDElasticEnergyDV(transfer, deformation_state, dt, minus_dedv,
                                scratch);
-  minus_dedv->setZero();
   MinusDKineticEnergyDVAndDGravitationalEnergyDV(v_prev, deformation_state, dt,
                                                  minus_dedv);
 }
@@ -37,7 +36,6 @@ void MpmModel<T>::ComputeD2EnergyDV2(
     const DeformationState<T>& deformation_state, double dt,
     MatrixX<T>* hessian) const {
   ComputeD2ElasticEnergyDV2(transfer, deformation_state, dt, hessian);
-  hessian->setZero();
   for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
        ++i) {
     (*hessian)(3 * i, 3 * i) += deformation_state.grid_data().GetMassAt(i);

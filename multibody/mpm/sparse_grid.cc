@@ -47,15 +47,12 @@ void SparseGrid<T>::GatherFromP2gPads(const std::vector<P2gPad<T>>& p2g_pads,
                                       GridData<T>* grid_data) const {
   grid_data->Reset(num_active_nodes());
   for (const P2gPad<T>& p2g_pad : p2g_pads) {
-    std::cout << "pad" << std::endl;
     const Vector3<int>& base_node = p2g_pad.base_node;
-    std::cout << "base node: " << base_node(0) << base_node(1) << base_node(2) << std::endl;
     // Add pad data to grid data.
     for (int a = -1; a <= 1; ++a) {
       for (int b = -1; b <= 1; ++b) {
         for (int c = -1; c <= 1; ++c) {
           size_t index_1d = To1DIndex(Vector3<int>(a, b, c) + base_node);
-          std::cout << "node index: " << index_1d << std::endl;
           grid_data->AccumulateAt(index_1d, p2g_pad.GetMassAt(a, b, c),
                                   p2g_pad.GetMomentumAt(a, b, c),
                                   p2g_pad.GetForceAt(a, b, c));

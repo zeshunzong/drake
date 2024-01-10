@@ -17,9 +17,6 @@ void MpmTransfer<T>::P2G(const Particles<T>& particles,
                          TransferScratch<T>* scratch) const {
   particles.SplatToP2gPads(grid.h(), &(scratch->p2g_pads));
   grid.GatherFromP2gPads(scratch->p2g_pads, grid_data);
-  for (size_t i = 0; i < grid_data->num_active_nodes(); ++i) {
-    std::cout << "node " << i << " mass: " << grid_data->masses()[i] << std::endl;
-  }
 }
 
 template <typename T>

@@ -90,7 +90,6 @@ class MpmDriver {
   int AdvanceDt() {
     // TODO(zeshunzong): precondition
     // TODO(zeshunzong): line search
-    // TODO(zeshunzong): projection
 
     int num_newtons = ComputeGridVelocities();
     std::cout << "num newtons: " << num_newtons << std::endl;
@@ -113,11 +112,7 @@ class MpmDriver {
     DeformationState<T> deformation_state(particles_, sparse_grid_, grid_data_);
 
     v_prev_ = grid_data_.velocities();
-    // std::cout << "b4 newton" << std::endl;
-    // for (size_t i = 0; i < v_prev_.size(); ++i) {
-    //   std::cout << v_prev_[i](2) << " ";
-    // }
-    // std::cout << std::endl;
+
     int count = 0;
     dG_norm_ = std::numeric_limits<T>::infinity();
     while (dG_norm_ > newton_epsilon_) {
@@ -129,10 +124,6 @@ class MpmDriver {
       model_.ComputeMinusDEnergyDV(transfer_, v_prev_, deformation_state, dt_,
                                    &minus_dEdv_, &scratch_);
 
-      for (int i = 0; i < static_cast<int>(minus_dEdv_.size()); ++i) {
-        std::cout << minus_dEdv_(i) << " ";
-      }
-      std::cout << std::endl << "this is -dedv " << std::endl;
       // if (apply_ground_) {
       //   ProjectCollisionGround(&minus_dEdv_);
       // }
@@ -226,7 +217,7 @@ class MpmDriver {
   MpmTransfer<T> transfer_;
   TransferScratch<T> scratch_;
 
-  double newton_epsilon_ = 0.0001;
+  double newton_epsilon_ = 1e-6;
 
   Eigen::VectorX<T> dG_;
   T dG_norm_ = std::numeric_limits<T>::infinity();

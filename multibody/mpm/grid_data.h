@@ -51,9 +51,7 @@ class GridData {
 
     DRAKE_ASSERT(dG.size() == num_active_nodes() * 3);
     for (size_t i = 0; i < num_active_nodes(); ++i) {
-      std::cout << "i is " << i << ". griv v before: " << velocities_[i](2);
       velocities_[i] += dG.segment(3 * i, 3);
-      std::cout << ". grid v after: " << velocities_[i](2) << ". dg: " << dG(3*i+2) << std::endl;
     }
   }
 
@@ -78,7 +76,7 @@ class GridData {
    */
   void ComputeVelocitiesFromMomentums() {
     for (size_t i = 0; i < masses_.size(); ++i) {
-      if (masses_[i] < 1e-16) {
+      if (masses_[i] == 0.0) {
         velocities_[i].setZero();
       } else {
         velocities_[i] = momentums_[i] / masses_[i];
