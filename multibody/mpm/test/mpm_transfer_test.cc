@@ -150,6 +150,123 @@ GTEST_TEST(MpmTransferTest, TestP2GAndG2PMassMomentumConservation) {
   // positions have changed.
 }
 
+// In an unlikely case where a particle stays at the center of a grid cube
+// (center in either 1d), there will be grid nodes with zero mass.
+GTEST_TEST(MpmTransferTest, TestZeroGridMass) {
+  const double h = 1.0;
+
+  SparseGrid<double> grid(h);
+  Particles<double> particles = Particles<double>();
+
+  particles.AddParticle(
+      Vector3<double>(0.5, 0.5, 0.5), Vector3<double>(2.0, -5.0, 3.0),
+      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2), 1.0, 1.0);
+
+  TransferScratch<double> scratch{};
+  MpmTransfer<double> mpm_transfer{};
+  GridData<double> grid_data{};
+
+  mpm_transfer.SetUpTransfer(&grid, &particles);
+  mpm_transfer.P2G(particles, grid, &grid_data, &scratch);
+
+  // expect nodes in the upper-right crust (27-8=19 nodes) to have zero mass
+  for (int a = -1; a <= 1; ++a) {
+    for (int b = -1; b <= 1; ++b) {
+      for (int c = -1; c <= 1; ++c) {
+        if ((a == 1) || (b == 1) || (c == 1)) {
+          size_t node_global_index =
+              grid.To1DIndex(particles.base_nodes()[0] + Vector3<int>(a, b, c));
+          EXPECT_EQ(grid_data.masses()[node_global_index], 0.0);
+        }
+      }
+    }
+  }
+
+  // check that conversion from momentum to velocity is handled properly
+  grid_data.ComputeVelocitiesFromMomentums();
+  for (int a = -1; a <= 1; ++a) {
+    for (int b = -1; b <= 1; ++b) {
+      for (int c = -1; c <= 1; ++c) {
+        size_t node_global_index =
+            grid.To1DIndex(particles.base_nodes()[0] + Vector3<int>(a, b, c));
+
+        // any node should not have NaN velocity
+        const Vector3<double>& v = grid_data.velocities()[node_global_index];
+        EXPECT_FALSE(std::isnan(v(0)));
+        EXPECT_FALSE(std::isnan(v(1)));
+        EXPECT_FALSE(std::isnan(v(2)));
+
+        // in particular, nodes with zero mass should have zero velocity
+        if ((a == 1) || (b == 1) || (c == 1)) {
+          EXPECT_EQ(grid_data.velocities()[node_global_index],
+                    Vector3<double>(0, 0, 0));
+        }
+      }
+    }
+  }
+}
+
+// test that nodes are correctly splatted to pads
+GTEST_TEST(MpmTransferTest, TestSplatP2g) {
+  const double h = 0.197;
+
+  SparseGrid<double> grid(h);
+  Particles<double> particles = Particles<double>();
+  Vector3<double> initial_v(0.2, 0.35, 0.4);
+  particles.AddParticle(
+      Vector3<double>(0.1, 0.15, 0.07), initial_v,
+      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2), 100.0, 100.0);
+  particles.AddParticle(
+      Vector3<double>(-0.48, -0.5, -0.5), initial_v,
+      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2), 1.0, 1.0);
+  particles.AddParticle(
+      Vector3<double>(-0.48, -0.55, -0.5), initial_v,
+      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2), 1.0, 1.0);
+
+  TransferScratch<double> scratch{};
+  MpmTransfer<double> mpm_transfer{};
+  GridData<double> grid_data{};
+
+  mpm_transfer.SetUpTransfer(&grid, &particles);
+  mpm_transfer.P2G(particles, grid, &grid_data, &scratch);
+
+  // after sorting, the first two particles have common base node (-2, -3, -3)
+  // the third particle has base node (1, 1, 0)
+  // the two pads do NOT overlap!
+  // thus, the 27 nodes around (-2, -3, -3) should only be affected by p0 and p1
+  // the 27 nodes around (1, 1, 0) should only be affected by p2
+
+  // check the sum of node masses for the 27 nodes around (-2, -3, -3) = p0.mass
+  // + p1.mass
+  double node_mass_sum = 0;
+  for (int a = -1; a <= 1; ++a) {
+    for (int b = -1; b <= 1; ++b) {
+      for (int c = -1; c <= 1; ++c) {
+        size_t node_global_index =
+            grid.To1DIndex(particles.base_nodes()[0] + Vector3<int>(a, b, c));
+
+        node_mass_sum += grid_data.masses()[node_global_index];
+      }
+    }
+  }
+  EXPECT_NEAR(node_mass_sum, particles.GetMassAt(0) + particles.GetMassAt(1),
+              kTolerance);
+
+  // check the sum of node masses for the 27 nodes around (1, 1, 0) = p2.mass
+  node_mass_sum = 0;
+  for (int a = -1; a <= 1; ++a) {
+    for (int b = -1; b <= 1; ++b) {
+      for (int c = -1; c <= 1; ++c) {
+        size_t node_global_index =
+            grid.To1DIndex(particles.base_nodes()[2] + Vector3<int>(a, b, c));
+
+        node_mass_sum += grid_data.masses()[node_global_index];
+      }
+    }
+  }
+  EXPECT_NEAR(node_mass_sum, particles.GetMassAt(2), kTolerance);
+}
+
 }  // namespace
 }  // namespace mpm
 }  // namespace multibody
