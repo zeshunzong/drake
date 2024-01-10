@@ -193,8 +193,8 @@ drake_cc_library(
         "mpm_driver.h",
     ],
     deps = [
-        ":particles_to_bgeo",
         ":matrix_replacement",
+        ":particles_to_bgeo",
         "//multibody/mpm/internal:analytic_level_set",
         "//multibody/mpm/internal:poisson_disk",
     ],

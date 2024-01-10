@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include <iostream>
+
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
 
@@ -48,7 +48,6 @@ class GridData {
    * Increments velocity to each grid node component.
    */
   void AddDG(const Eigen::VectorX<T>& dG) {
-
     DRAKE_ASSERT(dG.size() == num_active_nodes() * 3);
     for (size_t i = 0; i < num_active_nodes(); ++i) {
       velocities_[i] += dG.segment(3 * i, 3);
@@ -125,12 +124,12 @@ class GridData {
     }
   }
 
-  void ProjectionGround(const std::vector<size_t>& collision_nodes, bool sticky) {
+  void ProjectionGround(const std::vector<size_t>& collision_nodes,
+                        bool sticky) {
     for (auto node_idx : collision_nodes) {
       if (sticky) {
         velocities_[node_idx].setZero();
-      }
-      else {
+      } else {
         velocities_[node_idx](2) = 0.0;
       }
     }

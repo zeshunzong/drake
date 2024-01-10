@@ -54,8 +54,9 @@ class DeformationState {
    */
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DeformationState);
-
+  // NOLINTNEXTLINE
   DeformationState(Particles<T>& particles, const SparseGrid<T>& sparse_grid,
+                   // NOLINTNEXTLINE
                    GridData<T>& grid_data)
       : particles_(particles),
         sparse_grid_(sparse_grid),

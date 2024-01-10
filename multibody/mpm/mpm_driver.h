@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -38,12 +39,12 @@ class MpmDriver {
 
   void AddParticlesViaPoissonDiskSampling(
       const internal::AnalyticLevelSet& level_set,
-      const math::RigidTransform<double>& pose,
+      const math::RigidTransform<double>& pose, double common_density,
       const mpm::constitutive_model::ElastoPlasticModel<T>&
           elastoplastic_model) {
     const std::array<Vector3<double>, 2> bounding_box =
         level_set.bounding_box();
-    double min_num_particles_per_cell = 1;
+    double min_num_particles_per_cell = 5;
     double sample_r = h_ / (std::cbrt(min_num_particles_per_cell) + 1);
 
     std::array<double, 3> xmin = {bounding_box[0][0], bounding_box[0][1],
@@ -78,7 +79,7 @@ class MpmDriver {
     int num_particles = particles_positions.size();
     // We assume every particle have the same volume and mass
     double reference_volume_p = level_set.volume() / num_particles;
-    double mass_p = 1000.0 * reference_volume_p;
+    double mass_p = common_density * reference_volume_p;
 
     for (size_t p = 0; p < particles_positions.size(); ++p) {
       AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
@@ -94,6 +95,11 @@ class MpmDriver {
     std::cout << "num newtons: " << num_newtons << std::endl;
     // now we have G
     // SAP can take G and modify it if needed
+
+    if (apply_ground_) {
+      grid_data_.ProjectionGround(collision_nodes_, sticky_ground_);
+    }
+
     UpdateParticlesFromGridData();
 
     return num_newtons;
@@ -136,14 +142,12 @@ class MpmDriver {
 
       } else {
         model_.ComputeD2EnergyDV2(transfer_, deformation_state, dt_, &d2Edv2_);
-
         cg_dense_.compute(d2Edv2_);
         dG_ = cg_dense_.solve(minus_dEdv_);
       }
 
       grid_data_.AddDG(dG_);
 
-      grid_data_.ProjectionGround(collision_nodes_, sticky_ground_);
       dG_norm_ = dG_.norm();
 
       ++count;
@@ -170,6 +174,10 @@ class MpmDriver {
 
   void SetMatrixFree(bool matrix_free) { matrix_free_ = matrix_free; }
 
+  void ApplyGround(bool apply_ground) { apply_ground_ = apply_ground; }
+
+  void SetStickyGround(bool sticky) { sticky_ground_ = sticky; }
+
   void WriteParticlesToBgeo(int io_step) {
     std::string output_filename = "./f" + std::to_string(io_step) + ".bgeo";
     internal::WriteParticlesToBgeo(output_filename, particles_.positions(),
@@ -178,14 +186,12 @@ class MpmDriver {
   }
 
  private:
-  // TODO(zeshunzong): only sticky ground right now
   void UpdateCollisionNodesWithGround() {
     collision_nodes_.clear();
     for (size_t i = 0; i < sparse_grid_.num_active_nodes(); ++i) {
       if (sparse_grid_.To3DIndex(i)(2) <= 0) {
         collision_nodes_.push_back(i);
       }
-      // std::cout << "collide " << i << std::endl;
     }
   }
 
@@ -227,7 +233,7 @@ class MpmDriver {
 
   bool sticky_ground_ = true;
 
-  bool apply_ground_ = true;
+  bool apply_ground_ = false;
 
   Eigen::ConjugateGradient<MatrixReplacement<T>, Eigen::Lower | Eigen::Upper,
                            Eigen::IdentityPreconditioner>
