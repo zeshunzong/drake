@@ -39,7 +39,8 @@ class MpmDriver {
   void AddParticlesViaPoissonDiskSampling(
       const internal::AnalyticLevelSet& level_set,
       const math::RigidTransform<double>& pose,
-      const mpm::constitutive_model::ElastoPlasticModel<T>& elastoplastic_model) {
+      const mpm::constitutive_model::ElastoPlasticModel<T>&
+          elastoplastic_model) {
     const std::array<Vector3<double>, 2> bounding_box =
         level_set.bounding_box();
     double min_num_particles_per_cell = 1;
@@ -81,9 +82,7 @@ class MpmDriver {
 
     for (size_t p = 0; p < particles_positions.size(); ++p) {
       AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
-                  elastoplastic_model.Clone(),
-                      mass_p,
-                  reference_volume_p);
+                  elastoplastic_model.Clone(), mass_p, reference_volume_p);
     }
   }
 
@@ -104,10 +103,10 @@ class MpmDriver {
     transfer_.SetUpTransfer(&sparse_grid_, &particles_);
     transfer_.P2G(particles_, sparse_grid_, &grid_data_, &scratch_);
 
-    // if (apply_ground_) {
-    //   // identify grid nodes that penetrates ground
-    //   UpdateCollisionNodesWithGround();
-    // }
+    if (apply_ground_) {
+      // identify grid nodes that penetrates ground
+      UpdateCollisionNodesWithGround();
+    }
 
     DeformationState<T> deformation_state(particles_, sparse_grid_, grid_data_);
 
@@ -124,9 +123,9 @@ class MpmDriver {
       model_.ComputeMinusDEnergyDV(transfer_, v_prev_, deformation_state, dt_,
                                    &minus_dEdv_, &scratch_);
 
-      // if (apply_ground_) {
-      //   ProjectCollisionGround(&minus_dEdv_);
-      // }
+      if (apply_ground_) {
+        ProjectCollisionGround(&minus_dEdv_);
+      }
 
       // find dG_ = hessian^-1 * minus_gradient
       if (matrix_free_) {
@@ -142,11 +141,9 @@ class MpmDriver {
         dG_ = cg_dense_.solve(minus_dEdv_);
       }
 
-      // if (apply_ground_) {
-      //   ProjectCollisionGround(&dG_);
-      // }
-
       grid_data_.AddDG(dG_);
+
+      grid_data_.ProjectionGround(collision_nodes_, sticky_ground_);
       dG_norm_ = dG_.norm();
 
       ++count;
@@ -163,9 +160,9 @@ class MpmDriver {
     // update particle position, this is the last step
     particles_.AdvectParticles(dt_);
 
-    for (size_t i = 0; i < particles_.num_particles(); ++i) {
-      std::cout << particles_.velocities()[i](2) << std::endl;
-    }
+    // for (size_t i = 0; i < particles_.num_particles(); ++i) {
+    //   std::cout << particles_.velocities()[i](2) << std::endl;
+    // }
   }
 
   const Particles<T>& particles() const { return particles_; }
@@ -188,6 +185,7 @@ class MpmDriver {
       if (sparse_grid_.To3DIndex(i)(2) <= 0) {
         collision_nodes_.push_back(i);
       }
+      // std::cout << "collide " << i << std::endl;
     }
   }
 
@@ -229,7 +227,7 @@ class MpmDriver {
 
   bool sticky_ground_ = true;
 
-  bool apply_ground_ = false;
+  bool apply_ground_ = true;
 
   Eigen::ConjugateGradient<MatrixReplacement<T>, Eigen::Lower | Eigen::Upper,
                            Eigen::IdentityPreconditioner>

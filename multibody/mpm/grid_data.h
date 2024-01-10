@@ -125,6 +125,17 @@ class GridData {
     }
   }
 
+  void ProjectionGround(const std::vector<size_t>& collision_nodes, bool sticky) {
+    for (auto node_idx : collision_nodes) {
+      if (sticky) {
+        velocities_[node_idx].setZero();
+      }
+      else {
+        velocities_[node_idx](2) = 0.0;
+      }
+    }
+  }
+
  private:
   std::vector<T> masses_;
   std::vector<Vector3<T>> momentums_;

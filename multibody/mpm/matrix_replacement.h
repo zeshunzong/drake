@@ -100,6 +100,7 @@ struct generic_product_impl<drake::multibody::mpm::MatrixReplacement<T>, Rhs,
 
   template <typename Dest>
   static void scaleAndAddTo(
+  // NOLINTNEXTLINE
       Dest& dst, const drake::multibody::mpm::MatrixReplacement<T>& lhs,
       const Rhs& rhs, const Scalar& alpha) {
     // This method should implement "dst += alpha * lhs * rhs" inplace,
