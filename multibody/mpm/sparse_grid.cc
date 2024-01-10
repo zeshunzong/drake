@@ -64,17 +64,38 @@ void SparseGrid<T>::GatherFromP2gPads(const std::vector<P2gPad<T>>& p2g_pads,
 }
 
 template <typename T>
+void SparseGrid<T>::GatherForceFromP2gPads(
+    const std::vector<P2gPad<T>>& p2g_pads,
+    std::vector<Vector3<T>>* grid_forces) const {
+  std::vector<Vector3<T>>& grid_forces_ref = *grid_forces;
+  grid_forces_ref.resize(num_active_nodes(), Vector3<T>::Zero());
+
+  for (const P2gPad<T>& p2g_pad : p2g_pads) {
+    const Vector3<int>& base_node = p2g_pad.base_node;
+    // Add pad data to grid data.
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          size_t index_1d = To1DIndex(Vector3<int>(a, b, c) + base_node);
+          grid_forces_ref[index_1d] += p2g_pad.GetForceAt(a, b, c);
+        }
+      }
+    }
+  }
+}
+
+template <typename T>
 internal::MassAndMomentum<T> SparseGrid<T>::ComputeTotalMassMomentum(
     const GridData<T>& grid_data) const {
   internal::MassAndMomentum<T> total_mass_momentum{};
   for (size_t i = 0; i < num_active_nodes(); ++i) {
-    total_mass_momentum.total_mass += grid_data.masses_[i];
+    total_mass_momentum.total_mass += grid_data.masses()[i];
     total_mass_momentum.total_momentum +=
-        grid_data.masses_[i] * grid_data.velocities_[i];
+        grid_data.masses()[i] * grid_data.velocities()[i];
     const Vector3<T> node_position =
         internal::ComputePositionFromIndex3D(To3DIndex(i), h_);
     total_mass_momentum.total_angular_momentum +=
-        grid_data.masses_[i] * node_position.cross(grid_data.velocities_[i]);
+        grid_data.masses()[i] * node_position.cross(grid_data.velocities()[i]);
   }
   return total_mass_momentum;
 }

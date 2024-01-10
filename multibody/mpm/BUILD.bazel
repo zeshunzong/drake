@@ -59,6 +59,7 @@ drake_cc_library(
         ":particles_data",
         "//common:autodiff",
         "//common:essential",
+        "//multibody/mpm/constitutive_model:elastoplastic_model",
         "//multibody/mpm/internal:mass_and_momentum",
     ],
 )
@@ -67,6 +68,7 @@ drake_cc_googletest(
     name = "particles_test",
     deps = [
         ":particles",
+        "//multibody/mpm/constitutive_model:corotated_elastic_model",
     ],
 )
 
@@ -122,6 +124,7 @@ drake_cc_library(
         ":particles_data",
         ":sparse_grid",
         "//common:essential",
+        "//multibody/mpm/constitutive_model:corotated_elastic_model",
     ],
 )
 
@@ -130,6 +133,25 @@ drake_cc_googletest(
     deps = [
         ":mpm_transfer",
         "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_model",
+    hdrs = [
+        "mpm_model.h",
+    ],
+    deps = [
+        ":mpm_transfer",
+    ],
+)
+
+drake_cc_googletest(
+    name = "mpm_model_test",
+    deps = [
+        ":mpm_model",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//math:gradient",
     ],
 )
 

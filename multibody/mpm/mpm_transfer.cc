@@ -13,16 +13,18 @@ void MpmTransfer<T>::SetUpTransfer(SparseGrid<T>* grid,
 
 template <typename T>
 void MpmTransfer<T>::P2G(const Particles<T>& particles,
-                         const SparseGrid<T>& grid, GridData<T>* grid_data) {
-  particles.SplatToP2gPads(grid.h(), &p2g_pads_);
-  grid.GatherFromP2gPads(p2g_pads_, grid_data);
+                         const SparseGrid<T>& grid, GridData<T>* grid_data,
+                         TransferScratch<T>* scratch) const {
+  particles.SplatToP2gPads(grid.h(), &(scratch->p2g_pads));
+  grid.GatherFromP2gPads(scratch->p2g_pads, grid_data);
 }
 
 template <typename T>
 void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
                          const GridData<T>& grid_data,
                          const Particles<T>& particles,
-                         ParticlesData<T>* particles_data) {
+                         ParticlesData<T>* particles_data,
+                         TransferScratch<T>* scratch) const {
   DRAKE_DEMAND(!particles.NeedReordering());
   particles_data->Resize(particles.num_particles());
 
@@ -35,7 +37,7 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
     batch_idx_3d = base_nodes[batch_starts[i]];
 
     // form the g2p_pad for this batch
-    g2p_pad_.Reset();
+    scratch->g2p_pad.SetZero();
     for (int a = -1; a <= 1; ++a) {
       for (int b = -1; b <= 1; ++b) {
         for (int c = -1; c <= 1; ++c) {
@@ -46,12 +48,13 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
           const Vector3<T>& velocity =
               grid_data.GetVelocityAt(grid.To1DIndex(idx_3d));
 
-          g2p_pad_.SetPositionAndVelocityAt(a, b, c, position, velocity);
+          scratch->g2p_pad.SetPositionAndVelocityAt(a, b, c, position,
+                                                    velocity);
         }
       }
     }
     // write particle v, B, and grad v to particles_data
-    particles.WriteParticlesDataFromG2pPad(i, g2p_pad_, particles_data);
+    particles.WriteParticlesDataFromG2pPad(i, scratch->g2p_pad, particles_data);
   }
 }
 

@@ -22,6 +22,13 @@ struct P2gPad {
   // the 27 local nodes (3by3by3) of a cube are stored lexicographically as,
   // viewing the center node as {0,0,0}
 
+  // initialize to zero
+  void SetZero() {
+    std::fill(momentums.begin(), momentums.end(), Vector3<T>::Zero());
+    std::fill(forces.begin(), forces.end(), Vector3<T>::Zero());
+    std::fill(masses.begin(), masses.end(), 0);
+  }
+
   // @pre a, b, c ∈ {−1,0,1}
   const T& GetMassAt(int a, int b, int c) const {
     int id_local = (c + 1) + 3 * (b + 1) + 9 * (a + 1);
@@ -46,7 +53,7 @@ struct G2pPad {
   std::array<Vector3<T>, 27> positions{};
   std::array<Vector3<T>, 27> velocities{};
 
-  void Reset() {
+  void SetZero() {
     std::fill(positions.begin(), positions.end(), Vector3<T>::Zero());
     std::fill(velocities.begin(), velocities.end(), Vector3<T>::Zero());
   }

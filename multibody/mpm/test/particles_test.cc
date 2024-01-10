@@ -6,30 +6,35 @@
 
 #include <gtest/gtest.h>
 
+#include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
+
 namespace drake {
 namespace multibody {
 namespace mpm {
 namespace {
 
-// TODO(zeshunzong): add more as more attributes come in
+using drake::multibody::mpm::constitutive_model::CorotatedElasticModel;
 GTEST_TEST(ParticlesClassTest, TestAddSetGet) {
   Particles<double> particles = Particles<double>();
 
   // add particle #1
-  particles.AddParticle(Vector3<double>{1, 1, 1}, Vector3<double>{1, 1, 1}, 1.0,
-                        1.0, Matrix3<double>::Ones() * 1.0,
-                        Matrix3<double>::Ones() * 1.0,
-                        Matrix3<double>::Ones() * 1.0);
+  particles.AddParticle(
+      Vector3<double>{1, 1, 1}, Vector3<double>{1, 1, 1}, 1.0, 1.0,
+      Matrix3<double>::Ones() * 1.0, Matrix3<double>::Ones() * 1.0,
+      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2),
+      Matrix3<double>::Ones() * 1.0);
   // add particle #2
-  particles.AddParticle(Vector3<double>{2, 2, 2}, Vector3<double>{2, 2, 2}, 2.0,
-                        2.0, Matrix3<double>::Ones() * 2.0,
-                        Matrix3<double>::Ones() * 2.0,
-                        Matrix3<double>::Ones() * 2.0);
+  particles.AddParticle(
+      Vector3<double>{2, 2, 2}, Vector3<double>{2, 2, 2}, 2.0, 2.0,
+      Matrix3<double>::Ones() * 2.0, Matrix3<double>::Ones() * 2.0,
+      std::make_unique<CorotatedElasticModel<double>>(2.0, 0.2),
+      Matrix3<double>::Ones() * 2.0);
   // add particle #3
-  particles.AddParticle(Vector3<double>{3, 3, 3}, Vector3<double>{3, 3, 3}, 3.0,
-                        3.0, Matrix3<double>::Ones() * 3.0,
-                        Matrix3<double>::Ones() * 3.0,
-                        Matrix3<double>::Ones() * 3.0);
+  particles.AddParticle(
+      Vector3<double>{3, 3, 3}, Vector3<double>{3, 3, 3}, 3.0, 3.0,
+      Matrix3<double>::Ones() * 3.0, Matrix3<double>::Ones() * 3.0,
+      std::make_unique<CorotatedElasticModel<double>>(3.0, 0.2),
+      Matrix3<double>::Ones() * 3.0);
 
   EXPECT_EQ(particles.num_particles(), 3);
 
@@ -65,6 +70,7 @@ GTEST_TEST(ParticlesClassTest, TestParticlesBatch) {
   const double h = 1.0;
 
   Particles<double> particles = Particles<double>();
+  CorotatedElasticModel<double> model(2.0, 0.2);
 
   Vector3<double> particle_A_position{2.1, 2.9, 3.9};
   // its batch index should be {2,3,4}
@@ -81,11 +87,16 @@ GTEST_TEST(ParticlesClassTest, TestParticlesBatch) {
   Vector3<double> particle_E_position{1.7, 3.1, 4.4};
   // its batch index should be {2,3,4}
 
-  particles.AddParticle(particle_A_position, Vector3<double>::Zero(), 1.0, 1.0);
-  particles.AddParticle(particle_B_position, Vector3<double>::Zero(), 2.0, 2.0);
-  particles.AddParticle(particle_C_position, Vector3<double>::Zero(), 3.0, 3.0);
-  particles.AddParticle(particle_D_position, Vector3<double>::Zero(), 4.0, 4.0);
-  particles.AddParticle(particle_E_position, Vector3<double>::Zero(), 5.0, 5.0);
+  particles.AddParticle(particle_A_position, Vector3<double>::Zero(),
+                        model.Clone(), 1.0, 1.0);
+  particles.AddParticle(particle_B_position, Vector3<double>::Zero(),
+                        model.Clone(), 2.0, 2.0);
+  particles.AddParticle(particle_C_position, Vector3<double>::Zero(),
+                        model.Clone(), 3.0, 3.0);
+  particles.AddParticle(particle_D_position, Vector3<double>::Zero(),
+                        model.Clone(), 4.0, 4.0);
+  particles.AddParticle(particle_E_position, Vector3<double>::Zero(),
+                        model.Clone(), 5.0, 5.0);
   particles.Prepare(h);
 
   const std::vector<Vector3<int>> base_nodes = particles.base_nodes();
