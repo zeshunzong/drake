@@ -159,6 +159,15 @@ class SparseGrid {
                          GridData<T>* grid_data) const;
 
   /**
+   * Computes the forces on grid by adding stresses stored on pads.
+   * @note this is a partial version of GatherFromP2gPads(), where only grid
+   * forces are computed.
+   * @pre Pads doesn't contain data into non-active region of the grid.
+   */
+  void GatherForceFromP2gPads(const std::vector<P2gPad<T>>& p2g_pads,
+                              std::vector<Vector3<T>>* grid_forces) const;
+
+  /**
    * Computes the mass and momentum of the body embedded in this grid, by
    * summing over all active grid nodes.
    */

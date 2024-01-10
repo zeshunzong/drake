@@ -15,59 +15,18 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
+template <typename T>
+struct TransferScratch {
+  // scratch pads for transferring states from particles to grid nodes
+  // there will be one pad for each particle
+  std::vector<P2gPad<T>> p2g_pads{};
+  // scratch pad for transferring states from grid nodes to particles
+  G2pPad<T> g2p_pad{};
+};
+
 /**
  * An implementation of MPM's transfer schemes. We follow Section 10.5 in
  * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf.
- *
- * Have the following things in hand to advance from tₙ to tₙ₊₁:
- *
- * Particles<double> particles; -- carries state of Lagrangian particles at tₙ
- * SparseGrid<double> sparse_grid; -- auxiliary structure for indexing
- * GridData<double> grid_data; -- zero-initialized, to hold grid state
- * MpmTransfer<double> mpm_transfer; -- transfer functions
- * ParticlesData<double> particles_data; -- data holder for particles
- *
- * @note Below Gₙ represents grid velocities, Pₙ represents all states stored
- * on particles.
- *
- * In: Pₙ particles at tₙ
- * Out: Gₙ₊₁ grid state at tₙ₊₁, Pₙ₊₁ particles at tₙ₊₁.
- *
- * Explicit temporal advancement:
- * ```
- * mpm_transfer.SetupTransfer(&sparse_grid, &particles);
- * // Gₙ = P2G(Pₙ)
- * mpm_transfer.P2G(particles, grid, &grid_data);
- * // compute Gₙ₊₁
- * TODO(zeshunzong): mpm_transfer.AddGravity(&grid_data);
- * // particle_data = G2P(Gₙ₊₁)
- * mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
- * // update particles state except for position
- * mpm_transfer.UpdateParticlesState(particles_data, dt, &particles);
- * // afterwards we get Pₙ₊₁
- * particles.AdvectParticles(dt);
- * ```
- *
- * Implicit temporal advancement:
- * ```
- * mpm_transfer.SetupTransfer(&sparse_grid, &particles);
- * dG = ∞
- * while |dG|>ε:
- *   // Gₙ = P2G(Pₙ)
- *   mpm_transfer.P2G(particles, grid, &grid_data);
- *   // Solve the linear system H(Pₙ)⋅dG = -f(Pₙ)
- *   @note H and f depend on weights and particle deformation gradients
- *   TODO(zeshunzong): LinearSolve(H, f, Pₙ, &dg)
- *   Gₙ = Gₙ + dG
- *   // particle_data = G2P(Gₙ₊₁)
- *   mpm_transfer.G2P(grid, grid_data, particles, &particles_data);
- *   // Pₙ = UpdateParticlesState(particle_data)
- *   mpm_transfer.UpdateParticlesState(particles_data, dt, &particles);
- * end
- * // afterwards we get Pₙ₊₁
- * particles.AdvectParticles(dt);
- * Output Gₙ₊₁:=Gₙ, Pₙ₊₁:=Pₙ.
- * ```
  */
 template <typename T>
 class MpmTransfer {
@@ -91,7 +50,7 @@ class MpmTransfer {
    * grid_data.
    */
   void P2G(const Particles<T>& particles, const SparseGrid<T>& grid,
-           GridData<T>* grid_data);
+           GridData<T>* grid_data, TransferScratch<T>* scratch) const;
 
   /**
    * Grid to particles transfer.
@@ -100,7 +59,8 @@ class MpmTransfer {
    * Given grid_data, writes particle v, B, and grad_v to particles_data.
    */
   void G2P(const SparseGrid<T>& grid, const GridData<T>& grid_data,
-           const Particles<T>& particles, ParticlesData<T>* particles_data);
+           const Particles<T>& particles, ParticlesData<T>* particles_data,
+           TransferScratch<T>* scratch) const;
 
   /**
    * Updates velocity, B-matrix, trial deformation gradient, elastic deformation
@@ -113,12 +73,27 @@ class MpmTransfer {
   void UpdateParticlesState(const ParticlesData<T>& particles_data, double dt,
                             Particles<T>* particles) const;
 
- private:
-  // scratch pads for transferring states from particles to grid nodes
-  std::vector<P2gPad<T>> p2g_pads_{};
-
-  // scratch pad for transferring states from grid nodes to particles
-  G2pPad<T> g2p_pad_{};
+  /**
+   * Computes the grid_forces at all active grid nodes.
+   * fᵢ = − ∑ₚ V⁰ₚ P F₀ᵀ ∇ wᵢₚ
+   * Also see the accompanied energy_derivatives.md.
+   * @note the computation is similar to P2G, with only grid forces being
+   * computed.
+   * @note the computation depends implicitly on the grid velocities through
+   * the first Piola-Kirchhoff stresses `Ps`, which should be computed from the
+   * grid velocities.
+   * @note the computation depends on the current elastic_deformation_gradient
+   * F₀ stored in particles (for chain rule).
+   * @pre Ps.size() == particles.num_particles().
+   */
+  void ComputeGridElasticForces(const Particles<T>& particles,
+                                const SparseGrid<T>& grid,
+                                const std::vector<Matrix3<T>>& Ps,
+                                std::vector<Vector3<T>>* grid_elastic_forces,
+                                TransferScratch<T>* scratch) const {
+    particles.SplatStressToP2gPads(Ps, &(scratch->p2g_pads));
+    grid.GatherForceFromP2gPads(scratch->p2g_pads, grid_elastic_forces);
+  }
 };
 
 }  // namespace mpm
