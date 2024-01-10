@@ -195,6 +195,8 @@ drake_cc_library(
     deps = [
         ":particles_to_bgeo",
         ":matrix_replacement",
+        "//multibody/mpm/internal:analytic_level_set",
+        "//multibody/mpm/internal:poisson_disk",
     ],
 )
 
