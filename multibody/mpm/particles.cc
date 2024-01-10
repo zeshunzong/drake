@@ -119,7 +119,7 @@ void Particles<T>::SplatToP2gPads(double h,
       weights_[p].SplatParticleDataToP2gPad(
           GetMassAt(p), GetPositionAt(p), GetVelocityAt(p),
           GetAffineMomentumMatrixAt(p, h), GetReferenceVolumeAt(p),
-          GetPKStressAt(p), GetElasticDeformationGradientAt(p), base_nodes_[i],
+          GetPKStressAt(p), GetElasticDeformationGradientAt(p), base_nodes_[p],
           h, &p2g_pad);
     }
   }
@@ -139,7 +139,7 @@ void Particles<T>::SplatStressToP2gPads(
     for (size_t p = p_start; p < p_end; ++p) {
       weights_[p].SplatParticleStressToP2gPad(
           GetReferenceVolumeAt(p), Ps[p], GetElasticDeformationGradientAt(p),
-          base_nodes_[i], &p2g_pad);
+          base_nodes_[p], &p2g_pad);
     }
   }
 }

@@ -57,13 +57,19 @@ class GridData {
 
   /**
    * Computes the velocity for momentum for each active grid node.
-   * @pre masses_[i] > 0 for all i. This will be satisfied if only active grid
-   * nodes are stored and grid data for each active grid node has already been
-   * accumulated.
+   * velocity = momentum / mass.
+   * @note usually the mass will be non-zero, except when all particles fall
+   * right on the boundary of the support of B-spline kernel for this node.
+   * @note when mass is zero, momentum will also be zero, and velocity is
+   * clearly zero. We add an if statement to prevent 0/0.
    */
   void ComputeVelocitiesFromMomentums() {
     for (size_t i = 0; i < masses_.size(); ++i) {
-      velocities_[i] = momentums_[i] / masses_[i];
+      if (masses_[i] == 0.0) {
+        velocities_[i].setZero();
+      } else {
+        velocities_[i] = momentums_[i] / masses_[i];
+      }
     }
   }
 
