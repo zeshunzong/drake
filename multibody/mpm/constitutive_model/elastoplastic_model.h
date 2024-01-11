@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "drake/common/unused.h"
 #include "drake/multibody/fem/matrix_utilities.h"
 #include "drake/multibody/mpm/internal/math_utils.h"
 
@@ -48,7 +49,8 @@ class ElastoPlasticModel {
   // Returns ψ(FE) where ψ is the energy density function. FE is the *elastic*
   // part of deformation gradient.
   // TODO(zeshunzong): consider adding an Eval function based on cached FE.
-  virtual T CalcStrainEnergyDensity(const Matrix3<T>& FE) const = 0;
+  virtual T CalcStrainEnergyDensity(const Matrix3<T>& F0,
+                                    const Matrix3<T>& FE) const = 0;
 
   // Calculates the first Piola Kirchhoff stress P = dψ(FE)/dFE, where FE is the
   // *elastic* deformation gradient.
@@ -56,7 +58,7 @@ class ElastoPlasticModel {
   // CalcKirchhoffStress().
   // @pre P != nullptr
   // TODO(zeshunzong): consider adding an Eval function based on cached FE
-  virtual void CalcFirstPiolaStress(const Matrix3<T>& FE,
+  virtual void CalcFirstPiolaStress(const Matrix3<T>& F0, const Matrix3<T>& FE,
                                     Matrix3<T>* P) const = 0;
 
   // Calculates the Kirchhoff stress τ. FE is the *elastic* deformation
@@ -64,7 +66,7 @@ class ElastoPlasticModel {
   // CalcFirstPiolaStress().
   // @pre tau != nullptr
   // TODO(zeshunzong): consider adding an Eval function based on cached FE
-  virtual void CalcKirchhoffStress(const Matrix3<T>& FE,
+  virtual void CalcKirchhoffStress(const Matrix3<T>& F0, const Matrix3<T>& FE,
                                    Matrix3<T>* tau) const = 0;
 
   // Calculates the derivative of first Piola stress with respect to the
@@ -97,7 +99,8 @@ class ElastoPlasticModel {
   // @pre dPdF != nullptr
   // @note the returned dPdF is symmetric.
   virtual void CalcFirstPiolaStressDerivative(
-      const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF) const = 0;
+      const Matrix3<T>& F0, const Matrix3<T>& FE,
+      Eigen::Matrix<T, 9, 9>* dPdF) const = 0;
 
  protected:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(ElastoPlasticModel);

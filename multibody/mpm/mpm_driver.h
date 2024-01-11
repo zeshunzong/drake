@@ -115,24 +115,21 @@ class MpmDriver {
     }
 
     DeformationState<T> deformation_state(particles_, sparse_grid_, grid_data_);
-
     v_prev_ = grid_data_.velocities();
 
     int count = 0;
-    dG_norm_ = std::numeric_limits<T>::infinity();
-    while (dG_norm_ > newton_epsilon_) {
-      if (count > max_newton_iter_) {
-        break;
-      }
+    for (; count < max_newton_iter_; ++count) {
       deformation_state.Update(transfer_, dt_, &scratch_);
       // find minus_gradient
       model_.ComputeMinusDEnergyDV(transfer_, v_prev_, deformation_state, dt_,
                                    &minus_dEdv_, &scratch_);
 
-      if (apply_ground_) {
+      if (apply_ground_) 
         ProjectCollisionGround(&minus_dEdv_);
-      }
-
+      
+      if ((minus_dEdv_.norm() < newton_epsilon_) && (count > 0))
+        break;
+  
       // find dG_ = hessian^-1 * minus_gradient
       if (matrix_free_) {
         MatrixReplacement<T> hessian_operator =
@@ -147,10 +144,6 @@ class MpmDriver {
       }
 
       grid_data_.AddDG(dG_);
-
-      dG_norm_ = dG_.norm();
-
-      ++count;
     }
     return count;
   }

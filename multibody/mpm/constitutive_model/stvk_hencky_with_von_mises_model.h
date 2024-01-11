@@ -93,19 +93,23 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
 
   // @note The input FE should be *elastic* deformation gradient.
   // @note The calculation ignores the effect of plasticity.
-  T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
+  T CalcStrainEnergyDensity(const Matrix3<T>& F0,
+                            const Matrix3<T>& FE) const final;
 
   // @note The input FE should be *elastic* deformation gradient.
   // @note The calculation ignores the effect of plasticity.
-  void CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix3<T>* P) const final;
+  void CalcFirstPiolaStress(const Matrix3<T>& F0, const Matrix3<T>& FE,
+                            Matrix3<T>* P) const final;
 
   // @note The input FE should be *elastic* deformation gradient.
   // @note The calculation ignores the effect of plasticity.
-  void CalcKirchhoffStress(const Matrix3<T>& FE, Matrix3<T>* tau) const final;
+  void CalcKirchhoffStress(const Matrix3<T>& F0, const Matrix3<T>& FE,
+                           Matrix3<T>* tau) const final;
 
   // @note The input FE should be *elastic* deformation gradient.
   // @note The calculation ignores the effect of plasticity.
-  void CalcFirstPiolaStressDerivative(const Matrix3<T>& FE,
+  void CalcFirstPiolaStressDerivative(const Matrix3<T>& F0,
+                                      const Matrix3<T>& FE,
                                       Eigen::Matrix<T, 9, 9>* dPdF) const final;
 
   // Returns f(dev(τ)) = sqrt(3/2)‖ dev(τ) ‖ - τ_c, where dev(τ) is the

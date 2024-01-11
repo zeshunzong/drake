@@ -12,7 +12,8 @@ CorotatedElasticModel<T>::CorotatedElasticModel(const T& youngs_modulus,
 
 template <typename T>
 T CorotatedElasticModel<T>::CalcStrainEnergyDensity(
-    const Matrix3<T>& FE) const {
+    const Matrix3<T>& F0, const Matrix3<T>& FE) const {
+  unused(F0);
   Eigen::JacobiSVD<Matrix3<T>> svd(FE);
   Vector3<T> sigma = svd.singularValues();
   T J = sigma(0) * sigma(1) * sigma(2);
@@ -30,8 +31,10 @@ void CorotatedElasticModel<T>::CalcFEFromFtrial(const Matrix3<T>& F_trial,
 }
 
 template <typename T>
-void CorotatedElasticModel<T>::CalcFirstPiolaStress(const Matrix3<T>& FE,
+void CorotatedElasticModel<T>::CalcFirstPiolaStress(const Matrix3<T>& F0,
+                                                    const Matrix3<T>& FE,
                                                     Matrix3<T>* P) const {
+  unused(F0);
   Matrix3<T> R, S, JFinvT;
   fem::internal::PolarDecompose<T>(FE, &R, &S);
   fem::internal::CalcCofactorMatrix<T>(FE, &JFinvT);
@@ -40,8 +43,10 @@ void CorotatedElasticModel<T>::CalcFirstPiolaStress(const Matrix3<T>& FE,
 }
 
 template <typename T>
-void CorotatedElasticModel<T>::CalcKirchhoffStress(const Matrix3<T>& FE,
+void CorotatedElasticModel<T>::CalcKirchhoffStress(const Matrix3<T>& F0,
+                                                   const Matrix3<T>& FE,
                                                    Matrix3<T>* tau) const {
+  unused(F0);
   Matrix3<T> R, S;
   T J = FE.determinant();
   fem::internal::PolarDecompose<T>(FE, &R, &S);
@@ -51,7 +56,9 @@ void CorotatedElasticModel<T>::CalcKirchhoffStress(const Matrix3<T>& FE,
 
 template <typename T>
 void CorotatedElasticModel<T>::CalcFirstPiolaStressDerivative(
-    const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF) const {
+    const Matrix3<T>& F0, const Matrix3<T>& FE,
+    Eigen::Matrix<T, 9, 9>* dPdF) const {
+  unused(F0);
   Matrix3<T> R, S, JFinvT;
   fem::internal::PolarDecompose<T>(FE, &R, &S);
   fem::internal::CalcCofactorMatrix<T>(FE, &JFinvT);

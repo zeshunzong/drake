@@ -21,6 +21,7 @@ drake_cc_library(
     ],
     deps = [
         "//common:essential",
+        "//common:unused",
         "//multibody/fem:matrix_utilities",
         "//multibody/mpm/internal:math_utils",
     ],
@@ -67,6 +68,27 @@ drake_cc_googletest(
     name = "stvk_hencky_with_von_mises_model_test",
     deps = [
         ":stvk_hencky_with_von_mises_model",
+        "//common:autodiff",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//math:geometric_transform",
+        "//math:gradient",
+    ],
+)
+
+drake_cc_library(
+    name = "linear_corotated_model",
+    hdrs = [
+        "linear_corotated_model.h",
+    ],
+    deps = [
+        ":elastoplastic_model",
+    ],
+)
+
+drake_cc_googletest(
+    name = "linear_corotated_model_test",
+    deps = [
+        ":linear_corotated_model",
         "//common:autodiff",
         "//common/test_utilities:eigen_matrix_compare",
         "//math:geometric_transform",

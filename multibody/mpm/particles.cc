@@ -27,7 +27,7 @@ void Particles<T>::AddParticle(
 
   Matrix3<T> P;
   elastoplastic_models_.back()->CalcFirstPiolaStress(
-      elastic_deformation_gradient, &P);
+      Matrix3<T>::Identity(), elastic_deformation_gradient, &P);
   PK_stresses_.emplace_back(P);
   B_matrices_.emplace_back(B_matrix);
 
@@ -191,8 +191,10 @@ void Particles<T>::ComputeFsPsdPdFs(
 
     F = (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
         GetElasticDeformationGradientAt(p);
-    elastoplastic_models_[p]->CalcFirstPiolaStress(F, &P);
-    elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(F, &dPdF);
+    elastoplastic_models_[p]->CalcFirstPiolaStress(
+        elastic_deformation_gradients_[p], F, &P);
+    elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(
+        elastic_deformation_gradients_[p], F, &dPdF);
   }
 }
 

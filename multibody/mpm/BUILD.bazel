@@ -205,6 +205,7 @@ drake_cc_googletest(
     deps = [
         ":mpm_driver",
         "//common/test_utilities:eigen_matrix_compare",
+        "//multibody/mpm/constitutive_model:linear_corotated_model",
     ],
 )
 

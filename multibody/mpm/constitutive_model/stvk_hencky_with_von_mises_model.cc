@@ -15,7 +15,8 @@ StvkHenckyWithVonMisesModel<T>::StvkHenckyWithVonMisesModel(const T& E,
 
 template <typename T>
 T StvkHenckyWithVonMisesModel<T>::CalcStrainEnergyDensity(
-    const Matrix3<T>& FE) const {
+    const Matrix3<T>& F0, const Matrix3<T>& FE) const {
+  unused(F0);
   // psi = μ tr((log Σ)^2) + 1/2 λ (tr(log Σ))^2
   StrainStressData strain_stress_data = ComputeStrainStressData(FE);
 
@@ -39,8 +40,10 @@ void StvkHenckyWithVonMisesModel<T>::CalcFEFromFtrial(const Matrix3<T>& F_trial,
 }
 
 template <typename T>
-void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStress(const Matrix3<T>& FE,
+void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStress(const Matrix3<T>& F0,
+                                                          const Matrix3<T>& FE,
                                                           Matrix3<T>* P) const {
+  unused(F0);
   // Here FE is *elastic* deformation gradient
   // P = U (2 μ Σ^{-1} (log Σ) + λ tr(log Σ) Σ^{-1}) V^T
   const StrainStressData strain_stress_data = ComputeStrainStressData(FE);
@@ -55,7 +58,8 @@ void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStress(const Matrix3<T>& FE,
 
 template <typename T>
 void StvkHenckyWithVonMisesModel<T>::CalcKirchhoffStress(
-    const Matrix3<T>& FE, Matrix3<T>* tau) const {
+    const Matrix3<T>& F0, const Matrix3<T>& FE, Matrix3<T>* tau) const {
+  unused(F0);
   // Here FE is *elastic* deformation gradient
   // The Kirchhoff stress can be then written as
   // τ = U Σᵢ Uᵀ, where Σᵢ = 2μ log(σᵢ) + λ ∑ᵢ log(σᵢ).
@@ -71,7 +75,9 @@ void StvkHenckyWithVonMisesModel<T>::CalcKirchhoffStress(
 
 template <typename T>
 void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStressDerivative(
-    const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF) const {
+    const Matrix3<T>& F0, const Matrix3<T>& FE,
+    Eigen::Matrix<T, 9, 9>* dPdF) const {
+  unused(F0);
   const PsiSigmaDerivatives psi_derivatives = CalcPsiSigmaDerivative(FE);
   const StrainStressData ssd = ComputeStrainStressData(FE);
   for (int ij = 0; ij < 9; ++ij) {

@@ -21,6 +21,8 @@ namespace {
 using Eigen::Matrix3d;
 
 constexpr double kTolerance = 1e-12;
+Matrix3<AutoDiffXd> unused_F0_autodiff;
+Matrix3<double> unused_F0_double;
 
 Matrix3<AutoDiffXd> MakeDeformationGradientsWithDerivatives() {
   /* Create an arbitrary AutoDiffXd deformation. */
@@ -77,11 +79,11 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed1;
-  model1.CalcKirchhoffStress(FE_1, &tau_computed1);
+  model1.CalcKirchhoffStress(unused_F0_double, FE_1, &tau_computed1);
 
   // Compute First Piola stress from FE
   Matrix3<double> piola_stress_computed1;
-  model1.CalcFirstPiolaStress(FE_1, &piola_stress_computed1);
+  model1.CalcFirstPiolaStress(unused_F0_double, FE_1, &piola_stress_computed1);
 
   // verify the relationship between P and τ
   // P = τ * FE^{-T}, or P * FE^T = τ
@@ -115,11 +117,11 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed2;
-  model2.CalcKirchhoffStress(FE_2, &tau_computed2);
+  model2.CalcKirchhoffStress(unused_F0_double, FE_2, &tau_computed2);
 
   // Compute First Piola stress from FE
   Matrix3<double> piola_stress_computed2;
-  model2.CalcFirstPiolaStress(FE_2, &piola_stress_computed2);
+  model2.CalcFirstPiolaStress(unused_F0_double, FE_2, &piola_stress_computed2);
 
   // verify the relationship between P and τ
   // P = τ * FE^{-T}, or P * FE^T = τ
@@ -138,7 +140,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
   Matrix3<double> FE_rot;
   model2.CalcFEFromFtrial(F_trial_rot, &FE_rot);
   Matrix3<double> tau_computed_zero;
-  model2.CalcKirchhoffStress(FE_rot, &tau_computed_zero);
+  model2.CalcKirchhoffStress(unused_F0_double, FE_rot, &tau_computed_zero);
   EXPECT_TRUE(
       CompareMatrices(tau_computed_zero, Matrix3<double>::Zero(), kTolerance));
 
@@ -149,7 +151,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
   Matrix3<double> FE_rot2;
   model1.CalcFEFromFtrial(F_trial_rot2, &FE_rot2);
   Matrix3<double> tau_computed_zero2;
-  model1.CalcKirchhoffStress(FE_rot2, &tau_computed_zero2);
+  model1.CalcKirchhoffStress(unused_F0_double, FE_rot2, &tau_computed_zero2);
   EXPECT_TRUE(
       CompareMatrices(tau_computed_zero2, Matrix3<double>::Zero(), kTolerance));
 }
@@ -158,19 +160,19 @@ GTEST_TEST(CorotatedElasticModelTest, TestEnergyDerivatives) {
   // Test P is derivative of Psi
   CorotatedElasticModel<AutoDiffXd> model(3.14159, 0.3337);
   Matrix3<AutoDiffXd> F = MakeDeformationGradientsWithDerivatives();
-  AutoDiffXd f = model.CalcStrainEnergyDensity(F);
+  AutoDiffXd f = model.CalcStrainEnergyDensity(unused_F0_autodiff, F);
   Matrix3<AutoDiffXd> dfdF;
-  model.CalcFirstPiolaStress(F, &dfdF);
+  model.CalcFirstPiolaStress(unused_F0_autodiff, F, &dfdF);
   EXPECT_TRUE(
       CompareMatrices(Eigen::Map<const Matrix3d>(f.derivatives().data(), 3, 3),
                       dfdF, kTolerance));
 
   // Test dPdF is derivative of P
   Matrix3<AutoDiffXd> P;
-  model.CalcFirstPiolaStress(F, &P);
+  model.CalcFirstPiolaStress(unused_F0_autodiff, F, &P);
 
   Eigen::Matrix<AutoDiffXd, 9, 9> dPdF;
-  model.CalcFirstPiolaStressDerivative(F, &dPdF);
+  model.CalcFirstPiolaStressDerivative(unused_F0_autodiff, F, &dPdF);
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
       Matrix3d dPijdF;

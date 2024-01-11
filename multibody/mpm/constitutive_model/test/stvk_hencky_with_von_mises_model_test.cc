@@ -20,6 +20,8 @@ namespace {
 constexpr double kTolerance = 1e-12;
 using Eigen::Matrix3d;
 using Eigen::Matrix3Xd;
+Matrix3<AutoDiffXd> unused_F0_autodiff;
+Matrix3<double> unused_F0_double;
 
 Matrix3<AutoDiffXd> MakeDeformationGradientsWithDerivatives() {
   /* Create an arbitrary AutoDiffXd deformation. */
@@ -59,13 +61,14 @@ GTEST_TEST(StvkWithVonMisesModelTest, SanityCheck) {
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed;
-  hencky_model.CalcKirchhoffStress(FE, &tau_computed);
+  hencky_model.CalcKirchhoffStress(unused_F0_double, FE, &tau_computed);
   EXPECT_TRUE(
       CompareMatrices(tau_computed, Matrix3<double>::Zero(), kTolerance));
 
   // Compute First Piola stress from FE
   Matrix3<double> piola_stress_computed;
-  hencky_model.CalcFirstPiolaStress(FE, &piola_stress_computed);
+  hencky_model.CalcFirstPiolaStress(unused_F0_double, FE,
+                                    &piola_stress_computed);
   EXPECT_TRUE(CompareMatrices(piola_stress_computed, Matrix3<double>::Zero(),
                               kTolerance));
 }
@@ -160,11 +163,12 @@ GTEST_TEST(StvkWithVonMisesModelTest, TestPsiTauP) {
   Matrix3<double> FE;
   hencky_model.CalcFEFromFtrial(F_trial, &FE);
   Matrix3<double> piola_stress_computed;
-  hencky_model.CalcFirstPiolaStress(FE, &piola_stress_computed);
+  hencky_model.CalcFirstPiolaStress(unused_F0_double, FE,
+                                    &piola_stress_computed);
   EXPECT_TRUE(CompareMatrices(piola_stress_computed, P_exact, kTolerance));
 
   Matrix3<double> tau_computed;
-  hencky_model.CalcKirchhoffStress(FE, &tau_computed);
+  hencky_model.CalcKirchhoffStress(unused_F0_double, FE, &tau_computed);
   EXPECT_TRUE(
       CompareMatrices(tau_computed, P_exact * FE.transpose(), kTolerance));
 }
@@ -175,19 +179,19 @@ GTEST_TEST(StvkWithVonMisesModelTest, TestEnergyDerivatives) {
   Matrix3<AutoDiffXd> FE = MakeDeformationGradientsWithDerivatives();
   // differentiate w.r.t. elastic deformation gradient. Here we neglect return
   // mapping
-  AutoDiffXd f = model.CalcStrainEnergyDensity(FE);
+  AutoDiffXd f = model.CalcStrainEnergyDensity(unused_F0_autodiff, FE);
   Matrix3<AutoDiffXd> dfdF;
-  model.CalcFirstPiolaStress(FE, &dfdF);
+  model.CalcFirstPiolaStress(unused_F0_autodiff, FE, &dfdF);
   EXPECT_TRUE(
       CompareMatrices(Eigen::Map<const Matrix3d>(f.derivatives().data(), 3, 3),
                       dfdF, kTolerance));
 
   // Test dPdF is derivative of P
   Matrix3<AutoDiffXd> P;
-  model.CalcFirstPiolaStress(FE, &P);
+  model.CalcFirstPiolaStress(unused_F0_autodiff, FE, &P);
 
   Eigen::Matrix<AutoDiffXd, 9, 9> dPdF;
-  model.CalcFirstPiolaStressDerivative(FE, &dPdF);
+  model.CalcFirstPiolaStressDerivative(unused_F0_autodiff, FE, &dPdF);
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
       Matrix3d dPijdF;

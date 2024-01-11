@@ -25,13 +25,17 @@ class CorotatedElasticModel : public ElastoPlasticModel<T> {
 
   void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final;
 
-  T CalcStrainEnergyDensity(const Matrix3<T>& FE) const final;
+  T CalcStrainEnergyDensity(const Matrix3<T>& F0,
+                            const Matrix3<T>& FE) const final;
 
-  void CalcFirstPiolaStress(const Matrix3<T>& FE, Matrix3<T>* P) const final;
+  void CalcFirstPiolaStress(const Matrix3<T>& F0, const Matrix3<T>& FE,
+                            Matrix3<T>* P) const final;
 
-  void CalcKirchhoffStress(const Matrix3<T>& FE, Matrix3<T>* tau) const final;
+  void CalcKirchhoffStress(const Matrix3<T>& F0, const Matrix3<T>& FE,
+                           Matrix3<T>* tau) const final;
 
-  void CalcFirstPiolaStressDerivative(const Matrix3<T>& FE,
+  void CalcFirstPiolaStressDerivative(const Matrix3<T>& F0,
+                                      const Matrix3<T>& FE,
                                       Eigen::Matrix<T, 9, 9>* dPdF) const final;
 };
 

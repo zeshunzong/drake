@@ -362,7 +362,8 @@ class Particles {
           trial_deformation_gradients_[p],
           &(elastic_deformation_gradients_[p]));
       elastoplastic_models_[p]->CalcFirstPiolaStress(
-          elastic_deformation_gradients_[p], &(PK_stresses_[p]));
+          elastic_deformation_gradients_[p], elastic_deformation_gradients_[p],
+          &(PK_stresses_[p]));
     }
   }
 
@@ -393,7 +394,8 @@ class Particles {
     T sum = 0;
     for (size_t p = 0; p < num_particles(); ++p) {
       sum += reference_volumes_[p] *
-             elastoplastic_models_[p]->CalcStrainEnergyDensity(F_all[p]);
+             elastoplastic_models_[p]->CalcStrainEnergyDensity(
+                 elastic_deformation_gradients_[p], F_all[p]);
     }
     return sum;
   }
