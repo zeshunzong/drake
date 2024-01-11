@@ -179,6 +179,22 @@ class MpmModel {
 
   const Vector3<T>& gravity() const { return gravity_; }
 
+  // precondition for cg solve, currently this is MASS
+  // that is, in absense of elastic deformation, this is equivalent to diagonal
+  // preconditioner
+  void Precondition(const DeformationState<T>& deformation_state,
+                    const Eigen::VectorX<T>& rhs, Eigen::VectorX<T>* x) const {
+    for (size_t i = 0; i < deformation_state.grid_data().num_active_nodes();
+         ++i) {
+      if (deformation_state.grid_data().masses()[i] > 0.0) {
+        (*x).segment(3 * i, 3) =
+            rhs.segment(3 * i, 3) / deformation_state.grid_data().masses()[i];
+      } else {
+        (*x).segment(3 * i, 3) = rhs.segment(3 * i, 3);
+      }
+    }
+  }
+
  private:
   // Kinetic energy = 0.5 * m * (v - v_prev)ᵀ(v - v_prev).
   // Gravitational energy = - m*dt*gᵀv. Since we only care about its gradient,

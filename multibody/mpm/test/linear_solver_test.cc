@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
+#include "drake/multibody/mpm/conjugate_gradient.h"
 #include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
 #include "drake/multibody/mpm/matrix_replacement.h"
 
@@ -69,6 +70,7 @@ GTEST_TEST(LinearSolverTest, TestCG) {
 
   Eigen::ConjugateGradient<MatrixX<double>, Eigen::Lower | Eigen::Upper>
       cg_dense;
+  cg_dense.setTolerance(1e-15);  // set same tol for each version of cg
   cg_dense.compute(hessian_dense);
   x_dense = cg_dense.solve(b);
   std::cout << "#iterations:     " << cg_dense.iterations() << std::endl;
@@ -86,6 +88,7 @@ GTEST_TEST(LinearSolverTest, TestCG) {
                            Eigen::Lower | Eigen::Upper,
                            Eigen::IdentityPreconditioner>
       cg_matrix_free;
+  cg_matrix_free.setTolerance(1e-15);  // set same tol for each version of cg
   cg_matrix_free.compute(hessian_matrix_free);
   x_matrix_free = cg_matrix_free.solve(b);
   std::cout << "CG_matrix free:#iterations: " << cg_matrix_free.iterations()
@@ -99,6 +102,14 @@ GTEST_TEST(LinearSolverTest, TestCG) {
   EXPECT_TRUE(CompareMatrices(x_dense, x_matrix_free, kTolerance));
 
   // @note matrix-free CG seems to run considerably more iterations
+
+  HessianWrapper hessian_wrapper(mpm_transfer, mpm_model, deformation_state,
+                                 dt);
+
+  CongugateGradient cg;
+  Eigen::VectorXd x;
+  cg.Solve(hessian_wrapper, b, &x);
+  EXPECT_TRUE(CompareMatrices(hessian_dense * x, b, kTolerance));
 }
 
 }  // namespace

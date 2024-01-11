@@ -159,6 +159,16 @@ drake_cc_googletest(
 )
 
 drake_cc_library(
+    name = "conjugate_gradient",
+    hdrs = [
+        "conjugate_gradient.h",
+    ],
+    deps = [
+        ":mpm_model",
+    ],
+)
+
+drake_cc_library(
     name = "matrix_replacement",
     hdrs = [
         "matrix_replacement.h",
@@ -171,6 +181,7 @@ drake_cc_library(
 drake_cc_googletest(
     name = "linear_solver_test",
     deps = [
+        ":conjugate_gradient",
         ":matrix_replacement",
         "//common/test_utilities:eigen_matrix_compare",
     ],
