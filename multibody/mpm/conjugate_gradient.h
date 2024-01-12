@@ -94,7 +94,7 @@ class CongugateGradient {
   Eigen::VectorXd p_;
   Eigen::VectorXd Ap_;  // stores A*p_
 
-  double tolerance_ = 1e-15;
+  double tolerance_ = 1e-10;
   int max_CG_iter_ = 1e5;  // copy from fangyu
 };
 
