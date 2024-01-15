@@ -88,8 +88,6 @@ class MpmDriver {
   }
 
   int AdvanceDt() {
-    // TODO(zeshunzong): precondition
-    // TODO(zeshunzong): line search
 
     int num_newtons = ComputeGridVelocities();
     std::cout << "num newtons: " << num_newtons << std::endl;

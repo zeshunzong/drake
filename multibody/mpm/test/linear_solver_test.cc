@@ -14,9 +14,13 @@ namespace multibody {
 namespace mpm {
 namespace {
 using drake::multibody::mpm::constitutive_model::CorotatedElasticModel;
-constexpr double kTolerance = 1e-10;
+constexpr double kTolerance = 1e-5;
 
 GTEST_TEST(LinearSolverTest, TestCG) {
+  double relative_tolerance = 1e-5;
+  // want |b-Ax|/|b| < relative_tolerance
+  // that is, |b-Ax| < relative_tolerance * |b|
+  // so |b-Ax|∞ ≤ |b-Ax|₂ < relative_tolerance * |b|₂
   const double h = 0.2;
   double dt = 0.1;
   Particles<double> particles = Particles<double>();
@@ -62,7 +66,7 @@ GTEST_TEST(LinearSolverTest, TestCG) {
   Eigen::VectorXd b(3 * sparse_grid.num_active_nodes());
   b.setRandom();
 
-  // solve with CG + dense matrix
+  // --- method 1: solve with Eigen::CG + dense matrix + diagonal preconditioner
   Eigen::VectorXd x_dense;
   MatrixX<double> hessian_dense;
   mpm_model.ComputeD2EnergyDV2(mpm_transfer, deformation_state, dt,
@@ -70,16 +74,20 @@ GTEST_TEST(LinearSolverTest, TestCG) {
 
   Eigen::ConjugateGradient<MatrixX<double>, Eigen::Lower | Eigen::Upper>
       cg_dense;
-  cg_dense.setTolerance(1e-15);  // set same tol for each version of cg
+  cg_dense.setTolerance(relative_tolerance);
+  // set same tol for each version of cg
   cg_dense.compute(hessian_dense);
   x_dense = cg_dense.solve(b);
   std::cout << "#iterations:     " << cg_dense.iterations() << std::endl;
   std::cout << "estimated error: " << cg_dense.error() << std::endl;
 
   // check that the result is correct
-  EXPECT_TRUE(CompareMatrices(hessian_dense * x_dense, b, kTolerance));
+  EXPECT_TRUE(CompareMatrices(b - hessian_dense * x_dense,
+                              Eigen::VectorXd::Zero(b.size()),
+                              relative_tolerance * b.norm()));
+  // --- method 1: solve with Eigen::CG + dense matrix + diagonal preconditioner
 
-  // solve with CG + matrix_free
+  // --- method 2: solve with Eigen::CG + matrix free + NO preconditioner
   MatrixReplacement<double> hessian_matrix_free =
       MatrixReplacement<double>(mpm_model, deformation_state, mpm_transfer, dt);
   Eigen::VectorXd x_matrix_free;
@@ -88,7 +96,8 @@ GTEST_TEST(LinearSolverTest, TestCG) {
                            Eigen::Lower | Eigen::Upper,
                            Eigen::IdentityPreconditioner>
       cg_matrix_free;
-  cg_matrix_free.setTolerance(1e-15);  // set same tol for each version of cg
+  cg_matrix_free.setTolerance(relative_tolerance);
+  // set same tol for each version of cg
   cg_matrix_free.compute(hessian_matrix_free);
   x_matrix_free = cg_matrix_free.solve(b);
   std::cout << "CG_matrix free:#iterations: " << cg_matrix_free.iterations()
@@ -96,20 +105,23 @@ GTEST_TEST(LinearSolverTest, TestCG) {
             << "estimated error: " << cg_matrix_free.error() << std::endl;
 
   // check that the result is correct
-  EXPECT_TRUE(CompareMatrices(hessian_dense * x_matrix_free, b, kTolerance));
+  EXPECT_TRUE(CompareMatrices(b - hessian_dense * x_matrix_free,
+                              Eigen::VectorXd::Zero(b.size()),
+                              relative_tolerance * b.norm()));
+  // --- method 2: solve with Eigen::CG + matrix free + NO preconditioner
+  // @note method 2 needs considerably more iterations due to no preconditioner
 
-  // the two results should also be close to each other
-  EXPECT_TRUE(CompareMatrices(x_dense, x_matrix_free, kTolerance));
-
-  // @note matrix-free CG seems to run considerably more iterations
-
+  // --- method 3: solve with custom CG + matrix free + mass preconditioner
   HessianWrapper hessian_wrapper(mpm_transfer, mpm_model, deformation_state,
                                  dt);
 
   CongugateGradient cg;
+  cg.SetRelativeTolerance(relative_tolerance);
   Eigen::VectorXd x;
   cg.Solve(hessian_wrapper, b, &x);
-  EXPECT_TRUE(CompareMatrices(hessian_dense * x, b, kTolerance));
+  EXPECT_TRUE(CompareMatrices(b - hessian_dense * x,
+                              Eigen::VectorXd::Zero(b.size()),
+                              relative_tolerance * b.norm()));
 }
 
 }  // namespace

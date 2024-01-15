@@ -45,6 +45,9 @@ class CongugateGradient {
 
   CongugateGradient() {}
 
+  void SetRelativeTolerance(double tol) { relative_tolerance_ = tol; }
+  void SetAbsoluteTolerance(double tol) { absolute_tolerance_ = tol; }
+
   // model and state together give A
   // x is modified in place
   // CG initial guess x = 0
@@ -54,15 +57,16 @@ class CongugateGradient {
     x->resizeLike(b);
     x->setZero();
 
-    r_ = b;                   // r = b - Ax = b - 0 = b;
+    r_ = b;  // r = b - Ax = b - 0 = b;
     z_.resizeLike(b);
     A.Precondition(r_, &z_);  // find z_: Mz_ = r_
     p_ = z_;
     double b_norm = b.norm();
-    double rkTzk = std::abs(r_.dot(z_));  // do we need abs?
+    double rkTzk = r_.dot(z_);
     int k = 0;
     for (; k < max_CG_iter_; ++k) {
-      if (r_.norm() / b_norm < tolerance_) {
+      if (r_.norm() <
+          std::max(relative_tolerance_ * b_norm, absolute_tolerance_)) {
         break;
       }
 
@@ -85,7 +89,8 @@ class CongugateGradient {
       rkTzk = rkp1Tzkp1;
     }
 
-    std::cout << "CG converged after " << k << " iterations" << std::endl;
+    std::cout << "CG converged after " << k
+              << " iterations, residual = " << r_.norm() << std::endl;
     return k;
   }
 
@@ -94,7 +99,8 @@ class CongugateGradient {
   Eigen::VectorXd p_;
   Eigen::VectorXd Ap_;  // stores A*p_
 
-  double tolerance_ = 1e-10;
+  double relative_tolerance_ = 5e-5;
+  double absolute_tolerance_ = 1e-6;
   int max_CG_iter_ = 1e5;  // copy from fangyu
 };
 
