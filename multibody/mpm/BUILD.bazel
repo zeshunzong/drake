@@ -110,6 +110,18 @@ drake_cc_googletest(
 )
 
 drake_cc_library(
+    name = "mpm_state",
+    hdrs = [
+        "mpm_state.h",
+    ],
+    deps = [
+        ":sparse_grid",
+        ":particles",
+        "//multibody/mpm/internal:poisson_disk",
+    ],
+)
+
+drake_cc_library(
     name = "mpm_transfer",
     srcs = [
         "mpm_transfer.cc",
@@ -146,6 +158,8 @@ drake_cc_library(
     ],
     deps = [
         ":mpm_transfer",
+        "//multibody/mpm/internal:analytic_level_set",
+        "//systems/framework:context",
     ],
 )
 

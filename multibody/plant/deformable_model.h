@@ -10,6 +10,8 @@
 #include "drake/common/identifier.h"
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/fem/fem_model.h"
+#include "drake/multibody/mpm/mpm_model.h"
+#include "drake/multibody/mpm/mpm_state.h"
 #include "drake/multibody/plant/constraint_specs.h"
 #include "drake/multibody/plant/deformable_ids.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -38,6 +40,38 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     DRAKE_DEMAND(plant_ != nullptr);
     DRAKE_DEMAND(!plant_->is_finalized());
   }
+
+  // ---------------- newly added for MPM ---------------
+
+  DeformableBodyId RegisterMpmBody(
+      std::unique_ptr<mpm::internal::AnalyticLevelSet> level_set,
+      std::unique_ptr<mpm::constitutive_model::ElastoPlasticModel<double>>
+          constitutive_model,
+      std::unique_ptr<math::RigidTransform<double>> pose, double density,
+      double grid_h) {
+    this->ThrowIfSystemResourcesDeclared(__func__);
+    if (ExistsMpmModel()) {
+      throw std::logic_error("we only allow one mpm model");
+    }
+    mpm_model_ = std::make_unique<mpm::MpmModel<T>>();
+    mpm_model_->StoreInitialObjectParams(std::move(level_set),
+                                        std::move(constitutive_model),
+                                        std::move(pose), density, grid_h);
+
+    const DeformableBodyId body_id = DeformableBodyId::get_new_id();
+    return body_id;
+  }
+
+  bool ExistsMpmModel() const { return (mpm_model_ != nullptr); }
+
+  const mpm::MpmModel<T>& GetMpmModel() const {
+    if (mpm_model_ == nullptr) {
+      throw std::logic_error("GetMpmModel(): No MPM Model registered");
+    }
+    return *mpm_model_;
+  }
+
+  // ---------------- newly added for MPM ---------------
 
   /** Returns the number of deformable bodies registered with this
    DeformableModel. */
@@ -264,6 +298,9 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   std::map<MultibodyConstraintId, internal::DeformableRigidFixedConstraintSpec>
       fixed_constraint_specs_;
   systems::OutputPortIndex vertex_positions_port_index_;
+
+  // mpm attributes
+  std::unique_ptr<mpm::MpmModel<T>> mpm_model_;
 };
 
 }  // namespace multibody

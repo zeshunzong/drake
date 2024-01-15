@@ -3,6 +3,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/default_scalars.h"
 #include "drake/common/drake_copyable.h"

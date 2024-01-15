@@ -313,6 +313,24 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     DeformableBodyId id = body_ids_[i];
     body_id_to_index_[id] = i;
   }
+
+  // ---------------- newly added for MPM ---------------
+  if (ExistsMpmModel()) {
+    // crate mpm_state = [particles, sparse_grid]
+    mpm::MpmState<T> mpm_state(mpm_model_->InitialObjectParams().grid_h);
+    // append particles
+    mpm_state.AddParticlesViaPoissonDiskSampling(
+        *(mpm_model_->InitialObjectParams().level_set),
+        
+        *(mpm_model_->InitialObjectParams().pose),
+        *(mpm_model_->InitialObjectParams().constitutive_model),
+        mpm_model_->InitialObjectParams().density);
+
+    mpm_model_->SetMpmStateIndex(
+        this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state)));
+  }
+
+  // ---------------- newly added for MPM ---------------
 }
 
 template <typename T>

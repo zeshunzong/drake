@@ -4,7 +4,10 @@
 #include <memory>
 #include <vector>
 
+#include "drake/math/rigid_transform.h"
+#include "drake/multibody/mpm/internal/analytic_level_set.h"
 #include "drake/multibody/mpm/mpm_transfer.h"
+#include "drake/systems/framework/context.h"
 
 namespace drake {
 namespace multibody {
@@ -101,11 +104,56 @@ class DeformationState {
 };
 
 template <typename T>
+struct MpmInitialObjectParameters {
+  std::unique_ptr<internal::AnalyticLevelSet> level_set;
+  std::unique_ptr<constitutive_model::ElastoPlasticModel<T>> constitutive_model;
+  std::unique_ptr<math::RigidTransform<T>> pose;
+  double density;
+  double grid_h;
+
+  MpmInitialObjectParameters(
+      std::unique_ptr<internal::AnalyticLevelSet> level_set_in,
+      std::unique_ptr<constitutive_model::ElastoPlasticModel<T>>
+          constitutive_model_in,
+      std::unique_ptr<math::RigidTransform<T>> pose_in, double density_in,
+      double h_in)
+      : density(density_in), grid_h(h_in) {
+    level_set = std::move(level_set_in);
+    constitutive_model = std::move(constitutive_model_in);
+    pose = std::move(pose_in);
+  }
+};
+
+template <typename T>
 class MpmModel {
  public:
-  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(MpmModel);
+  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(MpmModel);
 
   MpmModel() {}
+
+  void StoreInitialObjectParams(
+      std::unique_ptr<internal::AnalyticLevelSet> level_set_in,
+      std::unique_ptr<constitutive_model::ElastoPlasticModel<T>>
+          constitutive_model_in,
+      std::unique_ptr<math::RigidTransform<T>> pose_in, double density_in,
+      double h_in) {
+    initial_object_params_ = std::make_unique<MpmInitialObjectParameters<T>>(
+        std::move(level_set_in), std::move(constitutive_model_in),
+        std::move(pose_in), density_in, h_in);
+  }
+
+  const MpmInitialObjectParameters<T>& InitialObjectParams() const {
+    DRAKE_DEMAND(initial_object_params_ != nullptr);
+    return *initial_object_params_;
+  }
+
+  void SetMpmStateIndex(const systems::AbstractStateIndex& index) {
+    mpm_state_index_ = index;
+  }
+
+  const systems::AbstractStateIndex& mpm_state_index() const {
+    return mpm_state_index_;
+  }
 
   /**
    * Total energy = elastic energy + kinetic energy + gravitational energy.
@@ -212,6 +260,11 @@ class MpmModel {
       Eigen::VectorX<T>* result) const;
 
   Vector3<T> gravity_{0.0, 0.0, -10.0};
+
+  // consider having a list of those?
+  std::unique_ptr<MpmInitialObjectParameters<T>> initial_object_params_;
+  // the state index where we store mpm_state inside context
+  systems::AbstractStateIndex mpm_state_index_;
 };
 
 }  // namespace mpm
