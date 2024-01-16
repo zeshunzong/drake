@@ -52,6 +52,8 @@ DeformableDriver<T>::DeformableDriver(
    midpoint rule, i.e., q = q₀ + δt/2 *(v₀ + v). */
   integrator_ = std::make_unique<fem::internal::VelocityNewmarkScheme<T>>(
       manager_->plant().time_step(), 1.0, 0.5);
+
+  mpm_transfer_ = std::make_unique<mpm::MpmTransfer<T>>();
 }
 
 template <typename T>

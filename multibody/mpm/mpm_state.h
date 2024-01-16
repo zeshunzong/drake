@@ -6,15 +6,16 @@
 #include "drake/multibody/mpm/internal/poisson_disk.h"
 #include "drake/multibody/mpm/particles.h"
 #include "drake/multibody/mpm/sparse_grid.h"
+#include "drake/multibody/mpm/internal/analytic_level_set.h"
+#include "drake/math/rigid_transform.h"
 
 namespace drake {
 namespace multibody {
 namespace mpm {
 
 template <typename T>
-class MpmState {
- public:
-  explicit MpmState(double h) : sparse_grid_(h) { DRAKE_DEMAND(h > 0); }
+struct MpmState {
+  explicit MpmState(double h) : sparse_grid(h) { DRAKE_DEMAND(h > 0); }
 
   int AddParticlesViaPoissonDiskSampling(
       const internal::AnalyticLevelSet& level_set,
@@ -24,7 +25,7 @@ class MpmState {
     const std::array<Vector3<double>, 2> bounding_box =
         level_set.bounding_box();
     double sample_r =
-        sparse_grid_.h() / (std::cbrt(min_num_particles_per_cell_) + 1);
+        sparse_grid.h() / (std::cbrt(min_num_particles_per_cell_) + 1);
 
     std::array<double, 3> xmin = {bounding_box[0][0], bounding_box[0][1],
                                   bounding_box[0][2]};
@@ -52,16 +53,16 @@ class MpmState {
     double mass_p = common_density * reference_volume_p;
     // we assume all particles start with zero velocity
     for (int p = 0; p < num_particles; ++p) {
-      particles_.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
+      particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
                              elastoplastic_model.Clone(), mass_p,
                              reference_volume_p);
     }
     return num_particles;  // return the number of particles added
   }
 
- private:
-  Particles<T> particles_{};
-  SparseGrid<T> sparse_grid_;
+
+  Particles<T> particles{};
+  SparseGrid<T> sparse_grid;
   int min_num_particles_per_cell_ = 5;
 };
 

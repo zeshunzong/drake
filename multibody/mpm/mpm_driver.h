@@ -88,7 +88,6 @@ class MpmDriver {
   }
 
   int AdvanceDt() {
-
     int num_newtons = ComputeGridVelocities();
     std::cout << "num newtons: " << num_newtons << std::endl;
     // now we have G
@@ -122,12 +121,10 @@ class MpmDriver {
       model_.ComputeMinusDEnergyDV(transfer_, v_prev_, deformation_state, dt_,
                                    &minus_dEdv_, &scratch_);
 
-      if (apply_ground_) 
-        ProjectCollisionGround(&minus_dEdv_);
-      
-      if ((minus_dEdv_.norm() < newton_epsilon_) && (count > 0))
-        break;
-  
+      if (apply_ground_) ProjectCollisionGround(&minus_dEdv_);
+
+      if ((minus_dEdv_.norm() < newton_epsilon_) && (count > 0)) break;
+
       // find dG_ = hessian^-1 * minus_gradient
       if (matrix_free_) {
         MatrixReplacement<T> hessian_operator =

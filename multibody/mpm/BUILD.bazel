@@ -118,6 +118,7 @@ drake_cc_library(
         ":sparse_grid",
         ":particles",
         "//multibody/mpm/internal:poisson_disk",
+        "//multibody/mpm/internal:analytic_level_set",
     ],
 )
 

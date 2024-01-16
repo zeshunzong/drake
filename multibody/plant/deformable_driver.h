@@ -1,9 +1,9 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 #include <unordered_map>
 #include <vector>
-#include <iostream>
 
 #include "drake/common/default_scalars.h"
 #include "drake/common/drake_copyable.h"
@@ -13,6 +13,8 @@
 #include "drake/multibody/contact_solvers/schur_complement.h"
 #include "drake/multibody/fem/discrete_time_integrator.h"
 #include "drake/multibody/fem/fem_solver.h"
+#include "drake/multibody/mpm/mpm_state.h"
+#include "drake/multibody/mpm/mpm_transfer.h"
 #include "drake/multibody/plant/contact_pair_kinematics.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/discrete_contact_data.h"
@@ -103,6 +105,121 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
    @pre manager != nullptr. */
   DeformableDriver(const DeformableModel<T>* deformable_model,
                    const DiscreteUpdateManager<T>* manager);
+
+  // ------------ newly added for MPM ---------------
+  void CalcAbstractStates(const systems::Context<T>& context,
+                          systems::State<T>* update) const {
+    if (deformable_model_->ExistsMpmModel()) {
+      unused(context);
+      // CalcNextMpmState(context, &mutable_mpm_state);
+
+      // the two lines below together act as setting abstract state
+      mpm::MpmState<T>& mutable_mpm_state =
+          update->template get_mutable_abstract_state<mpm::MpmState<T>>(
+              deformable_model_->mpm_model().mpm_state_index());
+
+      std::cout << "need reordering? "
+                << mutable_mpm_state.particles.NeedReordering() << std::endl;
+
+      mpm_transfer_->SetUpTransfer(&(mutable_mpm_state.sparse_grid),
+                                   &(mutable_mpm_state.particles));
+
+      std::cout << "need reordering? "
+                << mutable_mpm_state.particles.NeedReordering() << std::endl;
+
+      const mpm::MpmState<T>& state =
+          context.template get_abstract_state<mpm::MpmState<T>>(
+              deformable_model_->mpm_model().mpm_state_index());
+      std::cout << "need reordering? " << state.particles.NeedReordering()
+                << std::endl;
+
+      mpm::GridData<T> grid_data_free_motion;
+      CalcGridDataFreeMotion(context, &grid_data_free_motion);
+      std::cout << "free motion pass" << std::endl;
+      mpm::GridData<T> grid_data_post_contact = grid_data_free_motion;
+      CalcGridDataPostContact(context, &grid_data_post_contact);
+
+      mpm::ParticlesData<T> particles_data;  // this is also a scratch
+      mpm::TransferScratch<T> scratch;       // cache it?
+
+      UpdateParticlesFromGridData(
+          mutable_mpm_state.sparse_grid, grid_data_post_contact,
+          &(mutable_mpm_state.particles), &particles_data, &scratch);
+    }
+  }
+
+  void CalcGridDataFreeMotion(const systems::Context<T>& context,
+                              mpm::GridData<T>* grid_data_free_motion) const {
+    const mpm::MpmState<T>& state =
+        context.template get_abstract_state<mpm::MpmState<T>>(
+            deformable_model_->mpm_model().mpm_state_index());
+    double dt = manager_->plant().time_step();
+
+    mpm::TransferScratch<T> scratch;
+    std::cout << "before p2g" << std::endl;
+    mpm_transfer_->P2G(state.particles, state.sparse_grid,
+                       grid_data_free_motion, &scratch);
+    std::cout << "finish p2g" << std::endl;
+    // apply ground here tbd
+    mpm::DeformationState<T> deformation_state(
+        state.particles, state.sparse_grid, *grid_data_free_motion);
+
+    std::vector<Vector3<T>> v_prev = grid_data_free_motion->velocities();
+    Eigen::VectorX<T> minus_dEdv;
+    Eigen::VectorX<T> dG;
+
+    int count = 0;
+    for (; count < deformable_model_->mpm_model().max_newton_iter(); ++count) {
+      deformation_state.Update(*mpm_transfer_, dt, &scratch);
+      // find minus_gradient
+      deformable_model_->mpm_model().ComputeMinusDEnergyDV(
+          *mpm_transfer_, v_prev, deformation_state, dt, &minus_dEdv, &scratch);
+
+      // apply ground if necessary
+
+      if ((minus_dEdv.norm() <
+           deformable_model_->mpm_model().newton_epsilon()) &&
+          (count > 0))
+        break;
+
+      if (deformable_model_->mpm_model().matrix_free_cg()) {
+        throw;  // tbd
+      } else {
+        Eigen::ConjugateGradient<MatrixX<T>, Eigen::Lower | Eigen::Upper>
+            cg_dense;
+        MatrixX<T> d2Edv2;
+        deformable_model_->mpm_model().ComputeD2EnergyDV2(
+            *mpm_transfer_, deformation_state, dt, &d2Edv2);
+        cg_dense.compute(d2Edv2);
+        dG = cg_dense.solve(minus_dEdv);
+      }
+      grid_data_free_motion->AddDG(dG);
+    }
+  }
+
+  // TODO(zeshunzong): implements whatever SAP needs to do
+  void CalcGridDataPostContact(const systems::Context<T>& context,
+                               mpm::GridData<T>* grid_data_post_contact) const {
+    // SAP takes the grid_data and handles contact
+    unused(context);
+    unused(grid_data_post_contact);
+  }
+
+  void UpdateParticlesFromGridData(const mpm::SparseGrid<T>& sparse_grid,
+                                   const mpm::GridData<T>& grid_data,
+                                   mpm::Particles<T>* particles,
+                                   mpm::ParticlesData<T>* particles_data,
+                                   mpm::TransferScratch<T>* scratch) const {
+    double dt = manager_->plant().time_step();
+    mpm_transfer_->G2P(sparse_grid, grid_data, *particles, particles_data,
+                       scratch);
+    // update F_trial, F_elastic, stress, B_matrix
+    mpm_transfer_->UpdateParticlesState(*particles_data, dt, particles);
+    // update particle position, this is the last step
+    particles->AdvectParticles(dt);
+  }
+
+  // ------------ newly added for MPM ---------------
 
   ~DeformableDriver();
 
@@ -311,6 +428,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   /* The integrator used to advance deformable body free motion states in
    time. */
   std::unique_ptr<fem::internal::DiscreteTimeIntegrator<T>> integrator_;
+
+  std::unique_ptr<mpm::MpmTransfer<T>> mpm_transfer_;
 };
 
 }  // namespace internal

@@ -319,7 +319,7 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     // crate mpm_state = [particles, sparse_grid]
     mpm::MpmState<T> mpm_state(mpm_model_->InitialObjectParams().grid_h);
     // append particles
-    mpm_state.AddParticlesViaPoissonDiskSampling(
+    int num_particles = mpm_state.AddParticlesViaPoissonDiskSampling(
         *(mpm_model_->InitialObjectParams().level_set),
         
         *(mpm_model_->InitialObjectParams().pose),
@@ -328,6 +328,7 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
 
     mpm_model_->SetMpmStateIndex(
         this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state)));
+    std::cout << "add " << num_particles << "particles " << std::endl;
   }
 
   // ---------------- newly added for MPM ---------------

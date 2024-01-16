@@ -57,8 +57,8 @@ class DeformationState {
    */
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DeformationState);
-  // NOLINTNEXTLINE
-  DeformationState(Particles<T>& particles, const SparseGrid<T>& sparse_grid,
+  DeformationState(const Particles<T>& particles,
+                   const SparseGrid<T>& sparse_grid,
                    // NOLINTNEXTLINE
                    GridData<T>& grid_data)
       : particles_(particles),
@@ -98,7 +98,7 @@ class DeformationState {
   std::vector<Matrix3<T>> Ps_{};
   std::vector<Eigen::Matrix<T, 9, 9>> dPdFs_{};
 
-  Particles<T>& particles_;
+  const Particles<T>& particles_;
   const SparseGrid<T>& sparse_grid_;
   GridData<T>& grid_data_;
 };
@@ -243,6 +243,10 @@ class MpmModel {
     }
   }
 
+  int max_newton_iter() const { return max_newton_iter_; }
+  double newton_epsilon() const { return newton_epsilon_; }
+  bool matrix_free_cg() const { return matrix_free_cg_; }
+
  private:
   // Kinetic energy = 0.5 * m * (v - v_prev)ᵀ(v - v_prev).
   // Gravitational energy = - m*dt*gᵀv. Since we only care about its gradient,
@@ -265,6 +269,11 @@ class MpmModel {
   std::unique_ptr<MpmInitialObjectParameters<T>> initial_object_params_;
   // the state index where we store mpm_state inside context
   systems::AbstractStateIndex mpm_state_index_;
+
+  bool apply_ground_ = false;
+  int max_newton_iter_ = 1e5;
+  double newton_epsilon_ = 1e-6;
+  bool matrix_free_cg_ = false;
 };
 
 }  // namespace mpm

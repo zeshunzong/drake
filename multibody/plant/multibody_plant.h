@@ -5148,9 +5148,9 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
     this->ValidateContext(context0);
     if (discrete_update_manager_) {
       DRAKE_ASSERT(update != nullptr);
-      std::cout << "MultibodyPlant::CalcDiscreteStepMpm() calls "
-                   "DiscreteUpdateManager::CalcAbstractValues()."
-                << std::endl;
+      // std::cout << "MultibodyPlant::CalcDiscreteStepMpm() calls "
+      //              "DiscreteUpdateManager::CalcAbstractValues()."
+      //           << std::endl;
       discrete_update_manager_->CalcAbstractValues(context0, update);
       return systems::EventStatus::Succeeded();
     }

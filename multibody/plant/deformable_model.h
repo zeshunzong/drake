@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/eigen_types.h"
 #include "drake/common/identifier.h"
@@ -64,9 +65,9 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   bool ExistsMpmModel() const { return (mpm_model_ != nullptr); }
 
-  const mpm::MpmModel<T>& GetMpmModel() const {
+  const mpm::MpmModel<T>& mpm_model() const {
     if (mpm_model_ == nullptr) {
-      throw std::logic_error("GetMpmModel(): No MPM Model registered");
+      throw std::logic_error("mpm_model(): No MPM Model registered");
     }
     return *mpm_model_;
   }

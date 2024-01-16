@@ -189,10 +189,10 @@ class CompliantContactManager final : public DiscreteUpdateManager<T> {
                             systems::State<T>* update) const final {
     if constexpr (std::is_same_v<T, double>) {
       if (deformable_driver_ != nullptr) {
-        unused(context);
-        DRAKE_ASSERT(update != nullptr);
-        std::cout << "CompliantContactManager::DoCalcAbstractValues() will call DeformableDriver::CalcAbstractStates()" << std::endl;
-        // deformable_driver_->CalcAbstractStates(context, update);
+        // std::cout << "CompliantContactManager::DoCalcAbstractValues() will "
+        //              "call DeformableDriver::CalcAbstractStates()"
+        //           << std::endl;
+        deformable_driver_->CalcAbstractStates(context, update);
       }
     }
   }
