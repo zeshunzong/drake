@@ -326,6 +326,10 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
         *(mpm_model_->InitialObjectParams().constitutive_model),
         mpm_model_->InitialObjectParams().density);
 
+    // TODO(zeshunzong): add to initialize event?
+    mpm::MpmTransfer<T> initial_tranfer{};
+    initial_tranfer.SetUpTransfer(&mpm_state.sparse_grid, &mpm_state.particles);
+
     mpm_model_->SetMpmStateIndex(
         this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state)));
     std::cout << "add " << num_particles << "particles " << std::endl;

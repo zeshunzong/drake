@@ -24,8 +24,10 @@ struct MpmState {
       double common_density) {
     const std::array<Vector3<double>, 2> bounding_box =
         level_set.bounding_box();
+    // TODO(zeshunzong): pass is input
+    int min_num_particles_per_cell = 4;
     double sample_r =
-        sparse_grid.h() / (std::cbrt(min_num_particles_per_cell_) + 1);
+        sparse_grid.h() / (std::cbrt(min_num_particles_per_cell) + 1);
 
     std::array<double, 3> xmin = {bounding_box[0][0], bounding_box[0][1],
                                   bounding_box[0][2]};
@@ -63,7 +65,31 @@ struct MpmState {
 
   Particles<T> particles{};
   SparseGrid<T> sparse_grid;
-  int min_num_particles_per_cell_ = 5;
+};
+
+template <typename T>
+struct TransferScratch {
+  // scratch pads for transferring states from particles to grid nodes
+  // there will be one pad for each particle
+  std::vector<P2gPad<T>> p2g_pads{};
+  // scratch pad for transferring states from grid nodes to particles
+  G2pPad<T> g2p_pad{};
+};
+
+
+template <typename T>
+struct MpmSolverScratch {
+
+  std::vector<Vector3<T>> v_prev; // previous step grid v
+  Eigen::VectorX<T> minus_dEdv;
+  Eigen::VectorX<T> dG; // change to be reflected on grid data
+  std::vector<size_t> nodes_collide_with_ground;
+  MatrixX<T> d2Edv2;
+  TransferScratch<T> transfer_scratch;
+  ParticlesData<T> particles_data;
+
+  std::vector<size_t> collision_nodes;
+  
 };
 
 }  // namespace mpm

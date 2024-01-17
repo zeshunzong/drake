@@ -53,7 +53,9 @@ DeformableDriver<T>::DeformableDriver(
   integrator_ = std::make_unique<fem::internal::VelocityNewmarkScheme<T>>(
       manager_->plant().time_step(), 1.0, 0.5);
 
+  // mpm stuff
   mpm_transfer_ = std::make_unique<mpm::MpmTransfer<T>>();
+  mpm_solver_ = std::make_unique<mpm::MpmSolver<T>>();
 }
 
 template <typename T>
@@ -203,6 +205,61 @@ void DeformableDriver<T>::DeclareCacheEntries(
           constraint_participation_and_xd_tickets);
   cache_indexes_.participating_free_motion_velocities =
       participating_free_motion_velocities_cache_entry.cache_index();
+
+  // ------------------ cache entries for MPM
+  if (deformable_model_->ExistsMpmModel()) {
+    // 1. scratch for mpm solver
+    mpm::MpmSolverScratch<T> mpm_scratch;
+    const auto& scratch_entry = manager->DeclareCacheEntry(
+        fmt::format("Mpm Solver Scratch, for both transfer and CG"),
+        systems::ValueProducer(mpm_scratch, &systems::ValueProducer::NoopCalc),
+        {systems::SystemBase::nothing_ticket()});
+    cache_indexes_.mpm_solver_scratch = scratch_entry.cache_index();
+
+    // 2. grid v pre-SAP
+    mpm::GridData<T> grid_data_free_motion;
+    const auto& grid_data_free_motion_cache_entry = manager->DeclareCacheEntry(
+        "Grid data (velocity) after the implicit mpm solve, before sap kicks "
+        "in",
+        systems::ValueProducer(
+            grid_data_free_motion,
+            std::function<void(const Context<T>&, mpm::GridData<T>*)>{
+                [this](const Context<T>& context,
+                       mpm::GridData<T>* grid_data_free_motion_in) {
+                  this->CalcGridDataFreeMotion(context,
+                                               grid_data_free_motion_in);
+                }}),
+        {
+            // depend on mpm_state (i.e. particles, active grid nodes)
+            manager_->plant().abstract_state_ticket(
+                deformable_model_->mpm_model().mpm_state_index()),
+        });
+
+    cache_indexes_.grid_data_free_motion =
+        grid_data_free_motion_cache_entry.cache_index();
+
+    // 3. grid v post-SAP
+    mpm::GridData<T> grid_data_post_contact;
+    const auto& grid_data_post_contact_cache_entry = manager->DeclareCacheEntry(
+        "Grid data after sap",
+        systems::ValueProducer(
+            grid_data_post_contact,
+            std::function<void(const Context<T>&, mpm::GridData<T>*)>{
+                [this](const Context<T>& context,
+                       mpm::GridData<T>* grid_data_post_contact_in) {
+                  this->CalcGridDataPostContact(context,
+                                                grid_data_post_contact_in);
+                }}),
+        {
+            // depend on pre-sap grid velocity
+            // TODO(zeshunzong): also depend on other stuff
+            manager_->plant().cache_entry_ticket(
+                cache_indexes_.grid_data_free_motion),
+        });
+
+    cache_indexes_.grid_data_post_contact =
+        grid_data_post_contact_cache_entry.cache_index();
+  }
 }
 
 template <typename T>

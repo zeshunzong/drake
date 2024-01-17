@@ -153,6 +153,9 @@ drake_cc_library(
         "//systems/framework:leaf_system",
         "//multibody/mpm:mpm_model",
         "//multibody/mpm:mpm_state",
+        "//multibody/mpm:conjugate_gradient",
+        "//multibody/mpm:particles_to_bgeo",
+        "//multibody/mpm:mpm_solver",
     ],
 )
 

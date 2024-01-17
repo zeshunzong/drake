@@ -19,7 +19,7 @@ namespace internal {
  @param[in] m  Masses of the particles.
  @pre q.size() == v.size() == m.size().
  @throws exception if the file with `filename` cannot be written to. */
-void WriteParticlesToBgeo(const std::string& filename,
+inline void WriteParticlesToBgeo(const std::string& filename,
                           const std::vector<Vector3<double>>& q,
                           const std::vector<Vector3<double>>& v,
                           const std::vector<double>& m) {

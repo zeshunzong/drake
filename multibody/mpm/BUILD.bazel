@@ -138,6 +138,7 @@ drake_cc_library(
         ":sparse_grid",
         "//common:essential",
         "//multibody/mpm/constitutive_model:corotated_elastic_model",
+        ":mpm_state",
     ],
 )
 
@@ -210,6 +211,18 @@ drake_cc_library(
     deps = [
         "//common:essential",
         "@partio",
+    ],
+)
+
+drake_cc_library(
+    name = "mpm_solver",
+    hdrs = [
+        "mpm_solver.h",
+    ],
+    deps = [
+        ":conjugate_gradient",
+        ":mpm_model",
+        ":mpm_state",
     ],
 )
 

@@ -10,19 +10,11 @@
 #include "drake/multibody/mpm/particles.h"
 #include "drake/multibody/mpm/particles_data.h"
 #include "drake/multibody/mpm/sparse_grid.h"
+#include "drake/multibody/mpm/mpm_state.h"
 
 namespace drake {
 namespace multibody {
 namespace mpm {
-
-template <typename T>
-struct TransferScratch {
-  // scratch pads for transferring states from particles to grid nodes
-  // there will be one pad for each particle
-  std::vector<P2gPad<T>> p2g_pads{};
-  // scratch pad for transferring states from grid nodes to particles
-  G2pPad<T> g2p_pad{};
-};
 
 /**
  * An implementation of MPM's transfer schemes. We follow Section 10.5 in

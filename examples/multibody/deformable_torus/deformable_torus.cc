@@ -18,7 +18,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 8.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -80,11 +80,8 @@ int do_main() {
   const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -2});
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
                                   "ground_collision", rigid_proximity_props);
-  IllustrationProperties illustration_props;
-  illustration_props.AddProperty("phong", "diffuse",
-                                 Vector4d(0.7, 0.5, 0.4, 0.8));
-  plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
-                               "ground_visual", std::move(illustration_props));
+
+
 
   /* Set up a deformable torus. */
   auto owned_deformable_model =
@@ -98,7 +95,7 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(10000, 0.2);
+                                   LinearCorotatedModel<double>>(1e5, 0.2);
   Vector3<double> translation = {0.0, 0.0, 0.5};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
@@ -108,41 +105,15 @@ int do_main() {
                                           std::move(model), std::move(pose),
                                           1000.0, h);
 
-  DeformableBodyConfig<double> deformable_config;
-  deformable_config.set_youngs_modulus(FLAGS_E);
-  deformable_config.set_poissons_ratio(FLAGS_nu);
-  deformable_config.set_mass_density(FLAGS_density);
-  deformable_config.set_stiffness_damping_coefficient(FLAGS_beta);
-
-  const std::string torus_vtk = FindResourceOrThrow(
-      "drake/examples/multibody/deformable_torus/torus.vtk");
-  /* Load the geometry and scale it down to 65% (to showcase the scaling
-   capability and to make the torus suitable for grasping by the gripper). */
-  const double scale = 0.65;
-  auto torus_mesh = std::make_unique<Mesh>(torus_vtk, scale);
-  /* Minor diameter of the torus inferred from the vtk file. */
-  const double kL = 0.09 * scale;
-  /* Set the initial pose of the torus such that its bottom face is touching the
-   ground. */
-  const RigidTransformd X_WB(Vector3<double>(0.0, 0.0, kL / 2.0));
-  auto torus_instance = std::make_unique<GeometryInstance>(
-      X_WB, std::move(torus_mesh), "deformable_torus");
-
-  /* Minimumly required proximity properties for deformable bodies: A valid
-   Coulomb friction coefficient. */
-  ProximityProperties deformable_proximity_props;
-  AddContactMaterial({}, {}, surface_friction, &deformable_proximity_props);
-  torus_instance->set_proximity_properties(deformable_proximity_props);
-
   /* Registration of all deformable geometries ostensibly requires a resolution
    hint parameter that dictates how the shape is tessellated. In the case of a
    `Mesh` shape, the resolution hint is unused because the shape is already
    tessellated. */
   // TODO(xuchenhan-tri): Though unused, we still asserts the resolution hint is
   // positive. Remove the requirement of a resolution hint for meshed shapes.
-  const double unused_resolution_hint = 1.0;
-  owned_deformable_model->RegisterDeformableBody(
-      std::move(torus_instance), deformable_config, unused_resolution_hint);
+//   const double unused_resolution_hint = 1.0;
+//   owned_deformable_model->RegisterDeformableBody(
+//       std::move(torus_instance), deformable_config, unused_resolution_hint);
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
   plant.AddPhysicalModel(std::move(owned_deformable_model));

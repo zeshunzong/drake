@@ -13,8 +13,11 @@
 #include "drake/multibody/contact_solvers/schur_complement.h"
 #include "drake/multibody/fem/discrete_time_integrator.h"
 #include "drake/multibody/fem/fem_solver.h"
+#include "drake/multibody/mpm/conjugate_gradient.h"
+#include "drake/multibody/mpm/mpm_solver.h"
 #include "drake/multibody/mpm/mpm_state.h"
 #include "drake/multibody/mpm/mpm_transfer.h"
+#include "drake/multibody/mpm/particles_to_bgeo.h"
 #include "drake/multibody/plant/contact_pair_kinematics.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/discrete_contact_data.h"
@@ -110,41 +113,29 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void CalcAbstractStates(const systems::Context<T>& context,
                           systems::State<T>* update) const {
     if (deformable_model_->ExistsMpmModel()) {
-      unused(context);
-      // CalcNextMpmState(context, &mutable_mpm_state);
+      WriteMpmParticlesToBgeo(context);
+      // We require that the state in const context is sorted and prepared for
+      // transfer.
+      const mpm::MpmState<T>& state =
+          context.template get_abstract_state<mpm::MpmState<T>>(
+              deformable_model_->mpm_model().mpm_state_index());
+      DRAKE_DEMAND(!state.particles.NeedReordering());
 
-      // the two lines below together act as setting abstract state
+      // grid v after sap
+      const mpm::GridData<T>& grid_data_post_contact =
+          EvalGridDataPostContact(context);
+
+      // write to mpm_state from grid_data_post_contact
       mpm::MpmState<T>& mutable_mpm_state =
           update->template get_mutable_abstract_state<mpm::MpmState<T>>(
               deformable_model_->mpm_model().mpm_state_index());
 
-      std::cout << "need reordering? "
-                << mutable_mpm_state.particles.NeedReordering() << std::endl;
+      UpdateParticlesFromGridData(context, grid_data_post_contact,
+                                  &(mutable_mpm_state.particles));
 
+      // after mpm_state is updated, sort it to prepare for next step
       mpm_transfer_->SetUpTransfer(&(mutable_mpm_state.sparse_grid),
                                    &(mutable_mpm_state.particles));
-
-      std::cout << "need reordering? "
-                << mutable_mpm_state.particles.NeedReordering() << std::endl;
-
-      const mpm::MpmState<T>& state =
-          context.template get_abstract_state<mpm::MpmState<T>>(
-              deformable_model_->mpm_model().mpm_state_index());
-      std::cout << "need reordering? " << state.particles.NeedReordering()
-                << std::endl;
-
-      mpm::GridData<T> grid_data_free_motion;
-      CalcGridDataFreeMotion(context, &grid_data_free_motion);
-      std::cout << "free motion pass" << std::endl;
-      mpm::GridData<T> grid_data_post_contact = grid_data_free_motion;
-      CalcGridDataPostContact(context, &grid_data_post_contact);
-
-      mpm::ParticlesData<T> particles_data;  // this is also a scratch
-      mpm::TransferScratch<T> scratch;       // cache it?
-
-      UpdateParticlesFromGridData(
-          mutable_mpm_state.sparse_grid, grid_data_post_contact,
-          &(mutable_mpm_state.particles), &particles_data, &scratch);
     }
   }
 
@@ -155,68 +146,75 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             deformable_model_->mpm_model().mpm_state_index());
     double dt = manager_->plant().time_step();
 
-    mpm::TransferScratch<T> scratch;
-    std::cout << "before p2g" << std::endl;
-    mpm_transfer_->P2G(state.particles, state.sparse_grid,
-                       grid_data_free_motion, &scratch);
-    std::cout << "finish p2g" << std::endl;
-    // apply ground here tbd
-    mpm::DeformationState<T> deformation_state(
-        state.particles, state.sparse_grid, *grid_data_free_motion);
+    mpm::MpmSolverScratch<T>& mpm_scratch =
+        manager_->plant()
+            .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+            .get_mutable_cache_entry_value(context)
+            .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
 
-    std::vector<Vector3<T>> v_prev = grid_data_free_motion->velocities();
-    Eigen::VectorX<T> minus_dEdv;
-    Eigen::VectorX<T> dG;
+    mpm::NewtonParams params; // TODO(zeshunzong): move this to model
+    mpm_solver_->SolveGridVelocities(params, state, *mpm_transfer_,
+                                     deformable_model_->mpm_model(), dt,
+                                     grid_data_free_motion, &mpm_scratch);
+  }
 
-    int count = 0;
-    for (; count < deformable_model_->mpm_model().max_newton_iter(); ++count) {
-      deformation_state.Update(*mpm_transfer_, dt, &scratch);
-      // find minus_gradient
-      deformable_model_->mpm_model().ComputeMinusDEnergyDV(
-          *mpm_transfer_, v_prev, deformation_state, dt, &minus_dEdv, &scratch);
+  const mpm::GridData<T>& EvalGridDataFreeMotion(
+      const systems::Context<T>& context) const {
+    return manager_->plant()
+        .get_cache_entry(cache_indexes_.grid_data_free_motion)
+        .template Eval<mpm::GridData<T>>(context);
+  }
 
-      // apply ground if necessary
-
-      if ((minus_dEdv.norm() <
-           deformable_model_->mpm_model().newton_epsilon()) &&
-          (count > 0))
-        break;
-
-      if (deformable_model_->mpm_model().matrix_free_cg()) {
-        throw;  // tbd
-      } else {
-        Eigen::ConjugateGradient<MatrixX<T>, Eigen::Lower | Eigen::Upper>
-            cg_dense;
-        MatrixX<T> d2Edv2;
-        deformable_model_->mpm_model().ComputeD2EnergyDV2(
-            *mpm_transfer_, deformation_state, dt, &d2Edv2);
-        cg_dense.compute(d2Edv2);
-        dG = cg_dense.solve(minus_dEdv);
-      }
-      grid_data_free_motion->AddDG(dG);
-    }
+  const mpm::GridData<T>& EvalGridDataPostContact(
+      const systems::Context<T>& context) const {
+    return manager_->plant()
+        .get_cache_entry(cache_indexes_.grid_data_post_contact)
+        .template Eval<mpm::GridData<T>>(context);
   }
 
   // TODO(zeshunzong): implements whatever SAP needs to do
   void CalcGridDataPostContact(const systems::Context<T>& context,
                                mpm::GridData<T>* grid_data_post_contact) const {
     // SAP takes the grid_data and handles contact
-    unused(context);
-    unused(grid_data_post_contact);
+    const mpm::GridData<T>& grid_data_free_motion =
+        EvalGridDataFreeMotion(context);
+    (*grid_data_post_contact) = grid_data_free_motion;
   }
 
-  void UpdateParticlesFromGridData(const mpm::SparseGrid<T>& sparse_grid,
+  void UpdateParticlesFromGridData(const systems::Context<T>& context,
                                    const mpm::GridData<T>& grid_data,
-                                   mpm::Particles<T>* particles,
-                                   mpm::ParticlesData<T>* particles_data,
-                                   mpm::TransferScratch<T>* scratch) const {
+                                   mpm::Particles<T>* particles) const {
     double dt = manager_->plant().time_step();
-    mpm_transfer_->G2P(sparse_grid, grid_data, *particles, particles_data,
-                       scratch);
+    const mpm::MpmState<T>& state =
+        context.template get_abstract_state<mpm::MpmState<T>>(
+            deformable_model_->mpm_model().mpm_state_index());
+    mpm::MpmSolverScratch<T>& mpm_scratch =
+        manager_->plant()
+            .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+            .get_mutable_cache_entry_value(context)
+            .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
+    mpm_transfer_->G2P(state.sparse_grid, grid_data, *particles,
+                       &(mpm_scratch.particles_data),
+                       &(mpm_scratch.transfer_scratch));
     // update F_trial, F_elastic, stress, B_matrix
-    mpm_transfer_->UpdateParticlesState(*particles_data, dt, particles);
+    mpm_transfer_->UpdateParticlesState(mpm_scratch.particles_data, dt,
+                                        particles);
     // update particle position, this is the last step
     particles->AdvectParticles(dt);
+  }
+
+  void WriteMpmParticlesToBgeo(const systems::Context<T>& context) const {
+    double dt = manager_->plant().time_step();
+    int current_step = std::round(context.get_time() / dt);
+    const mpm::MpmState<T>& state =
+        context.template get_abstract_state<mpm::MpmState<T>>(
+            deformable_model_->mpm_model().mpm_state_index());
+    std::string output_filename =
+        "./f" + std::to_string(current_step) + ".bgeo";
+    mpm::internal::WriteParticlesToBgeo(
+        output_filename, state.particles.positions(),
+        state.particles.velocities(), state.particles.masses());
+    std::cout << "write " << output_filename << std::endl;
   }
 
   // ------------ newly added for MPM ---------------
@@ -313,6 +311,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     systems::CacheIndex participating_velocity_mux;
     systems::CacheIndex participating_velocities;
     systems::CacheIndex participating_free_motion_velocities;
+
+    // mpm cache indexes
+    systems::CacheIndex mpm_solver_scratch;
+    systems::CacheIndex grid_data_free_motion;
+    systems::CacheIndex grid_data_post_contact;
   };
   /* Copies the state of the deformable body with `id` in the given `context`
    to the `fem_state`.
@@ -429,7 +432,9 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
    time. */
   std::unique_ptr<fem::internal::DiscreteTimeIntegrator<T>> integrator_;
 
+  // mpm stuff
   std::unique_ptr<mpm::MpmTransfer<T>> mpm_transfer_;
+  std::unique_ptr<mpm::MpmSolver<T>> mpm_solver_;
 };
 
 }  // namespace internal

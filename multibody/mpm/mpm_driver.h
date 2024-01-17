@@ -166,7 +166,7 @@ class MpmDriver {
 
   void SetStickyGround(bool sticky) { sticky_ground_ = sticky; }
 
-  void WriteParticlesToBgeo(int io_step) {
+  void WriteParticlesToBgeo(int io_step) const {
     std::string output_filename = "./f" + std::to_string(io_step) + ".bgeo";
     internal::WriteParticlesToBgeo(output_filename, particles_.positions(),
                                    particles_.velocities(),

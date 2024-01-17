@@ -39,11 +39,11 @@ struct HessianWrapper {
 
 // solve for Ax=b
 // A must provide precondition() and multiply(z) = A*z
-class CongugateGradient {
+class ConjugateGradient {
  public:
-  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(CongugateGradient);
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(ConjugateGradient);
 
-  CongugateGradient() {}
+  ConjugateGradient() {}
 
   void SetRelativeTolerance(double tol) { relative_tolerance_ = tol; }
   void SetAbsoluteTolerance(double tol) { absolute_tolerance_ = tol; }
@@ -99,9 +99,9 @@ class CongugateGradient {
   Eigen::VectorXd p_;
   Eigen::VectorXd Ap_;  // stores A*p_
 
-  double relative_tolerance_ = 5e-5;
+  double relative_tolerance_ = 1e-5;
   double absolute_tolerance_ = 1e-6;
-  int max_CG_iter_ = 1e5;  // copy from fangyu
+  int max_CG_iter_ = 1e5; 
 };
 
 }  // namespace mpm

@@ -115,7 +115,7 @@ GTEST_TEST(LinearSolverTest, TestCG) {
   HessianWrapper hessian_wrapper(mpm_transfer, mpm_model, deformation_state,
                                  dt);
 
-  CongugateGradient cg;
+  ConjugateGradient cg;
   cg.SetRelativeTolerance(relative_tolerance);
   Eigen::VectorXd x;
   cg.Solve(hessian_wrapper, b, &x);

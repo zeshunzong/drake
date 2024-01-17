@@ -1,16 +1,17 @@
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <iostream>
 
 #include "drake/common/eigen_types.h"
 #include "drake/common/identifier.h"
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/fem/fem_model.h"
+#include "drake/multibody/mpm/conjugate_gradient.h"
 #include "drake/multibody/mpm/mpm_model.h"
 #include "drake/multibody/mpm/mpm_state.h"
 #include "drake/multibody/plant/constraint_specs.h"
@@ -56,8 +57,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     }
     mpm_model_ = std::make_unique<mpm::MpmModel<T>>();
     mpm_model_->StoreInitialObjectParams(std::move(level_set),
-                                        std::move(constitutive_model),
-                                        std::move(pose), density, grid_h);
+                                         std::move(constitutive_model),
+                                         std::move(pose), density, grid_h);
 
     const DeformableBodyId body_id = DeformableBodyId::get_new_id();
     return body_id;
@@ -244,6 +245,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     return plant_->get_output_port(vertex_positions_port_index_);
   }
 
+
  private:
   PhysicalModelPointerVariant<T> DoToPhysicalModelPointerVariant() const final {
     return PhysicalModelPointerVariant<T>(this);
@@ -302,6 +304,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   // mpm attributes
   std::unique_ptr<mpm::MpmModel<T>> mpm_model_;
+
 };
 
 }  // namespace multibody
