@@ -115,6 +115,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
   void CalcAbstractStates(const systems::Context<T>& context,
                           systems::State<T>* update) const {
+                            std::cout << "calling calc abstract state" << std::endl;
     if (deformable_model_->ExistsMpmModel()) {
       WriteMpmParticlesToBgeo(context);
       // We require that the state in const context is sorted and prepared for
@@ -208,8 +209,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         EvalGridDataFreeMotion(context);
     (*grid_data_post_contact) = grid_data_free_motion;
 
-
-    contact_solvers::internal::ContactSolverResults<T> results = manager_->EvalContactSolverResults(context);
+    contact_solvers::internal::ContactSolverResults<T> results =
+        manager_->EvalContactSolverResults(context);
     int mpm_dofs = grid_data_free_motion.num_active_nodes() * 3;
     VectorX<T> grid_v_post_contact_vec = results.v_next.tail(mpm_dofs);
 
@@ -252,6 +253,15 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     std::cout << "write " << output_filename << std::endl;
   }
 
+  const std::vector<geometry::internal::MpmParticleContactPair<T>>&
+  EvalMpmContactPairs(const systems::Context<T>& context) const {
+    return manager_->plant()
+        .get_cache_entry(cache_indexes_.mpm_contact_pairs)
+        .template Eval<
+            std::vector<geometry::internal::MpmParticleContactPair<T>>>(
+            context);
+  }
+
   void CalcMpmContactPairs(
       const systems::Context<T>& context,
       std::vector<geometry::internal::MpmParticleContactPair<T>>* result)
@@ -274,8 +284,9 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       // identify those that are in contact, i.e. signed_distance < 0
       for (const auto& p2geometry : p_to_geometries) {
         if (p2geometry.distance < 0) {
-            std::cout << "particle in contact " << std::endl;
-            std::cout << "particle position is " << state.particles.GetPositionAt(p)(2) << std::endl;
+          std::cout << "particle in contact " << std::endl;
+          std::cout << "particle position is "
+                    << state.particles.GetPositionAt(p)(2) << std::endl;
           // if particle is inside rigid body, i.e. in contact
           // note: normal direction
           result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
@@ -309,9 +320,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void AppendDiscreteContactPairsMpm(
       const systems::Context<T>& context,
       DiscreteContactData<DiscreteContactPair<T>>* result) const {
-    std::vector<geometry::internal::MpmParticleContactPair<T>>
-        mpm_contact_pairs;
-    CalcMpmContactPairs(context, &mpm_contact_pairs);
+    const std::vector<geometry::internal::MpmParticleContactPair<T>>&
+        mpm_contact_pairs = EvalMpmContactPairs(context);
     geometry::GeometryId dummy_id = geometry::GeometryId::get_new_id();
     // TODO(zeshunzong): don't know how to use
 
@@ -320,7 +330,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const T d = NAN;  // not used.
       const T k = std::numeric_limits<double>::infinity();
       // TODO(zeshunzong): set the two values in model
-      const T tau = 0.01;
+      const T tau = 0.001;
       const T mu = 0.0;
       result->AppendDeformableData(DiscreteContactPair<T>{
           dummy_id, mpm_contact_pair.non_mpm_id,
@@ -343,9 +353,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     const TreeIndex clique_index_mpm(tree_topology.num_trees() +
                                      num_deformable_bodies());
 
-    std::vector<geometry::internal::MpmParticleContactPair<T>>
-        mpm_contact_pairs;
-    CalcMpmContactPairs(context, &mpm_contact_pairs);
+    const std::vector<geometry::internal::MpmParticleContactPair<T>>&
+        mpm_contact_pairs = EvalMpmContactPairs(context);
 
     const int nv = manager_->plant().num_velocities();
     for (auto& contact_pair : mpm_contact_pairs) {
@@ -527,6 +536,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     systems::CacheIndex mpm_solver_scratch;
     systems::CacheIndex grid_data_free_motion;
     systems::CacheIndex grid_data_post_contact;
+    systems::CacheIndex mpm_contact_pairs;
   };
   /* Copies the state of the deformable body with `id` in the given `context`
    to the `fem_state`.

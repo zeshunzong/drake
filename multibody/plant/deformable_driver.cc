@@ -234,7 +234,6 @@ void DeformableDriver<T>::DeclareCacheEntries(
             manager_->plant().abstract_state_ticket(
                 deformable_model_->mpm_model().mpm_state_index()),
         });
-
     cache_indexes_.grid_data_free_motion =
         grid_data_free_motion_cache_entry.cache_index();
 
@@ -256,9 +255,27 @@ void DeformableDriver<T>::DeclareCacheEntries(
             manager_->plant().cache_entry_ticket(
                 cache_indexes_.grid_data_free_motion),
         });
-
     cache_indexes_.grid_data_post_contact =
         grid_data_post_contact_cache_entry.cache_index();
+
+    // 4. mpm contact pairs
+    std::vector<geometry::internal::MpmParticleContactPair<T>> mpm_contact_pairs;
+    const auto& mpm_contact_pairs_cache_entry = manager->DeclareCacheEntry(
+        "contact pairs between mpm particle and rigid body",
+        systems::ValueProducer(
+            mpm_contact_pairs,
+            std::function<void(const Context<T>&, std::vector<geometry::internal::MpmParticleContactPair<T>>*)>{
+                [this](const Context<T>& context,
+                       std::vector<geometry::internal::MpmParticleContactPair<T>>* mpm_contact_pairs_in) {
+                  this->CalcMpmContactPairs(context,
+                                                mpm_contact_pairs_in);
+                }}),
+        {
+            manager_->plant().abstract_state_ticket(
+                deformable_model_->mpm_model().mpm_state_index()),
+        });
+    cache_indexes_.mpm_contact_pairs =
+        mpm_contact_pairs_cache_entry.cache_index();
   }
 }
 

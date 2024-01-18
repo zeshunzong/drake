@@ -294,7 +294,7 @@ class MpmModel {
       const DeformationState<T>& deformation_state, double dt,
       Eigen::VectorX<T>* result) const;
 
-  Vector3<T> gravity_{0.0, 0.0, -10.0};
+  Vector3<T> gravity_{0.0, 0.0, 0.0};
 
   // consider having a list of those?
   std::unique_ptr<MpmInitialObjectParameters<T>> initial_object_params_;

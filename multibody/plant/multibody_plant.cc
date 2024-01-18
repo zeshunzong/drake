@@ -2736,6 +2736,7 @@ systems::EventStatus MultibodyPlant<T>::CalcDiscreteStep(
   // This requires one of our custom managers to become the default
   // MultibodyPlant manager.
   if (discrete_update_manager_) {
+    std::cout << "mpb calls discrete update manager::CalcDiscreteValues" << std::endl;
     discrete_update_manager_->CalcDiscreteValues(context0, updates);
     return systems::EventStatus::Succeeded();
   }

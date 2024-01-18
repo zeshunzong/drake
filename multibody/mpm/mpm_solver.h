@@ -17,7 +17,7 @@ namespace multibody {
 namespace mpm {
 
 struct NewtonParams {
-  int max_newton_iter = 1000;
+  int max_newton_iter = 500;
   double newton_gradient_epsilon = 1e-5;
   bool matrix_free = true;
   bool linear_constitutive_model = true;
@@ -62,6 +62,7 @@ class MpmSolver {
                                &(scratch->minus_dEdv));
       }
       double gradient_norm = scratch->minus_dEdv.norm();
+      std::cout << "gradient norm is " << gradient_norm << std::endl;
       if ((gradient_norm < params.newton_gradient_epsilon) && (count > 0))
         break;
 
@@ -73,7 +74,7 @@ class MpmSolver {
           // if model is linear, cg only needs to be this much accurate for
           // newton to converge in one step
           cg.SetRelativeTolerance(0.5 * params.newton_gradient_epsilon /
-                                  gradient_norm);
+                                  (gradient_norm+1e-6));
         }
         HessianWrapper hessian_wrapper(transfer, model, deformation_state, dt);
         cg.Solve(hessian_wrapper, scratch->minus_dEdv, &(scratch->dG));

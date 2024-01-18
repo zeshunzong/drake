@@ -9,6 +9,7 @@
 #include "drake/math/rigid_transform.h"
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
+#include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -95,11 +96,11 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(1e5, 0.2);
-  Vector3<double> translation = {0.0, 0.0, 0.4};
+                                   CorotatedElasticModel<double>>(1e5, 0.2);
+  Vector3<double> translation = {0.0, 0.0, 0.0};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.08;
+  double h = 0.38;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
