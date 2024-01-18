@@ -115,7 +115,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
   void CalcAbstractStates(const systems::Context<T>& context,
                           systems::State<T>* update) const {
-                            std::cout << "calling calc abstract state" << std::endl;
+    std::cout << "calling calc abstract state" << std::endl;
     if (deformable_model_->ExistsMpmModel()) {
       WriteMpmParticlesToBgeo(context);
       // We require that the state in const context is sorted and prepared for
@@ -141,6 +141,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       mpm_transfer_->SetUpTransfer(&(mutable_mpm_state.sparse_grid),
                                    &(mutable_mpm_state.particles));
     }
+    std::cout << "-------- mpm update done -----" << std::endl;
   }
 
   void CalcGridDataFreeMotion(const systems::Context<T>& context,
@@ -160,10 +161,14 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     mpm_solver_->SolveGridVelocities(params, state, *mpm_transfer_,
                                      deformable_model_->mpm_model(), dt,
                                      grid_data_free_motion, &mpm_scratch);
+    std::cout << "CalcGridDataFreeMotion is called at " << context.get_time()
+              << std::endl;
+    //grid_data_free_motion->PrintV(context.get_time());
   }
 
   const mpm::GridData<T>& EvalGridDataFreeMotion(
       const systems::Context<T>& context) const {
+    std::cout << "EvalGridDataFreeMotion is called " << std::endl;
     return manager_->plant()
         .get_cache_entry(cache_indexes_.grid_data_free_motion)
         .template Eval<mpm::GridData<T>>(context);
@@ -183,12 +188,15 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     mpm::GridData<T> grid_data_prev_step;
     mpm_transfer_->P2G(state.particles, state.sparse_grid, &grid_data_prev_step,
                        &(mpm_scratch.transfer_scratch));
-
+    std::cout << "participating v as initial guess is called "<< std::endl;
+    //grid_data_prev_step.PrintV(context.get_time());
     grid_data_prev_step.GetFlattenedVelocities(result);
   }
 
   void CalcParticipatingFreeMotionVelocitiesMpm(
       const systems::Context<T>& context, VectorX<T>* result) const {
+    std::cout << "CalcParticipatingFreeMotionVelocitiesMpm is called"
+              << std::endl;
     const mpm::GridData<T>& grid_data_free_motion =
         EvalGridDataFreeMotion(context);
     grid_data_free_motion.GetFlattenedVelocities(result);
@@ -205,6 +213,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void CalcGridDataPostContact(const systems::Context<T>& context,
                                mpm::GridData<T>* grid_data_post_contact) const {
     // SAP takes the grid_data and handles contact
+    std::cout << "CalcGridDataPostContact is called" << std::endl;
     const mpm::GridData<T>& grid_data_free_motion =
         EvalGridDataFreeMotion(context);
     (*grid_data_post_contact) = grid_data_free_motion;
@@ -255,6 +264,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
   const std::vector<geometry::internal::MpmParticleContactPair<T>>&
   EvalMpmContactPairs(const systems::Context<T>& context) const {
+    std::cout << "EvalMpmContactPairs is called " << std::endl;
     return manager_->plant()
         .get_cache_entry(cache_indexes_.mpm_contact_pairs)
         .template Eval<
@@ -266,6 +276,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context,
       std::vector<geometry::internal::MpmParticleContactPair<T>>* result)
       const {
+    std::cout << "CalcMpmContactPairs is called " << std::endl;
     DRAKE_ASSERT(result != nullptr);
     result->clear();
     const mpm::MpmState<T>& state =
@@ -284,9 +295,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       // identify those that are in contact, i.e. signed_distance < 0
       for (const auto& p2geometry : p_to_geometries) {
         if (p2geometry.distance < 0) {
-          std::cout << "particle in contact " << std::endl;
-          std::cout << "particle position is "
-                    << state.particles.GetPositionAt(p)(2) << std::endl;
           // if particle is inside rigid body, i.e. in contact
           // note: normal direction
           result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
@@ -295,13 +303,14 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         }
       }
     }
+    std::cout << result->size() << " contact pairs at " << context.get_time() << std::endl;
   }
 
   // note: the linear dynamics matrix that sap needs is d2Edv2 in MPM
   void AppendLinearDynamicsMatrixMpm(const systems::Context<T>& context,
                                      std::vector<MatrixX<T>>* A) const {
     DRAKE_DEMAND(A != nullptr);
-
+    std::cout << "AppendLinearDynamicsMatrixMpm is called" << std::endl;
     MatrixX<T> linear_dynamics_matrix;
     const mpm::MpmState<T>& state =
         context.template get_abstract_state<mpm::MpmState<T>>(
@@ -311,9 +320,17 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         EvalGridDataFreeMotion(context);
     mpm::DeformationState<T> deformation_state(
         state.particles, state.sparse_grid, grid_data_free_motion_copy);
+    
+    mpm::MpmSolverScratch<T>& mpm_scratch =
+        manager_->plant()
+            .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+            .get_mutable_cache_entry_value(context)
+            .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
+    deformation_state.Update(*mpm_transfer_, manager_->plant().time_step(), &(mpm_scratch.transfer_scratch));
     deformable_model_->mpm_model().ComputeD2EnergyDV2(
         *mpm_transfer_, deformation_state, manager_->plant().time_step(),
         &linear_dynamics_matrix);
+    
     A->emplace_back(std::move(linear_dynamics_matrix));
   }
 
@@ -330,8 +347,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const T d = NAN;  // not used.
       const T k = std::numeric_limits<double>::infinity();
       // TODO(zeshunzong): set the two values in model
-      const T tau = 0.001;
-      const T mu = 0.0;
+      const T tau = 0.01;
+      const T mu = 0.2;
       result->AppendDeformableData(DiscreteContactPair<T>{
           dummy_id, mpm_contact_pair.non_mpm_id,
           mpm_contact_pair.particle_in_contact_position,
@@ -343,6 +360,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void AppendContactKinematicsMpm(
       const systems::Context<T>& context,
       DiscreteContactData<ContactPairKinematics<T>>* result) const {
+    std::cout << "AppendContactKinematicsMpm is called " << std::endl;
     DRAKE_DEMAND(result != nullptr);
     const mpm::MpmState<T>& state =
         context.template get_abstract_state<mpm::MpmState<T>>(

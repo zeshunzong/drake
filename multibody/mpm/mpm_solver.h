@@ -62,7 +62,6 @@ class MpmSolver {
                                &(scratch->minus_dEdv));
       }
       double gradient_norm = scratch->minus_dEdv.norm();
-      std::cout << "gradient norm is " << gradient_norm << std::endl;
       if ((gradient_norm < params.newton_gradient_epsilon) && (count > 0))
         break;
 

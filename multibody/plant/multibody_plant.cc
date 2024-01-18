@@ -2736,7 +2736,8 @@ systems::EventStatus MultibodyPlant<T>::CalcDiscreteStep(
   // This requires one of our custom managers to become the default
   // MultibodyPlant manager.
   if (discrete_update_manager_) {
-    std::cout << "mpb calls discrete update manager::CalcDiscreteValues" << std::endl;
+    std::cout << "mpb calls discrete update manager::CalcDiscreteValues"
+              << std::endl;
     discrete_update_manager_->CalcDiscreteValues(context0, updates);
     return systems::EventStatus::Succeeded();
   }
@@ -2773,12 +2774,14 @@ void MultibodyPlant<T>::DeclareStateCacheAndPorts() {
   DRAKE_DEMAND(this->is_finalized());
 
   if (is_discrete()) {
-    this->DeclarePeriodicDiscreteUpdateEvent(
-        time_step_, 0.0, &MultibodyPlant<T>::CalcDiscreteStep);
+    // this->DeclarePeriodicDiscreteUpdateEvent(
+    //     time_step_, 0.0, &MultibodyPlant<T>::CalcDiscreteStep);
 
     // ----------------------- newly added for mpm
+    // note: the function call must update both mpm and whatever
+    // CalcDiscreteStep does, so the above is not needed
     this->DeclarePeriodicUnrestrictedUpdateEvent(
-        time_step_, 0.0, &MultibodyPlant<T>::CalcDiscreteStepMpm);
+        time_step_, 0.0, &MultibodyPlant<T>::CalcDiscreteStepGeneral);
     // ----------------------- newly added for mpm
 
     // Also permit triggering a step via a Forced update.

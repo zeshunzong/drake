@@ -333,6 +333,7 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     mpm_model_->SetMpmStateIndex(
         this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state)));
     std::cout << "add " << num_particles << "particles " << std::endl;
+    getchar();
   }
 
   // ---------------- newly added for MPM ---------------

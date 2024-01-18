@@ -3,11 +3,11 @@
 #include <memory>
 #include <vector>
 
+#include "drake/math/rigid_transform.h"
+#include "drake/multibody/mpm/internal/analytic_level_set.h"
 #include "drake/multibody/mpm/internal/poisson_disk.h"
 #include "drake/multibody/mpm/particles.h"
 #include "drake/multibody/mpm/sparse_grid.h"
-#include "drake/multibody/mpm/internal/analytic_level_set.h"
-#include "drake/math/rigid_transform.h"
 
 namespace drake {
 namespace multibody {
@@ -56,12 +56,11 @@ struct MpmState {
     // we assume all particles start with zero velocity
     for (int p = 0; p < num_particles; ++p) {
       particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
-                             elastoplastic_model.Clone(), mass_p,
-                             reference_volume_p);
+                            elastoplastic_model.Clone(), mass_p,
+                            reference_volume_p);
     }
     return num_particles;  // return the number of particles added
   }
-
 
   Particles<T> particles{};
   SparseGrid<T> sparse_grid;
@@ -76,20 +75,17 @@ struct TransferScratch {
   G2pPad<T> g2p_pad{};
 };
 
-
 template <typename T>
 struct MpmSolverScratch {
-
-  std::vector<Vector3<T>> v_prev; // previous step grid v
+  std::vector<Vector3<T>> v_prev;  // previous step grid v
   Eigen::VectorX<T> minus_dEdv;
-  Eigen::VectorX<T> dG; // change to be reflected on grid data
+  Eigen::VectorX<T> dG;  // change to be reflected on grid data
   std::vector<size_t> nodes_collide_with_ground;
   MatrixX<T> d2Edv2;
   TransferScratch<T> transfer_scratch;
   ParticlesData<T> particles_data;
 
   std::vector<size_t> collision_nodes;
-  
 };
 
 }  // namespace mpm

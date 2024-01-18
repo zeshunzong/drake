@@ -187,11 +187,6 @@ class CompliantContactManager final : public DiscreteUpdateManager<T> {
   // ---------------------newly added for MPM, called by DiscreteUpdateManager::
   void DoCalcAbstractValues(const systems::Context<T>& context,
                             systems::State<T>* update) const final {
-    // optional, EvalContactSolverResults will also be called inside
-    // deformable_driver_->CalcAbstractStates()
-    const drake::multibody::contact_solvers::internal::ContactSolverResults<T>&
-        results = this->EvalContactSolverResults(context);
-    unused(results);
     if constexpr (std::is_same_v<T, double>) {
       if (deformable_driver_ != nullptr) {
         deformable_driver_->CalcAbstractStates(context, update);

@@ -151,10 +151,6 @@ class MpmDriver {
     transfer_.UpdateParticlesState(particles_data_, dt_, &particles_);
     // update particle position, this is the last step
     particles_.AdvectParticles(dt_);
-
-    // for (size_t i = 0; i < particles_.num_particles(); ++i) {
-    //   std::cout << particles_.velocities()[i](2) << std::endl;
-    // }
   }
 
   const Particles<T>& particles() const { return particles_; }
