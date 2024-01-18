@@ -21,7 +21,7 @@ struct NewtonParams {
   double newton_gradient_epsilon = 1e-5;
   bool matrix_free = true;
   bool linear_constitutive_model = true;
-  bool apply_ground = true;
+  bool apply_ground = false;
   bool sticky_ground = true;
 };
 

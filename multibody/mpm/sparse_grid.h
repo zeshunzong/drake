@@ -174,6 +174,37 @@ class SparseGrid {
   internal::MassAndMomentum<T> ComputeTotalMassMomentum(
       const GridData<T>& grid_data) const;
 
+  // computes the sparsity patttern of the hessian matrix
+  std::vector<std::vector<int>> CalcGridHessianSparsityPattern() const {
+    std::vector<std::vector<int>> pattern;
+    Vector3<int> current_index_3d;
+    // loop over all active grid nodes
+    for (size_t index1d = 0; index1d < num_active_nodes(); ++index1d) {
+      current_index_3d = To3DIndex(index1d);
+      std::vector<int> pattern_i;
+      // get its 125 neighbors
+      for (int ic = -2; ic <= 2; ++ic) {
+        for (int ib = -2; ib <= 2; ++ib) {
+          for (int ia = -2; ia <= 2; ++ia) {
+            Vector3<int> neighbor_node_index_3d =
+                current_index_3d +
+                Vector3<int>(ia, ib, ic);  // global 3d index of node i
+            if (IsActive(neighbor_node_index_3d)) {
+              //  we first require this is an active grid node
+              if (To1DIndex(neighbor_node_index_3d) >= index1d) {
+                // we also require that this block should be in the upper right
+
+                pattern_i.push_back(To1DIndex(neighbor_node_index_3d));
+              }
+            }
+          }
+        }
+      }
+      pattern.push_back(std::move(pattern_i));
+    }
+    return pattern;
+  }
+
  private:
   double h_{};
 

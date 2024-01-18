@@ -154,6 +154,9 @@ void SapDriver<T>::CalcLinearDynamicsMatrix(const systems::Context<T>& context,
     if (manager().deformable_driver_ != nullptr &&
         manager().deformable_driver_->num_deformable_bodies() > 0) {
       manager().deformable_driver_->AppendLinearDynamicsMatrix(context, A);
+    } else if (manager().deformable_driver_ != nullptr &&
+               manager().deformable_driver_->ExistsMpmBody()) {
+      manager().deformable_driver_->AppendLinearDynamicsMatrixMpm(context, A);
     }
   }
 }
@@ -185,6 +188,17 @@ void SapDriver<T>::CalcFreeMotionVelocities(const systems::Context<T>& context,
       v_star->resize(rigid_dofs + deformable_dofs);
       v_star->head(rigid_dofs) = v0 + dt * vdot0;
       v_star->tail(deformable_dofs) = deformable_v_star;
+    } else if (manager().deformable_driver_ != nullptr &&
+               manager().deformable_driver_->ExistsMpmBody()) {
+      // TODO(zeshunzong): add eval
+      VectorX<T> deformable_v_star_mpm;
+      manager().deformable_driver_->CalcParticipatingFreeMotionVelocitiesMpm(
+          context, &deformable_v_star_mpm);
+      const int rigid_dofs = v0.size();
+      const int deformable_dofs_mpm = deformable_v_star_mpm.size();
+      v_star->resize(rigid_dofs + deformable_dofs_mpm);
+      v_star->head(rigid_dofs) = v0 + dt * vdot0;
+      v_star->tail(deformable_dofs_mpm) = deformable_v_star_mpm;
     } else {
       *v_star = v0 + dt * vdot0;
     }
@@ -756,7 +770,13 @@ void SapDriver<T>::CalcContactProblemCache(
       (manager().deformable_driver_ == nullptr)
           ? 0
           : manager().deformable_driver_->num_deformable_bodies();
-  const int num_objects = num_rigid_bodies + num_deformable_bodies;
+  int num_objects = num_rigid_bodies + num_deformable_bodies;
+  if (manager().deformable_driver_ != nullptr &&
+      manager().deformable_driver_->ExistsMpmBody()) {
+    num_objects = num_objects + 1;  // there is only one MPM body
+    // if this is executed, then it must be that there is no fem
+    DRAKE_DEMAND(num_deformable_bodies == 0);
+  }
   cache->sap_problem = std::make_unique<SapContactProblem<T>>(
       plant().time_step(), std::move(A), std::move(v_star));
   cache->sap_problem->set_num_objects(num_objects);
@@ -857,12 +877,18 @@ void SapDriver<T>::AddCliqueContribution(
         manager().deformable_driver_.get();
     DRAKE_THROW_UNLESS(deformable_driver != nullptr);
     if constexpr (std::is_same_v<T, double>) {
-      const int num_deformable_dofs = values->size() - plant().num_velocities();
-      Eigen::Ref<VectorX<T>> deformable_values =
-          values->tail(num_deformable_dofs);
-      DeformableBodyIndex body_index(clique - tree_topology().num_trees());
-      deformable_driver->EvalParticipatingVelocityMultiplexer(context)
-          .Demultiplex(&deformable_values, body_index) += clique_values;
+      if (deformable_driver->num_deformable_bodies() > 0) {
+        const int num_deformable_dofs =
+            values->size() - plant().num_velocities();
+        Eigen::Ref<VectorX<T>> deformable_values =
+            values->tail(num_deformable_dofs);
+        DeformableBodyIndex body_index(clique - tree_topology().num_trees());
+        deformable_driver->EvalParticipatingVelocityMultiplexer(context)
+            .Demultiplex(&deformable_values, body_index) += clique_values;
+      } else if (deformable_driver->ExistsMpmBody()) {
+        const int num_mpm_dofs = values->size() - plant().num_velocities();
+        values->tail(num_mpm_dofs) += clique_values;
+      }
     } else {
       /* For non-double scalars, we can't have `deformable_driver != nullptr`,
        so we won't reach here. */
@@ -907,6 +933,16 @@ void SapDriver<T>::CalcSapSolverResults(
       const int deformable_dofs = deformable_v0.size();
       v0.conservativeResize(rigid_dofs + deformable_dofs);
       v0.tail(deformable_dofs) = deformable_v0;
+    } else if (manager().deformable_driver_ != nullptr &&
+               manager().deformable_driver_->ExistsMpmBody()) {
+      // TODO(zeshunzong): write eval
+      VectorX<double> deformable_v0_mpm;
+      manager().deformable_driver_->CalcParticipatingVelocitiesMpm(
+          context, &deformable_v0_mpm);
+      const int rigid_dofs = v0.size();
+      const int deformable_dofs_mpm = deformable_v0_mpm.size();
+      v0.conservativeResize(rigid_dofs + deformable_dofs_mpm);
+      v0.tail(deformable_dofs_mpm) = deformable_v0_mpm;
     }
   }
 

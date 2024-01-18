@@ -25,7 +25,7 @@ struct MpmState {
     const std::array<Vector3<double>, 2> bounding_box =
         level_set.bounding_box();
     // TODO(zeshunzong): pass is input
-    int min_num_particles_per_cell = 4;
+    int min_num_particles_per_cell = 1;
     double sample_r =
         sparse_grid.h() / (std::cbrt(min_num_particles_per_cell) + 1);
 

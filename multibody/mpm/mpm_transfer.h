@@ -5,12 +5,13 @@
 #include <vector>
 
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/contact_solvers/block_sparse_lower_triangular_or_symmetric_matrix.h"
 #include "drake/multibody/mpm/grid_data.h"
+#include "drake/multibody/mpm/mpm_state.h"
 #include "drake/multibody/mpm/pad.h"
 #include "drake/multibody/mpm/particles.h"
 #include "drake/multibody/mpm/particles_data.h"
 #include "drake/multibody/mpm/sparse_grid.h"
-#include "drake/multibody/mpm/mpm_state.h"
 
 namespace drake {
 namespace multibody {
@@ -95,6 +96,115 @@ class MpmTransfer {
       const Particles<T>& particles, const SparseGrid<T>& grid,
       const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs,
       MatrixX<T>* hessian) const;
+
+  // compute grid elastic hessian, but a block sparse format
+  multibody::contact_solvers::internal::
+      BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>
+      ComputeGridDElasticEnergyDV2SparseBlockSymmetric(
+          const Particles<T>& particles, const SparseGrid<T>& grid,
+          const std::vector<Eigen::Matrix<T, 9, 9>>& dPdFs, double dt) const {
+    if constexpr (std::is_same_v<T, double>) {
+      std::vector<Eigen::Matrix<T, 9, 9>> dPdF_contractF0_contractF0 =
+          particles.ComputeDPDFContractF0ContractF0(dPdFs);
+      std::vector<std::vector<int>> neighbors =
+          grid.CalcGridHessianSparsityPattern();
+      std::vector<int> block_sizes(grid.num_active_nodes(), 3);
+      multibody::contact_solvers::internal::BlockSparsityPattern
+          hessian_pattern(std::move(block_sizes), std::move(neighbors));
+      multibody::contact_solvers::internal::
+          BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>
+              hess_sparse(std::move(hessian_pattern));
+
+      Vector3<int> batch_index_3d;
+
+      const std::vector<Vector3<int>>& base_nodes = particles.base_nodes();
+      const std::vector<size_t>& batch_starts = particles.batch_starts();
+      MatrixX<T> pad_hessian;
+      for (size_t i = 0; i < particles.num_batches(); ++i) {
+        particles.ComputePadHessianForOneBatch(i, dPdF_contractF0_contractF0,
+                                               &pad_hessian);
+        AddPadHessianToHessianSymmetricBlockSparse(
+            base_nodes[batch_starts[i]], grid, pad_hessian * (dt * dt),
+            &hess_sparse);
+      }
+
+      return hess_sparse;
+    } else {
+      throw;
+    }
+  }
+
+  void AddPadHessianToHessianSymmetricBlockSparse(
+      const Vector3<int> batch_index_3d, const SparseGrid<T>& grid,
+      const MatrixX<T>& pad_hessian,
+      multibody::contact_solvers::internal::
+          BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>*
+              result) const {
+    if constexpr (std::is_same_v<T, double>) {
+      // temporary variables
+      int idx_local_i, idx_local_j;
+      Vector3<int> node_i_idx_3d, node_j_idx_3d;
+
+      for (int ia = -1; ia <= 1; ++ia) {
+        for (int ib = -1; ib <= 1; ++ib) {
+          for (int ic = -1; ic <= 1; ++ic) {
+            idx_local_i = 9 * (ia + 1) + 3 * (ib + 1) + (ic + 1);
+            // local index 0-26
+            node_i_idx_3d = batch_index_3d + Vector3<int>(ia, ib, ic);
+            // global 3d index of node i
+
+            for (int ja = -1; ja <= 1; ++ja) {
+              for (int jb = -1; jb <= 1; ++jb) {
+                for (int jc = -1; jc <= 1; ++jc) {
+                  idx_local_j = 9 * (ja + 1) + 3 * (jb + 1) + (jc + 1);
+                  // local index 0-26
+                  node_j_idx_3d = batch_index_3d + Vector3<int>(ja, jb, jc);
+                  // since symmetric, only add lower triangle
+                  if (grid.To1DIndex(node_i_idx_3d) >=
+                      grid.To1DIndex(node_j_idx_3d)) {
+                    const auto& dfi_dvj_block =
+                        pad_hessian.template block<3, 3>(idx_local_i * 3,
+                                                         idx_local_j * 3);
+                    result->AddToBlock(grid.To1DIndex(node_i_idx_3d),
+                                       grid.To1DIndex(node_j_idx_3d),
+                                       dfi_dvj_block);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Given m grid node velocities (3mby1) and a particle with index
+  // index_particle, compute J (3by3m) such that velocity of the particle = J *
+  // grid_velocity
+  // tested
+  void CalcJacobianGridVToParticleVAtParticle(size_t p,
+                                              const Particles<T>& particles,
+                                              const SparseGrid<T>& sparse_grid,
+                                              MatrixX<T>* J) const {
+    DRAKE_DEMAND(!particles.NeedReordering());
+    (*J) = MatrixX<T>::Zero(3, 3 * sparse_grid.num_active_nodes());
+    const Vector3<int> base_node_p = particles.GetBaseNodeAt(p);
+    Matrix3<T> local_J;
+    int idx_local;
+    int idx_global;
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          idx_local = (c + 1) + 3 * (b + 1) + 9 * (a + 1);
+          local_J =
+              particles.GetWeightAt(p, idx_local) * Matrix3<T>::Identity();
+          idx_global =
+              sparse_grid.To1DIndex(base_node_p + Vector3<int>(a, b, c));
+          J->template block<3, 3>(0, idx_global*3) = local_J;
+        }
+      }
+    }
+  }
 
   /**
    * Computes result += d2(elastic_energy)/dv2 * z.

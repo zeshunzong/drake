@@ -139,6 +139,7 @@ drake_cc_library(
         "//common:essential",
         "//multibody/mpm/constitutive_model:corotated_elastic_model",
         ":mpm_state",
+        "//multibody/contact_solvers",
     ],
 )
 

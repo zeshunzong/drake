@@ -208,6 +208,37 @@ class MpmModel {
                                  double dt, MatrixX<T>* hessian) const;
 
   /**
+   * d total_energy dv^2, in a BlockSparseLowerTriangularOrSymmetricMatrix form
+   */
+  multibody::contact_solvers::internal::
+      BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>
+      ComputeD2EnergyDV2SymmetricBlockSparse(
+          const MpmTransfer<T>& transfer,
+          const DeformationState<T>& deformation_state, double dt) const {
+    if constexpr (std::is_same_v<T, double>) {
+      multibody::contact_solvers::internal::
+          BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>
+              result =
+                  transfer.ComputeGridDElasticEnergyDV2SparseBlockSymmetric(
+                      deformation_state.particles(),
+                      deformation_state.sparse_grid(),
+                      deformation_state.dPdFs(), dt);
+      // add the mass part
+      for (size_t i = 0; i < deformation_state.sparse_grid().num_active_nodes();
+           ++i) {
+        Eigen::Matrix3<double> diagonal_mass = Eigen::Matrix3<double>::Zero();
+        diagonal_mass.diagonal().setConstant(
+            deformation_state.grid_data().GetMassAt(i));
+        result.AddToBlock(i, i, diagonal_mass);
+      }
+
+      return result;
+    } else {
+      throw;
+    }
+  }
+
+  /**
    * Computes result += ComputeD2EnergyDV2() * z.
    */
   void AddD2EnergyDV2TimesZ(const Eigen::VectorX<T>& z,
