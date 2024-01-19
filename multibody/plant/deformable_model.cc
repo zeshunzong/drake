@@ -313,6 +313,30 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     DeformableBodyId id = body_ids_[i];
     body_id_to_index_[id] = i;
   }
+
+  // ---------------- newly added for MPM ---------------
+  if (ExistsMpmModel()) {
+    // crate mpm_state = [particles, sparse_grid]
+    mpm::MpmState<T> mpm_state(mpm_model_->InitialObjectParams().grid_h);
+    // append particles
+    int num_particles = mpm_state.AddParticlesViaPoissonDiskSampling(
+        *(mpm_model_->InitialObjectParams().level_set),
+        
+        *(mpm_model_->InitialObjectParams().pose),
+        *(mpm_model_->InitialObjectParams().constitutive_model),
+        mpm_model_->InitialObjectParams().density);
+
+    // TODO(zeshunzong): add to initialize event?
+    mpm::MpmTransfer<T> initial_tranfer{};
+    initial_tranfer.SetUpTransfer(&mpm_state.sparse_grid, &mpm_state.particles);
+
+    mpm_model_->SetMpmStateIndex(
+        this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state)));
+    std::cout << "add " << num_particles << "particles " << std::endl;
+    getchar();
+  }
+
+  // ---------------- newly added for MPM ---------------
 }
 
 template <typename T>

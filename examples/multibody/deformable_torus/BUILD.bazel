@@ -26,6 +26,8 @@ drake_cc_binary(
         "//systems/analysis:simulator",
         "//systems/framework:diagram",
         "@gflags",
+        "//multibody/mpm/constitutive_model:linear_corotated_model",
+        "//multibody/mpm/constitutive_model:corotated_elastic_model",
     ],
 )
 

@@ -91,6 +91,13 @@ class GridData {
     return velocities_[index_1d];
   }
 
+  void GetFlattenedVelocities(VectorX<T>* result) const {
+    result->resize(3 * num_active_nodes());
+    for (size_t i = 0; i < num_active_nodes(); ++i) {
+      result->segment(3 * i, 3) = GetVelocityAt(i);
+    }
+  }
+
   /**
    * @pre index_1d < num_active_nodes()
    */
@@ -105,6 +112,12 @@ class GridData {
 
   void SetVelocities(const std::vector<Vector3<T>>& velocities) {
     velocities_ = velocities;
+  }
+
+  void SetVelocities(const VectorX<T>& velocities) {
+    for (size_t i = 0; i < num_active_nodes(); ++i) {
+      velocities_[i] = velocities.segment(3*i, 3);
+    }
   }
 
   void AddDKineticEnergyDV(std::vector<Vector3<T>>* result) const {

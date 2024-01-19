@@ -447,6 +447,17 @@ class Particles {
     return weights_[p].GetWeightGradientAt(neighbor_node);
   }
 
+  /**
+   * Returns the weight Nᵢ(xₚ), where i is the local index of a neighbor grid
+   * node.
+   * @pre p < num_particles().
+   * @pre neighbor_grid < 27.
+   */
+  const T& GetWeightAt(size_t p, size_t neighbor_node) const {
+    DRAKE_ASSERT(p < num_particles());
+    return weights_[p].GetWeightAt(neighbor_node);
+  }
+
  private:
   // Ensures that all attributes (std::vectors) have correct size. This only
   // needs to be called when new particles are added.

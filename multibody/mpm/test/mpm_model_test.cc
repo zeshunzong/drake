@@ -219,6 +219,86 @@ GTEST_TEST(MpmModelTest, TestHessianTimesZ) {
   }
 }
 
+// test the symmetric block sparse implementation is correct
+// i.e. same as the dense matrix implementation
+GTEST_TEST(MpmModelTest, TestHessianSymmetricBlockSparse) {
+  const double h = 0.2;
+  double dt = 0.1;
+  Particles<double> particles = Particles<double>();
+  particles.AddParticle(
+      Vector3<double>(0.01, 0.01, 0.01), Vector3<double>(0.0, 0.0, 0.0),
+      std::make_unique<CorotatedElasticModel<double>>(1.0, 0.2), 1.0, 1.0);
+
+  particles.AddParticle(
+      Vector3<double>(0.05, -0.05, 0.15), Vector3<double>(0.0, 0.0, 0.0),
+      std::make_unique<CorotatedElasticModel<double>>(3.0, 0.2), 1.0, 1.0);
+
+  particles.AddParticle(
+      Vector3<double>(-1.2, 0.0, 0.4), Vector3<double>(0.0, 0.0, 0.0),
+      std::make_unique<CorotatedElasticModel<double>>(5.0, 0.2), 1.0, 1.0);
+
+  SparseGrid<double> sparse_grid(h);
+  GridData<double> grid_data{};
+
+  MpmTransfer<double> mpm_transfer{};
+  TransferScratch<double> transfer_scratch{};
+  DeformationState<double> deformation_state(particles, sparse_grid, grid_data);
+
+  // setup mpm_model and auxiliary scratch
+  MpmModel<double> mpm_model{};
+
+  mpm_transfer.SetUpTransfer(&sparse_grid, &particles);
+  mpm_transfer.P2G(particles, sparse_grid, &grid_data, &transfer_scratch);
+
+  // now randomly modify some grid velocities
+  Eigen::Matrix3Xd V =
+      Eigen::MatrixXd::Random(3, sparse_grid.num_active_nodes());
+  std::vector<Vector3<double>> grid_velocities_input{};
+  for (size_t i = 0; i < sparse_grid.num_active_nodes(); ++i) {
+    grid_velocities_input.push_back(V.col(i));
+  }
+  grid_data.SetVelocities(grid_velocities_input);
+  deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
+
+  Eigen::VectorXd z(3 * sparse_grid.num_active_nodes());
+  Eigen::VectorXd hessian_times_z(3 * sparse_grid.num_active_nodes());
+
+  // total hessian
+  MatrixX<double> hessian;
+  mpm_model.ComputeD2EnergyDV2(mpm_transfer, deformation_state, dt, &hessian);
+
+  multibody::contact_solvers::internal::
+      BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>
+          hessian_symmetric_block_sparse =
+              mpm_model.ComputeD2EnergyDV2SymmetricBlockSparse(
+                  mpm_transfer, deformation_state, dt);
+
+  EXPECT_TRUE(CompareMatrices(
+      hessian, hessian_symmetric_block_sparse.MakeDenseMatrix(), kTolerance));
+
+  // test jacobian
+  // TODO(zeshunzong): move this to transfer test
+  ParticlesData<double> particles_data;
+  mpm_transfer.G2P(sparse_grid, grid_data, particles, &particles_data,
+                   &transfer_scratch);
+  // update velocity, F_trial, F_elastic, stress, B_matrix
+  mpm_transfer.UpdateParticlesState(particles_data, dt, &particles);
+
+  Eigen::VectorXd grid_vs =
+      Eigen::VectorXd::Zero(3 * grid_data.num_active_nodes());
+  for (size_t i = 0; i < grid_data.num_active_nodes(); ++i) {
+    grid_vs.segment(3 * i, 3) = grid_data.GetVelocityAt(i);
+  }
+
+  for (size_t p = 0; p < particles.num_particles(); ++p) {
+    MatrixX<double> J;
+    mpm_transfer.CalcJacobianGridVToParticleVAtParticle(p, particles,
+                                                        sparse_grid, &J);
+    EXPECT_TRUE(
+        CompareMatrices(particles.GetVelocityAt(p), J * grid_vs, kTolerance));
+  }
+}
+
 }  // namespace
 }  // namespace mpm
 }  // namespace multibody
