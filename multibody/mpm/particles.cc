@@ -198,6 +198,7 @@ void Particles<T>::ComputeFsPsdPdFs(
   }
 }
 
+// TODO(zeshunzong): can be optimized a bit (computing only half)
 template <typename T>
 void Particles<T>::ComputePadHessianForOneBatch(
     size_t batch_i,

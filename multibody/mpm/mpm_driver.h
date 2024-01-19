@@ -88,7 +88,6 @@ class MpmDriver {
   }
 
   int AdvanceDt() {
-
     int num_newtons = ComputeGridVelocities();
     std::cout << "num newtons: " << num_newtons << std::endl;
     // now we have G
@@ -122,12 +121,10 @@ class MpmDriver {
       model_.ComputeMinusDEnergyDV(transfer_, v_prev_, deformation_state, dt_,
                                    &minus_dEdv_, &scratch_);
 
-      if (apply_ground_) 
-        ProjectCollisionGround(&minus_dEdv_);
-      
-      if ((minus_dEdv_.norm() < newton_epsilon_) && (count > 0))
-        break;
-  
+      if (apply_ground_) ProjectCollisionGround(&minus_dEdv_);
+
+      if ((minus_dEdv_.norm() < newton_epsilon_) && (count > 0)) break;
+
       // find dG_ = hessian^-1 * minus_gradient
       if (matrix_free_) {
         MatrixReplacement<T> hessian_operator =
@@ -154,10 +151,6 @@ class MpmDriver {
     transfer_.UpdateParticlesState(particles_data_, dt_, &particles_);
     // update particle position, this is the last step
     particles_.AdvectParticles(dt_);
-
-    // for (size_t i = 0; i < particles_.num_particles(); ++i) {
-    //   std::cout << particles_.velocities()[i](2) << std::endl;
-    // }
   }
 
   const Particles<T>& particles() const { return particles_; }
@@ -169,7 +162,7 @@ class MpmDriver {
 
   void SetStickyGround(bool sticky) { sticky_ground_ = sticky; }
 
-  void WriteParticlesToBgeo(int io_step) {
+  void WriteParticlesToBgeo(int io_step) const {
     std::string output_filename = "./f" + std::to_string(io_step) + ".bgeo";
     internal::WriteParticlesToBgeo(output_filename, particles_.positions(),
                                    particles_.velocities(),

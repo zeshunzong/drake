@@ -222,6 +222,16 @@ class InterpolationWeights {
     return weight_gradients_[neighbor_node];
   }
 
+  /**
+   * Returns the weight wᵢₚ for *this* particle p and the
+   * neighbor_node-th node among its 27 neighbor nodes.
+   * @pre neighbor_node < 27.
+   */
+  const T& GetWeightAt(size_t neighbor_node) const {
+    DRAKE_ASSERT(neighbor_node < 27);
+    return weights_[neighbor_node];
+  }
+
  private:
   std::array<T, 27> weights_{};
   std::array<Vector3<T>, 27> weight_gradients_{};
