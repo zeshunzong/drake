@@ -174,8 +174,11 @@ CompliantContactManager<T>::CalcContactKinematics(
                           DiscreteContactType::kHydroelastic,
                           &contact_kinematics);
   if constexpr (std::is_same_v<T, double>) {
-    if (deformable_driver_ != nullptr) {
+    if (deformable_driver_ != nullptr && deformable_driver_->num_deformable_bodies()>0) {
       deformable_driver_->AppendContactKinematics(context, &contact_kinematics);
+    } else if (deformable_driver_ != nullptr && deformable_driver_->ExistsMpmBody()) {
+      // note: no fem allowed
+      deformable_driver_->AppendContactKinematicsMpm(context, &contact_kinematics);
     }
   }
   return contact_kinematics;
@@ -363,8 +366,10 @@ void CompliantContactManager<T>::CalcDiscreteContactPairs(
     AppendDiscreteContactPairsForHydroelasticContact(context, contact_pairs);
   }
   if constexpr (std::is_same_v<T, double>) {
-    if (deformable_driver_ != nullptr) {
+    if (deformable_driver_ != nullptr && deformable_driver_->num_deformable_bodies()>0) {
       deformable_driver_->AppendDiscreteContactPairs(context, contact_pairs);
+    } else if (deformable_driver_ != nullptr && deformable_driver_->ExistsMpmBody()) {
+      deformable_driver_->AppendDiscreteContactPairsMpm(context, contact_pairs);
     }
   }
 }

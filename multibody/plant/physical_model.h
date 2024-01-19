@@ -169,6 +169,11 @@ class PhysicalModel : public internal::ScalarConvertibleComponent<T> {
   static systems::DiscreteStateIndex DeclareDiscreteState(
       MultibodyPlant<T>* plant, const VectorX<T>& model_value);
 
+  // ------------- newly add for MPM --------------
+  static systems::AbstractStateIndex DeclareAbstractState(
+      MultibodyPlant<T>* plant, const AbstractValue& model_value);
+  // ------------- newly add for MPM --------------
+
   static systems::LeafOutputPort<T>& DeclareAbstractOutputPort(
       MultibodyPlant<T>* plant, std::string name,
       typename systems::LeafOutputPort<T>::AllocCallback alloc_function,
