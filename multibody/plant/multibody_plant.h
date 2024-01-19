@@ -5185,19 +5185,6 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
     return systems::EventStatus::Succeeded();
   }
 
-  // ------------------ newly added for mpm -----------------------
-  systems::EventStatus CalcDiscreteStepMpm(const systems::Context<T>& context0,
-                                           systems::State<T>* update) const {
-    this->ValidateContext(context0);
-    if (discrete_update_manager_) {
-      DRAKE_ASSERT(update != nullptr);
-      discrete_update_manager_->CalcAbstractValues(context0, update);
-      return systems::EventStatus::Succeeded();
-    }
-    return systems::EventStatus::Succeeded();
-  }
-  // ------------------ newly added for mpm -----------------------
-
   // Data will be resized on output according to the documentation for
   // JointLockingCacheData.
   void CalcJointLockingCache(const systems::Context<T>& context,
