@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -5140,6 +5141,49 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
   systems::EventStatus CalcDiscreteStep(
       const systems::Context<T>& context0,
       systems::DiscreteValues<T>* updates) const;
+
+  // this function also absorbs what is done in CalcDiscreteStep()
+  systems::EventStatus CalcDiscreteStepGeneral(
+      const systems::Context<T>& context0, systems::State<T>* update) const {
+    this->ValidateContext(context0);
+    if (discrete_update_manager_) {
+      DRAKE_ASSERT(update != nullptr);
+      // ---------------- newly added for MPM --------------
+      // mpm part
+      discrete_update_manager_->CalcAbstractValues(context0, update);
+      // ---------------- newly added for MPM --------------
+      // deformable part
+      discrete_update_manager_->CalcDiscreteValues(
+          context0, &(update->get_mutable_discrete_state()));
+      return systems::EventStatus::Succeeded();
+    }
+
+    // ----------- below is rigid part --------------
+    // Get the system state as raw Eigen vectors
+    // (solution at the previous time step).
+    auto x0 = context0.get_discrete_state(0).get_value();
+    VectorX<T> q0 = x0.topRows(this->num_positions());
+    VectorX<T> v0 = x0.bottomRows(this->num_velocities());
+
+    // For a discrete model this evaluates vdot = (v_next - v0)/time_step() and
+    // includes contact forces.
+    const VectorX<T>& vdot = this->EvalForwardDynamics(context0).get_vdot();
+
+    // TODO(amcastro-tri): Consider replacing this by:
+    //   const VectorX<T>& v_next = solver_results.v_next;
+    // to avoid additional vector operations.
+    const VectorX<T>& v_next = v0 + time_step() * vdot;
+
+    VectorX<T> qdot_next(this->num_positions());
+    MapVelocityToQDot(context0, v_next, &qdot_next);
+    VectorX<T> q_next = q0 + time_step() * qdot_next;
+
+    VectorX<T> x_next(this->num_multibody_states());
+    x_next << q_next, v_next;
+    update->get_mutable_discrete_state().set_value(0, x_next);
+
+    return systems::EventStatus::Succeeded();
+  }
 
   // Data will be resized on output according to the documentation for
   // JointLockingCacheData.
