@@ -75,18 +75,14 @@ class AcrobotGravityCompensator : public systems::LeafSystem<double> {
     // Construct position vectors from L1o to L1q and from L1o to L1r,
     // all expressed in link1 frame. Do the same for position vectors on link2.
     const Vector3<double> up_W(0, 0, 1);
-    const SpatialForce<double> F_L1q_W(
-        Vector3<double>::Zero() /* no torque */,
-        link1.default_mass() * g / 2 * up_W);
-    const SpatialForce<double> F_L1r_W(
-        Vector3<double>::Zero() /* no torque */,
-        link1.default_mass() * g / 2 * up_W);
-    const SpatialForce<double> F_L2q_W(
-        Vector3<double>::Zero() /* no torque */,
-        link2.default_mass() * g / 2 * up_W);
-    const SpatialForce<double> F_L2r_W(
-        Vector3<double>::Zero() /* no torque */,
-        link2.default_mass() * g / 2 * up_W);
+    const SpatialForce<double> F_L1q_W(Vector3<double>::Zero() /* no torque */,
+                                       link1.default_mass() * g / 2 * up_W);
+    const SpatialForce<double> F_L1r_W(Vector3<double>::Zero() /* no torque */,
+                                       link1.default_mass() * g / 2 * up_W);
+    const SpatialForce<double> F_L2q_W(Vector3<double>::Zero() /* no torque */,
+                                       link2.default_mass() * g / 2 * up_W);
+    const SpatialForce<double> F_L2r_W(Vector3<double>::Zero() /* no torque */,
+                                       link2.default_mass() * g / 2 * up_W);
 
     output->resize(4 /* number of forces */);
     (*output)[0].body_index = BodyIndex(1);
@@ -204,7 +200,7 @@ TEST_F(ExternallyAppliedForcesTest, CalcGeneralizedForcesDueToMultibodyForces) {
   MultibodyForces<double> forces(*plant_);
   for (const ExternallyAppliedSpatialForce<double>& a_force :
        externally_applied_spatial_forces) {
-    const Body<double>& body = plant_->get_body(a_force.body_index);
+    const RigidBody<double>& body = plant_->get_body(a_force.body_index);
 
     // Get the pose for this body in the world frame.
     const RigidTransform<double>& X_WB = body.EvalPoseInWorld(plant_context);

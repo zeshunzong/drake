@@ -23,8 +23,8 @@ namespace drake {
 using math::RigidTransform;
 using math::RollPitchYaw;
 using math::RotationMatrix;
-using systems::Context;
 using std::unique_ptr;
+using systems::Context;
 
 namespace multibody {
 namespace test {
@@ -72,13 +72,13 @@ class KukaIiwaModelTests : public ::testing::Test {
   void SetArbitraryConfigurationAndMotion(bool unit_quaternion = true) {
     const VectorX<double> x0_joints = GetArbitraryJointAnglesAndRates();
     SetState(x0_joints);
-     if (!unit_quaternion) {
-        VectorX<double> q = plant_->GetPositions(*context_);
-        // TODO(amcastro-tri): This assumes the first 4 entries in the
-        // generalized positions correspond to the quaternion for the free
-        // floating robot base. Provide API to access these values.
-        q.head<4>() *= 2;  // multiply quaternion by a factor.
-        plant_->SetPositions(context_.get(), q);
+    if (!unit_quaternion) {
+      VectorX<double> q = plant_->GetPositions(*context_);
+      // TODO(amcastro-tri): This assumes the first 4 entries in the
+      // generalized positions correspond to the quaternion for the free
+      // floating robot base. Provide API to access these values.
+      q.head<4>() *= 2;  // multiply quaternion by a factor.
+      plant_->SetPositions(context_.get(), q);
     }
   }
 
@@ -149,7 +149,7 @@ class KukaIiwaModelTests : public ::testing::Test {
   const RigidTransform<double> X_EH_{
       RollPitchYaw<double>{M_PI_2, 0, M_PI_2}.ToRotationMatrix(),
       Vector3<double>{0, 0, 0.081}};
-  const Body<double>* end_effector_link_{nullptr};
+  const RigidBody<double>* end_effector_link_{nullptr};
   const FixedOffsetFrame<double>* frame_H_{nullptr};
 
   // AutoDiffXd model to compute automatic derivatives:

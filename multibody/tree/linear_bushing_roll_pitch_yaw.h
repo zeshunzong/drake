@@ -14,7 +14,7 @@
 namespace drake {
 namespace multibody {
 
-template <typename T> class Body;
+template <typename T> class RigidBody;
 
 /// This ForceElement models a massless flexible bushing that connects a frame A
 /// of a link (body) L0 to a frame C of a link (body) L1.  The bushing can apply
@@ -356,10 +356,10 @@ class LinearBushingRollPitchYaw final : public ForceElement<T> {
                             const Vector3<double>& force_damping_constants);
 
   /// Returns link (body) L0 (frame A is welded to link L0).
-  const Body<T>& link0() const { return frameA().body(); }
+  const RigidBody<T>& link0() const { return frameA().body(); }
 
   /// Returns link (body) L1 (frame C is welded to link L1).
-  const Body<T>& link1() const { return frameC().body(); }
+  const RigidBody<T>& link1() const { return frameC().body(); }
 
   /// Returns frame A, which is the frame that is welded to link (body) L0 and
   /// attached to the bushing.
@@ -503,31 +503,49 @@ class LinearBushingRollPitchYaw final : public ForceElement<T> {
   SpatialForce<T> CalcBushingSpatialForceOnFrameC(
       const systems::Context<T>& context) const;
 
- protected:
-  // Implementation for MultibodyElement::DoDeclareParameters().
-  void DoDeclareParameters(
-      internal::MultibodyTreeSystem<T>* tree_system) override {
-    // Declare parent classes' parameters
-    ForceElement<T>::DoDeclareParameters(tree_system);
-
-    torque_stiffness_parameter_index_ = this->DeclareNumericParameter(
-        tree_system, systems::BasicVector<T>(
-                         torque_stiffness_constants_.template cast<T>()));
-
-    torque_damping_parameter_index_ = this->DeclareNumericParameter(
-        tree_system,
-        systems::BasicVector<T>(torque_damping_constants_.template cast<T>()));
-
-    force_stiffness_parameter_index_ = this->DeclareNumericParameter(
-        tree_system,
-        systems::BasicVector<T>(force_stiffness_constants_.template cast<T>()));
-
-    force_damping_parameter_index_ = this->DeclareNumericParameter(
-        tree_system,
-        systems::BasicVector<T>(force_damping_constants_.template cast<T>()));
+ private:
+  // Implementation for ForceElement::DoDeclareForceElementParameters().
+  void DoDeclareForceElementParameters(
+      internal::MultibodyTreeSystem<T>* tree_system) final {
+    // Sets model values to dummy values to indicate that the model values are
+    // not used. This class stores the the default values of the parameters.
+    torque_stiffness_parameter_index_ =
+        this->DeclareNumericParameter(tree_system, systems::BasicVector<T>(3));
+    torque_damping_parameter_index_ =
+        this->DeclareNumericParameter(tree_system, systems::BasicVector<T>(3));
+    force_stiffness_parameter_index_ =
+        this->DeclareNumericParameter(tree_system, systems::BasicVector<T>(3));
+    force_damping_parameter_index_ =
+        this->DeclareNumericParameter(tree_system, systems::BasicVector<T>(3));
   }
 
- private:
+  // Implementation for ForceElement::DoSetDefaultForceElementParameters().
+  void DoSetDefaultForceElementParameters(
+      systems::Parameters<T>* parameters) const final {
+    // Set the default stiffness and damping parameters.
+    systems::BasicVector<T>& torque_stiffness_parameter =
+        parameters->get_mutable_numeric_parameter(
+            torque_stiffness_parameter_index_);
+    systems::BasicVector<T>& torque_damping_parameter_ =
+        parameters->get_mutable_numeric_parameter(
+            torque_damping_parameter_index_);
+    systems::BasicVector<T>& force_stiffness_parameter_ =
+        parameters->get_mutable_numeric_parameter(
+            force_stiffness_parameter_index_);
+    systems::BasicVector<T>& force_damping_parameter_ =
+        parameters->get_mutable_numeric_parameter(
+            force_damping_parameter_index_);
+
+    torque_stiffness_parameter.set_value(
+        torque_stiffness_constants_.template cast<T>());
+    torque_damping_parameter_.set_value(
+        torque_damping_constants_.template cast<T>());
+    force_stiffness_parameter_.set_value(
+        force_stiffness_constants_.template cast<T>());
+    force_damping_parameter_.set_value(
+        force_damping_constants_.template cast<T>());
+  }
+
   // Friend class for accessing protected/private internals of this class.
   friend class BushingTester;
 

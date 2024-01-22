@@ -11,6 +11,7 @@
 #include "drake/multibody/fem/linear_simplex_element.h"
 #include "drake/multibody/fem/simplex_gaussian_quadrature.h"
 #include "drake/multibody/fem/volumetric_model.h"
+#include "drake/multibody/plant/multibody_plant.h"
 
 namespace drake {
 namespace multibody {
@@ -24,6 +25,12 @@ using geometry::SourceId;
 
 using fem::DeformableBodyConfig;
 using fem::MaterialModel;
+
+template <typename T>
+DeformableModel<T>::DeformableModel(MultibodyPlant<T>* plant) : plant_(plant) {
+  DRAKE_DEMAND(plant_ != nullptr);
+  DRAKE_DEMAND(!plant_->is_finalized());
+}
 
 template <typename T>
 DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
@@ -62,6 +69,7 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
   body_id_to_geometry_id_.emplace(body_id, geometry_id);
   geometry_id_to_body_id_.emplace(geometry_id, body_id);
   body_ids_.emplace_back(body_id);
+  body_id_to_density_prefinalize_.emplace(body_id, config.mass_density());
   return body_id;
 }
 
@@ -98,7 +106,7 @@ void DeformableModel<T>::SetWallBoundaryCondition(DeformableBodyId id,
 
 template <typename T>
 MultibodyConstraintId DeformableModel<T>::AddFixedConstraint(
-    DeformableBodyId body_A_id, const Body<T>& body_B,
+    DeformableBodyId body_A_id, const RigidBody<T>& body_B,
     const math::RigidTransform<double>& X_BA, const geometry::Shape& shape,
     const math::RigidTransform<double>& X_BG) {
   this->ThrowIfSystemResourcesDeclared(__func__);
@@ -147,6 +155,14 @@ MultibodyConstraintId DeformableModel<T>::AddFixedConstraint(
     }
     ++vertex_index;
   }
+  // TODO(xuchenhan-tri): consider adding an option to allow empty constraint.
+  if (spec.vertices.size() == 0) {
+    throw std::runtime_error(
+        fmt::format("No constraint has been added between deformable body with "
+                    "id {} and rigid body with name {}. Remove the call to "
+                    "AddFixedConstraint() if this is intended.",
+                    body_A_id, body_B.name()));
+  }
   body_id_to_constraint_ids_[body_A_id].push_back(constraint_id);
   fixed_constraint_specs_[constraint_id] = std::move(spec);
   return constraint_id;
@@ -158,6 +174,21 @@ systems::DiscreteStateIndex DeformableModel<T>::GetDiscreteStateIndex(
   this->ThrowIfSystemResourcesNotDeclared(__func__);
   ThrowUnlessRegistered(__func__, id);
   return discrete_state_indexes_.at(id);
+}
+
+template <typename T>
+void DeformableModel<T>::AddExternalForce(
+    std::unique_ptr<ForceDensityField<T>> force_density) {
+  this->ThrowIfSystemResourcesDeclared(__func__);
+  force_densities_.push_back(std::move(force_density));
+}
+
+template <typename T>
+const std::vector<const ForceDensityField<T>*>&
+DeformableModel<T>::GetExternalForces(DeformableBodyId id) const {
+  this->ThrowIfSystemResourcesNotDeclared(__func__);
+  ThrowUnlessRegistered(__func__, id);
+  return body_index_to_force_densities_[GetBodyIndex(id)];
 }
 
 template <typename T>
@@ -336,6 +367,32 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
   }
 
   // ---------------- newly added for MPM ---------------
+  /* Add user defined external forces to each body. */
+  body_index_to_force_densities_.resize(num_bodies());
+  for (int i = 0; i < num_bodies(); ++i) {
+    for (int j = 0; j < ssize(force_densities_); ++j) {
+      body_index_to_force_densities_[i].push_back(force_densities_[j].get());
+    }
+  }
+
+  /* Add gravity to each body. */
+  for (const auto& [deformable_id, fem_model] : fem_models_) {
+    const T& density = body_id_to_density_prefinalize_.at(deformable_id);
+    const Vector3<T>& gravity = plant->gravity_field().gravity_vector();
+    auto gravity_force =
+        std::make_unique<GravityForceField<T>>(gravity, density);
+    DeformableBodyIndex index = body_id_to_index_.at(deformable_id);
+    body_index_to_force_densities_[index].emplace_back(gravity_force.get());
+    AddExternalForce(std::move(gravity_force));
+  }
+  body_id_to_density_prefinalize_.clear();
+
+  /* Declare cache entries and input ports for force density fields that need
+   them. */
+  for (std::unique_ptr<ForceDensityField<T>>& force_density :
+       force_densities_) {
+    force_density->DeclareSystemResources(plant_);
+  }
 }
 
 template <typename T>

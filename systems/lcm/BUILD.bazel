@@ -20,6 +20,7 @@ drake_cc_package_library(
         ":lcm_pubsub_system",
         ":lcm_scope_system",
         ":lcm_subscriber_system",
+        ":lcm_system_graphviz",
         ":serializer",
     ],
 )
@@ -35,13 +36,27 @@ drake_cc_library(
 )
 
 drake_cc_library(
+    name = "lcm_system_graphviz",
+    srcs = ["lcm_system_graphviz.cc"],
+    hdrs = ["lcm_system_graphviz.h"],
+    deps = [
+        "//lcm:interface",
+        "//systems/framework:system_base",
+    ],
+)
+
+drake_cc_library(
     name = "lcm_publisher_system",
     srcs = ["lcm_publisher_system.cc"],
     hdrs = ["lcm_publisher_system.h"],
-    deps = [
+    interface_deps = [
         ":serializer",
-        "//lcm:drake_lcm",
+        "//lcm:interface",
         "//systems/framework:leaf_system",
+    ],
+    deps = [
+        ":lcm_system_graphviz",
+        "//lcm:drake_lcm",
     ],
 )
 
@@ -62,10 +77,14 @@ drake_cc_library(
     name = "lcm_subscriber_system",
     srcs = ["lcm_subscriber_system.cc"],
     hdrs = ["lcm_subscriber_system.h"],
-    deps = [
+    interface_deps = [
         ":serializer",
-        "//lcm:drake_lcm",
+        "//lcm:interface",
         "//systems/framework:leaf_system",
+    ],
+    deps = [
+        ":lcm_system_graphviz",
+        "//lcm:drake_lcm",
     ],
 )
 
@@ -78,6 +97,7 @@ drake_cc_library(
         "//systems/framework:leaf_system",
     ],
     deps = [
+        ":lcm_system_graphviz",
         "//lcm:drake_lcm",
     ],
 )
@@ -147,6 +167,7 @@ drake_cc_googletest(
         ":lcm_config_functions",
         "//common/test_utilities:expect_throws_message",
         "//lcm:drake_lcm",
+        "//lcmtypes:drake_signal",
     ],
 )
 
@@ -196,6 +217,16 @@ drake_cc_googletest(
         "//systems/framework:diagram",
         "//systems/framework:diagram_builder",
         "//systems/primitives:sine",
+    ],
+)
+
+drake_cc_googletest(
+    name = "lcm_system_graphviz_test",
+    deps = [
+        ":lcm_system_graphviz",
+        "//lcm:drake_lcm",
+        "//lcmtypes:drake_signal",
+        "@abseil_cpp_internal//absl/strings",
     ],
 )
 

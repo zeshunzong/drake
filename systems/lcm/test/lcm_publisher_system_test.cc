@@ -3,6 +3,7 @@
 #include <cmath>
 #include <memory>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/is_dynamic_castable.h"
@@ -73,7 +74,9 @@ GTEST_TEST(LcmPublisherSystemTest, TestInitializationEvent) {
   // Simulator::Initialize() behavior.
   auto init_events = dut1->AllocateCompositeEventCollection();
   dut1->GetInitializationEvents(*context, &*init_events);
-  dut1->Publish(*context, init_events->get_publish_events());
+  const EventStatus status =
+      dut1->Publish(*context, init_events->get_publish_events());
+  EXPECT_TRUE(status.succeeded());
 
   EXPECT_TRUE(init_was_called);
 
@@ -333,6 +336,15 @@ GTEST_TEST(LcmPublisherSystemTest, TestPublishOffset) {
 
   // Check that we didn't get any redundant (duplicate) messages.
   EXPECT_EQ(sub.count(), 3);
+}
+
+// The Graphviz should have an arrow pointing to the DrakeLcmInterface, plus
+// some extra metadata.
+GTEST_TEST(LcmPublisherSystemTest, Graphviz) {
+  DrakeLcm interface;
+  auto dut = LcmPublisherSystem::Make<lcmt_drake_signal>("SIGNAL", &interface);
+  EXPECT_THAT(dut->GetGraphvizString(), testing::HasSubstr(" -> drakelcm"));
+  EXPECT_THAT(dut->GetGraphvizString(), testing::HasSubstr("channel=SIGNAL"));
 }
 
 }  // namespace

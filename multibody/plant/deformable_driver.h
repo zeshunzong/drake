@@ -21,9 +21,10 @@
 #include "drake/multibody/mpm/mpm_transfer.h"
 #include "drake/multibody/mpm/particles_to_bgeo.h"
 #include "drake/multibody/plant/contact_pair_kinematics.h"
+#include "drake/multibody/plant/deformable_contact_info.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/discrete_contact_data.h"
-#include "drake/multibody/plant/discrete_update_manager.h"
+#include "drake/multibody/plant/discrete_contact_pair.h"
 #include "drake/systems/framework/context.h"
 
 namespace drake {
@@ -77,11 +78,8 @@ class Multiplexer {
   int num_entries_{0};
 };
 
-// template <typename T>
-// struct MpmGridDataAndDPdFs {
-//     mpm::GridData<T> grid_data;
-//     std::vector<Eigen::Matrix<T, 9, 9>> final_dPdFs;
-// }
+template <typename T>
+class DiscreteUpdateManager;
 
 /* DeformableDriver is responsible for computing dynamics information about
  all deformable bodies. It works in tandem with a DeformableModel and a
@@ -594,7 +592,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         Matrix3X<T> J_rigid =
             R_CW.matrix() *
             Jv_v_WBc_W.middleCols(
-                tree_topology.tree_velocities_start(tree_index_rigid),
+                tree_topology.tree_velocities_start_in_v(tree_index_rigid),
                 tree_topology.num_tree_velocities(tree_index_rigid));
         jacobian_blocks.emplace_back(
             tree_index_rigid,
@@ -687,6 +685,13 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context,
       std::vector<contact_solvers::internal::FixedConstraintKinematics<T>>*
           result) const;
+
+  /* Computes the contact information for all deformable bodies for the given
+   `context`.
+   @pre contact_info != nullptr. */
+  void CalcDeformableContactInfo(
+      const systems::Context<T>& context,
+      std::vector<DeformableContactInfo<T>>* contact_info) const;
 
   /* Evaluates FemState at the next time step for each deformable body and
    copies the them into the corresponding DiscreteValues.

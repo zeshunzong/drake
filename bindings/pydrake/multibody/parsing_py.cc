@@ -120,19 +120,6 @@ PYBIND11_MODULE(parsing, m) {
             cls_doc.SetAutoRenaming.doc)
         .def("GetAutoRenaming", &Class::GetAutoRenaming,
             cls_doc.GetAutoRenaming.doc);
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    cls  // BR
-        .def("AddAllModelsFromFile",
-            WrapDeprecated(cls_doc.AddAllModelsFromFile.doc_deprecated,
-                &Class::AddAllModelsFromFile),
-            py::arg("file_name"))
-        .def("AddModelFromFile",
-            WrapDeprecated(cls_doc.AddModelFromFile.doc_deprecated,
-                &Class::AddModelFromFile),
-            py::arg("file_name"), py::arg("model_name") = "");
-#pragma GCC diagnostic pop
   }
 
   // Model Directives
@@ -238,6 +225,17 @@ PYBIND11_MODULE(parsing, m) {
         .def_readonly("model_instance", &Class::model_instance,
             cls_doc.model_instance.doc);
   }
+
+  m.def(
+      "FlattenModelDirectives",
+      [](const parsing::ModelDirectives& directives,
+          const multibody::PackageMap& package_map) {
+        parsing::ModelDirectives out;
+        parsing::FlattenModelDirectives(directives, package_map, &out);
+        return out;
+      },
+      py::arg("directives"), py::arg("package_map"),
+      doc.parsing.FlattenModelDirectives.doc);
 
   m.def("ProcessModelDirectives",
       py::overload_cast<const parsing::ModelDirectives&, Parser*>(

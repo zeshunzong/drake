@@ -79,7 +79,7 @@ class TestCollisionChecker(unittest.TestCase):
 
         mut.LinearDistanceAndInterpolationProvider(plant=plant)
 
-        box_joint_index = plant.GetJointByName("$world_box").index()
+        box_joint_index = plant.GetJointByName("box").index()
         box_joint_weights = np.array([1.0, 0.0, 0.0, 0.0, 2.0, 3.0, 4.0])
         joint_distance_weights = {box_joint_index: box_joint_weights}
         mut.LinearDistanceAndInterpolationProvider(
@@ -351,7 +351,7 @@ class TestCollisionChecker(unittest.TestCase):
         dut.CheckContextConfigCollisionFree(model_context=ccc, q=q)
         self.assertEqual(
             len(dut.CheckConfigsCollisionFree(
-                configs=[q]*4, parallelize=False)),
+                configs=[q]*4, parallelize=True)),
             4)
         dut.CheckConfigsCollisionFree([q])  # Omit the defaulted arg.
 
@@ -382,20 +382,20 @@ class TestCollisionChecker(unittest.TestCase):
         dut.CheckEdgeCollisionFree(q1=q, q2=q)
         dut.CheckEdgeCollisionFree(q1=q, q2=q, context_number=1)
         dut.CheckContextEdgeCollisionFree(model_context=ccc, q1=q, q2=q)
-        dut.CheckEdgeCollisionFreeParallel(q1=q, q2=q, parallelize=False)
+        dut.CheckEdgeCollisionFreeParallel(q1=q, q2=q, parallelize=True)
         self.assertEqual(
             len(dut.CheckEdgesCollisionFree(
                 edges=[(q, q)]*4,
-                parallelize=False)),
+                parallelize=True)),
             4)
         dut.CheckEdgesCollisionFree([(q, q)])  # Omit the defaulted arg.
 
         dut.MeasureEdgeCollisionFree(q1=q, q2=q)
         dut.MeasureEdgeCollisionFree(q1=q, q2=q, context_number=1)
         dut.MeasureContextEdgeCollisionFree(model_context=ccc, q1=q, q2=q)
-        dut.MeasureEdgeCollisionFreeParallel(q1=q, q2=q, parallelize=False)
+        dut.MeasureEdgeCollisionFreeParallel(q1=q, q2=q, parallelize=True)
         measures = dut.MeasureEdgesCollisionFree(
-            edges=[(q, q)]*4, parallelize=False)
+            edges=[(q, q)]*4, parallelize=True)
         self.assertEqual(len(measures), 4)
         self.assertIsInstance(measures[0], mut.EdgeMeasure)
         dut.MeasureEdgesCollisionFree([(q, q)])  # Omit the defaulted arg.
@@ -471,6 +471,6 @@ class TestCollisionChecker(unittest.TestCase):
         points[-1, 1] += 0.1
         A = mut.VisibilityGraph(checker=checker,
                                 points=points,
-                                parallelize=False)
+                                parallelize=True)
         self.assertEqual(A.shape, (num_points, num_points))
         self.assertIsInstance(A, scipy.sparse.csc_matrix)

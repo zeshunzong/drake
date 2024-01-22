@@ -107,8 +107,7 @@ SceneGraph<T>::SceneGraph()
 
 template <typename T>
 template <typename U>
-SceneGraph<T>::SceneGraph(const SceneGraph<U>& other)
-    : SceneGraph() {
+SceneGraph<T>::SceneGraph(const SceneGraph<U>& other) : SceneGraph() {
   model_ = GeometryState<T>(other.model_);
 
   // We need to guarantee that the same source ids map to the same port indices.
@@ -154,8 +153,7 @@ bool SceneGraph<T>::SourceIsRegistered(SourceId id) const {
 }
 
 template <typename T>
-const InputPort<T>& SceneGraph<T>::get_source_pose_port(
-    SourceId id) const {
+const InputPort<T>& SceneGraph<T>::get_source_pose_port(SourceId id) const {
   ThrowUnlessRegistered(id, "Can't acquire pose port for unknown source id: ");
   return this->get_input_port(input_source_ids_.at(id).pose_port);
 }
@@ -263,8 +261,35 @@ void SceneGraph<T>::AddRenderer(
 }
 
 template <typename T>
+void SceneGraph<T>::AddRenderer(
+    Context<T>* context, std::string name,
+    std::unique_ptr<render::RenderEngine> renderer) const {
+  auto& g_state = mutable_geometry_state(context);
+  g_state.AddRenderer(std::move(name), std::move(renderer));
+}
+
+template <typename T>
+void SceneGraph<T>::RemoveRenderer(const std::string& name) {
+  return model_.RemoveRenderer(name);
+}
+
+template <typename T>
+void SceneGraph<T>::RemoveRenderer(Context<T>* context,
+                                   const std::string& name) const {
+  auto& g_state = mutable_geometry_state(context);
+  g_state.RemoveRenderer(name);
+}
+
+template <typename T>
 bool SceneGraph<T>::HasRenderer(const std::string& name) const {
   return model_.HasRenderer(name);
+}
+
+template <typename T>
+bool SceneGraph<T>::HasRenderer(const Context<T>& context,
+                                const std::string& name) const {
+  const auto& g_state = geometry_state(context);
+  return g_state.HasRenderer(name);
 }
 
 template <typename T>
@@ -278,13 +303,38 @@ std::string SceneGraph<T>::GetRendererTypeName(const std::string& name) const {
 }
 
 template <typename T>
+std::string SceneGraph<T>::GetRendererTypeName(const Context<T>& context,
+                                               const std::string& name) const {
+  const auto& g_state = geometry_state(context);
+  const render::RenderEngine* engine = g_state.GetRenderEngineByName(name);
+  if (engine == nullptr) {
+    return {};
+  }
+
+  return NiceTypeName::Get(*engine);
+}
+
+template <typename T>
 int SceneGraph<T>::RendererCount() const {
   return model_.RendererCount();
 }
 
 template <typename T>
+int SceneGraph<T>::RendererCount(const Context<T>& context) const {
+  const auto& g_state = geometry_state(context);
+  return g_state.RendererCount();
+}
+
+template <typename T>
 vector<std::string> SceneGraph<T>::RegisteredRendererNames() const {
   return model_.RegisteredRendererNames();
+}
+
+template <typename T>
+vector<std::string> SceneGraph<T>::RegisteredRendererNames(
+    const Context<T>& context) const {
+  const auto& g_state = geometry_state(context);
+  return g_state.RegisteredRendererNames();
 }
 
 template <typename T>
@@ -373,7 +423,7 @@ const SceneGraphInspector<T>& SceneGraph<T>::model_inspector() const {
 
 template <typename T>
 CollisionFilterManager SceneGraph<T>::collision_filter_manager() {
-  return model_.collision_filter_manager();;
+  return model_.collision_filter_manager();
 }
 
 template <typename T>
@@ -439,8 +489,7 @@ std::vector<FrameId> SceneGraph<T>::GetDynamicFrames(
 }
 
 template <typename T>
-void SceneGraph<T>::CalcPoseUpdate(const Context<T>& context,
-                                   int*) const {
+void SceneGraph<T>::CalcPoseUpdate(const Context<T>& context, int*) const {
   // TODO(SeanCurtis-TRI): Update this when the cache is available.
   // This method is const and the context is const. Ultimately, this will pull
   // cached entities to do the query work. For now, we have to const cast the
@@ -473,14 +522,12 @@ void SceneGraph<T>::CalcPoseUpdate(const Context<T>& context,
         }
         const auto& poses =
             pose_port.template Eval<FramePoseVector<T>>(context);
-        state.SetFramePoses(
-            source_id, poses, &kinematics_data);
+        state.SetFramePoses(source_id, poses, &kinematics_data);
       }
     }
   }
 
-  state.FinalizePoseUpdate(kinematics_data,
-                           &state.mutable_proximity_engine(),
+  state.FinalizePoseUpdate(kinematics_data, &state.mutable_proximity_engine(),
                            state.GetMutableRenderEngines());
 }
 
@@ -511,8 +558,8 @@ void SceneGraph<T>::CalcConfigurationUpdate(const Context<T>& context,
               state.GetName(source_id), source_id));
         }
         const auto& configs =
-            configuration_port
-                .template Eval<GeometryConfigurationVector<T>>(context);
+            configuration_port.template Eval<GeometryConfigurationVector<T>>(
+                context);
         state.SetGeometryConfiguration(source_id, configs, &kinematics_data);
       }
     }

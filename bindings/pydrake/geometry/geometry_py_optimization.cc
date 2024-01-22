@@ -15,6 +15,7 @@
 #include "drake/bindings/pydrake/polynomial_types_pybind.h"
 #include "drake/bindings/pydrake/pydrake_pybind.h"
 #include "drake/common/yaml/yaml_io.h"
+#include "drake/geometry/optimization/affine_ball.h"
 #include "drake/geometry/optimization/affine_subspace.h"
 #include "drake/geometry/optimization/c_iris_collision_geometry.h"
 #include "drake/geometry/optimization/cartesian_product.h"
@@ -25,6 +26,7 @@
 #include "drake/geometry/optimization/graph_of_convex_sets.h"
 #include "drake/geometry/optimization/hpolyhedron.h"
 #include "drake/geometry/optimization/hyperellipsoid.h"
+#include "drake/geometry/optimization/hyperrectangle.h"
 #include "drake/geometry/optimization/intersection.h"
 #include "drake/geometry/optimization/iris.h"
 #include "drake/geometry/optimization/minkowski_sum.h"
@@ -126,6 +128,37 @@ void DefineGeometryOptimization(py::module m) {
             cls_doc.ToShapeWithPose.doc)
         .def("CalcVolume", &ConvexSet::CalcVolume, cls_doc.CalcVolume.doc);
   }
+  // There is a dependency cycle between Hyperellipsoid and AffineBall, so we
+  // need to "forward declare" the Hyperellipsoid class here.
+  py::class_<Hyperellipsoid, ConvexSet> hyperellipsoid_cls(
+      m, "Hyperellipsoid", doc.Hyperellipsoid.doc);
+
+  // AffineBall
+  {
+    const auto& cls_doc = doc.AffineBall;
+    py::class_<AffineBall, ConvexSet> cls(m, "AffineBall", cls_doc.doc);
+    cls  // BR
+        .def(py::init<>(), cls_doc.ctor.doc_0args)
+        .def(py::init<const Eigen::Ref<const Eigen::MatrixXd>&,
+                 const Eigen::Ref<const Eigen::VectorXd>&>(),
+            py::arg("B"), py::arg("center"), cls_doc.ctor.doc_2args)
+        .def(py::init<const Hyperellipsoid&>(), py::arg("ellipsoid"),
+            cls_doc.ctor.doc_1args)
+        .def("B", &AffineBall::B, py_rvp::reference_internal, cls_doc.B.doc)
+        .def("center", &AffineBall::center, py_rvp::reference_internal,
+            cls_doc.center.doc)
+        .def_static("MinimumVolumeCircumscribedEllipsoid",
+            &AffineBall::MinimumVolumeCircumscribedEllipsoid, py::arg("points"),
+            py::arg("rank_tol") = 1e-6,
+            cls_doc.MinimumVolumeCircumscribedEllipsoid.doc)
+        .def_static("MakeAxisAligned", &AffineBall::MakeAxisAligned,
+            py::arg("radius"), py::arg("center"), cls_doc.MakeAxisAligned.doc)
+        .def_static("MakeHypersphere", &AffineBall::MakeHypersphere,
+            py::arg("radius"), py::arg("center"), cls_doc.MakeHypersphere.doc)
+        .def_static("MakeUnitBall", &AffineBall::MakeUnitBall, py::arg("dim"),
+            cls_doc.MakeUnitBall.doc);
+    DefClone(&cls);
+  }
 
   // AffineSubspace
   {
@@ -154,7 +187,10 @@ void DefineGeometryOptimization(py::module m) {
         .def("ContainedIn", &AffineSubspace::ContainedIn, py::arg("other"),
             py::arg("tol") = 1e-15, cls_doc.ContainedIn.doc)
         .def("IsNearlyEqualTo", &AffineSubspace::IsNearlyEqualTo,
-            py::arg("other"), py::arg("tol") = 1e-15, cls_doc.ContainedIn.doc);
+            py::arg("other"), py::arg("tol") = 1e-15, cls_doc.ContainedIn.doc)
+        .def("OrthogonalComplementBasis",
+            &AffineSubspace::OrthogonalComplementBasis,
+            cls_doc.OrthogonalComplementBasis.doc);
     DefClone(&cls);
   }
 
@@ -254,7 +290,7 @@ void DefineGeometryOptimization(py::module m) {
   // Hyperellipsoid
   {
     const auto& cls_doc = doc.Hyperellipsoid;
-    py::class_<Hyperellipsoid, ConvexSet>(m, "Hyperellipsoid", cls_doc.doc)
+    hyperellipsoid_cls  // BR
         .def(py::init<>(), cls_doc.ctor.doc_0args)
         .def(py::init<const Eigen::Ref<const Eigen::MatrixXd>&,
                  const Eigen::Ref<const Eigen::VectorXd>&>(),
@@ -263,6 +299,8 @@ void DefineGeometryOptimization(py::module m) {
                  std::optional<FrameId>>(),
             py::arg("query_object"), py::arg("geometry_id"),
             py::arg("reference_frame") = std::nullopt, cls_doc.ctor.doc_3args)
+        .def(py::init<const AffineBall&>(), py::arg("ellipsoid"),
+            cls_doc.ctor.doc_1args)
         .def("A", &Hyperellipsoid::A, cls_doc.A.doc)
         .def("center", &Hyperellipsoid::center, cls_doc.center.doc)
         .def("MinimumUniformScalingToTouch",
@@ -284,6 +322,30 @@ void DefineGeometryOptimization(py::module m) {
             },
             [](std::pair<Eigen::MatrixXd, Eigen::VectorXd> args) {
               return Hyperellipsoid(std::get<0>(args), std::get<1>(args));
+            }));
+  }
+
+  // Hyperrectangle
+  {
+    const auto& cls_doc = doc.Hyperrectangle;
+    py::class_<Hyperrectangle, ConvexSet>(m, "Hyperrectangle", cls_doc.doc)
+        .def(py::init<>(), cls_doc.ctor.doc_0args)
+        .def(py::init<const Eigen::Ref<const Eigen::VectorXd>&,
+                 const Eigen::Ref<const Eigen::VectorXd>&>(),
+            py::arg("lb"), py::arg("ub"), cls_doc.ctor.doc_2args)
+        .def("lb", &Hyperrectangle::lb, cls_doc.lb.doc)
+        .def("ub", &Hyperrectangle::ub, cls_doc.ub.doc)
+        .def("UniformSample", &Hyperrectangle::UniformSample,
+            py::arg("generator"), cls_doc.UniformSample.doc)
+        .def("Center", &Hyperrectangle::Center, cls_doc.Center.doc)
+        .def("MakeHPolyhedron", &Hyperrectangle::MakeHPolyhedron,
+            cls_doc.MakeHPolyhedron.doc)
+        .def(py::pickle(
+            [](const Hyperrectangle& self) {
+              return std::make_pair(self.lb(), self.ub());
+            },
+            [](std::pair<Eigen::VectorXd, Eigen::VectorXd> args) {
+              return Hyperrectangle(std::get<0>(args), std::get<1>(args));
             }));
   }
 
@@ -418,6 +480,8 @@ void DefineGeometryOptimization(py::module m) {
             cls_doc.configuration_obstacles.doc)
         .def_readwrite("starting_ellipse", &IrisOptions::starting_ellipse,
             cls_doc.starting_ellipse.doc)
+        .def_readwrite("bounding_region", &IrisOptions::bounding_region,
+            cls_doc.bounding_region.doc)
         .def_readwrite("num_additional_constraint_infeasible_samples",
             &IrisOptions::num_additional_constraint_infeasible_samples,
             cls_doc.num_additional_constraint_infeasible_samples.doc)
@@ -746,37 +810,6 @@ void DefineGeometryOptimization(py::module m) {
             &GraphOfConvexSets::SolveConvexRestriction, py::arg("active_edges"),
             py::arg("options") = GraphOfConvexSetsOptions(),
             cls_doc.SolveConvexRestriction.doc);
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    graph_of_convex_sets
-        .def("AddEdge",
-            WrapDeprecated(cls_doc.AddEdge.doc_deprecated,
-                py::overload_cast<GraphOfConvexSets::VertexId,
-                    GraphOfConvexSets::VertexId, std::string>(
-                    &GraphOfConvexSets::AddEdge)),
-            py::arg("u_id"), py::arg("v_id"), py::arg("name") = "",
-            py_rvp::reference_internal, cls_doc.AddEdge.doc_deprecated)
-        .def("RemoveVertex",
-            WrapDeprecated(cls_doc.RemoveVertex.doc_deprecated,
-                py::overload_cast<GraphOfConvexSets::VertexId>(
-                    &GraphOfConvexSets::RemoveVertex)),
-            py::arg("vertex_id"), cls_doc.RemoveVertex.doc_deprecated)
-        .def("RemoveEdge",
-            WrapDeprecated(cls_doc.RemoveEdge.doc_deprecated,
-                py::overload_cast<GraphOfConvexSets::EdgeId>(
-                    &GraphOfConvexSets::RemoveEdge)),
-            py::arg("edge_id"), cls_doc.RemoveEdge.doc_deprecated)
-        .def("SolveShortestPath",
-            WrapDeprecated(cls_doc.SolveShortestPath.doc_deprecated,
-                overload_cast_explicit<solvers::MathematicalProgramResult,
-                    GraphOfConvexSets::VertexId, GraphOfConvexSets::VertexId,
-                    const GraphOfConvexSetsOptions&>(
-                    &GraphOfConvexSets::SolveShortestPath)),
-            py::arg("source_id"), py::arg("target_id"),
-            py::arg("options") = GraphOfConvexSetsOptions(),
-            cls_doc.SolveShortestPath.doc_deprecated);
-#pragma GCC diagnostic pop
   }
   {
     // Definitions for c_iris_collision_geometry.h/cc
@@ -848,7 +881,7 @@ void DefineGeometryOptimization(py::module m) {
             m, "FindSeparationCertificateOptions", find_options_doc.doc)
             .def(py::init<>())
             .def_readwrite(
-                "num_threads", &FindSeparationCertificateOptions::num_threads)
+                "parallelism", &FindSeparationCertificateOptions::parallelism)
             .def_readwrite(
                 "verbose", &FindSeparationCertificateOptions::verbose)
             .def_readwrite(
@@ -857,6 +890,19 @@ void DefineGeometryOptimization(py::module m) {
                 &FindSeparationCertificateOptions::terminate_at_failure)
             .def_readwrite("solver_options",
                 &FindSeparationCertificateOptions::solver_options);
+    constexpr char kNumThreadsDeprecated[] =
+        "FindSeparationCertificateOptions.num_threads is deprecated and will "
+        "be removed on or after 2024-05-01. Use options.parallelism instead.";
+    find_options_cls.def_property("num_threads",
+        WrapDeprecated(kNumThreadsDeprecated,
+            [](const FindSeparationCertificateOptions& self) {
+              return self.parallelism.num_threads();
+            }),
+        WrapDeprecated(kNumThreadsDeprecated,
+            [](FindSeparationCertificateOptions& self, int num_threads) {
+              self.parallelism =
+                  (num_threads > 0) ? num_threads : Parallelism::Max();
+            }));
   }
   {
     using BaseClass = CspaceFreePolytopeBase;
@@ -916,7 +962,10 @@ void DefineGeometryOptimization(py::module m) {
               return std::pair(success, certificates);
             },
             py::arg("C"), py::arg("d"), py::arg("ignored_collision_pairs"),
-            py::arg("options"))
+            py::arg("options"),
+            // The `options` contains a `Parallelism`; we must release the GIL.
+            py::call_guard<py::gil_scoped_release>(),
+            cls_doc.FindSeparationCertificateGivenPolytope.doc)
         .def("SearchWithBilinearAlternation",
             &Class::SearchWithBilinearAlternation,
             py::arg("ignored_collision_pairs"), py::arg("C_init"),
@@ -932,6 +981,8 @@ void DefineGeometryOptimization(py::module m) {
         .def("SolveSeparationCertificateProgram",
             &Class::SolveSeparationCertificateProgram,
             py::arg("certificate_program"), py::arg("options"),
+            // The `options` contains a `Parallelism`; we must release the GIL.
+            py::call_guard<py::gil_scoped_release>(),
             cls_doc.SolveSeparationCertificateProgram.doc);
     py::class_<Class::SeparatingPlaneLagrangians>(cspace_free_polytope_cls,
         "SeparatingPlaneLagrangians", cls_doc.SeparatingPlaneLagrangians.doc)

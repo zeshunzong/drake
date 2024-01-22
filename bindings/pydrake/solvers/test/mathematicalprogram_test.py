@@ -138,7 +138,7 @@ class TestMathematicalProgram(unittest.TestCase):
         self.assertTrue(np.allclose(result.get_x_val(), x_expected))
         self.assertEqual(result.get_solution_result(),
                          mp.SolutionResult.kSolutionFound)
-        self.assertEqual(result.get_optimal_cost(), 3.0)
+        self.assertAlmostEqual(result.get_optimal_cost(), 3.0, places=7)
         self.assertTrue(result.get_solver_id().name())
         self.assertTrue(np.allclose(result.GetSolution(), x_expected))
         self.assertAlmostEqual(result.GetSolution(qp.x[0]), 1.0)
@@ -538,14 +538,25 @@ class TestMathematicalProgram(unittest.TestCase):
         S = prog.NewSymmetricContinuousVariables(3, "S")
         prog.AddLinearConstraint(S[0, 1] >= 1)
         prog.AddPositiveSemidefiniteConstraint(S)
+        minor_indices = {0, 2}
         self.assertEqual(len(prog.positive_semidefinite_constraints()), 1)
         self.assertEqual(
             prog.positive_semidefinite_constraints()[0].evaluator().
             matrix_rows(), 3)
+        prog.AddPrincipalSubmatrixIsPsdConstraint(S, minor_indices)
+        self.assertEqual(len(prog.positive_semidefinite_constraints()), 2)
+        self.assertEqual(
+            prog.positive_semidefinite_constraints()[1].evaluator().
+            matrix_rows(), 2)
         prog.AddPositiveSemidefiniteConstraint(S+S)
+        prog.AddPrincipalSubmatrixIsPsdConstraint(S+S, minor_indices)
         prog.AddPositiveDiagonallyDominantMatrixConstraint(X=S)
+        prog.AddPositiveDiagonallyDominantDualConeMatrixConstraint(X=S)
+        prog.AddPositiveDiagonallyDominantDualConeMatrixConstraint(X=S+S)
         prog.AddScaledDiagonallyDominantMatrixConstraint(X=S)
         prog.AddScaledDiagonallyDominantMatrixConstraint(X=S+S)
+        prog.AddScaledDiagonallyDominantDualConeMatrixConstraint(X=S)
+        prog.AddScaledDiagonallyDominantDualConeMatrixConstraint(X=S+S)
         prog.AddLinearCost(np.trace(S))
         result = mp.Solve(prog)
         self.assertTrue(result.is_success())
@@ -554,6 +565,21 @@ class TestMathematicalProgram(unittest.TestCase):
         tol = 1e-8
         self.assertTrue(np.all(eigs >= -tol))
         self.assertTrue(S[0, 1] >= -tol)
+
+    def test_replace_psd_methods(self):
+        prog = mp.MathematicalProgram()
+        replacement_methods = [
+            prog.TightenPsdConstraintToDd,
+            prog.TightenPsdConstraintToSdd,
+            prog.RelaxPsdConstraintToDdDualCone,
+            prog.RelaxPsdConstraintToSddDualCone,
+        ]
+        for method in replacement_methods:
+            X = prog.NewSymmetricContinuousVariables(3)
+            psd_constraint = prog.AddPositiveSemidefiniteConstraint(X)
+            self.assertEqual(len(prog.positive_semidefinite_constraints()), 1)
+            method(constraint=psd_constraint)
+            self.assertEqual(len(prog.positive_semidefinite_constraints()), 0)
 
     def test_sos_polynomial(self):
         # Only check if the API works.
@@ -690,7 +716,7 @@ class TestMathematicalProgram(unittest.TestCase):
         self.assertAlmostEqual(a_val[0], 1)
         self.assertAlmostEqual(a_val[1], 2)
 
-    def test_log_determinant(self):
+    def test_log_determinant_cost(self):
         # Find the minimal ellipsoid that covers some given points.
         prog = mp.MathematicalProgram()
         X = prog.NewSymmetricContinuousVariables(2)
@@ -704,6 +730,14 @@ class TestMathematicalProgram(unittest.TestCase):
         self.assertEqual(log_det_Z.shape, (2, 2))
         result = mp.Solve(prog)
         self.assertTrue(result.is_success())
+
+    def test_log_determinant_lower(self):
+        prog = mp.MathematicalProgram()
+        X = prog.NewSymmetricContinuousVariables(2)
+        linear_constraint, t, Z = prog.AddLogDeterminantLowerBoundConstraint(
+            X=X, lower=1)
+        self.assertEqual(t.shape, (2,))
+        self.assertEqual(Z.shape, (2, 2))
 
     def test_maximize_geometric_mean(self):
         # Find the smallest axis-algined ellipsoid that covers some given
@@ -774,21 +808,41 @@ class TestMathematicalProgram(unittest.TestCase):
         x = prog.NewContinuousVariables(2, 'x')
         lb = [0., 0.]
         ub = [1., 1.]
+
         prog.AddBoundingBoxConstraint(lb, ub, x)
         prog.AddBoundingBoxConstraint(0., 1., x[0])
         prog.AddBoundingBoxConstraint(0., 1., x)
-        prog.AddLinearConstraint(A=np.eye(2), lb=np.zeros(2), ub=np.ones(2),
-                                 vars=x)
+
+        A_dense = np.eye(2)
+        dense1 = prog.AddLinearConstraint(
+            A=A_dense, lb=np.zeros(2), ub=np.ones(2), vars=x)
+        # Ensure that the dense version of the binding has been called.
+        self.assertTrue(dense1.evaluator().is_dense_A_constructed())
+
+        A_sparse = scipy.sparse.csc_matrix(A_dense)
+        sparse1 = prog.AddLinearConstraint(
+            A=A_sparse, lb=np.zeros(2), ub=np.ones(2), vars=x)
+        # Ensure that the sparse version of the binding has been called.
+        self.assertFalse(sparse1.evaluator().is_dense_A_constructed())
         prog.AddLinearConstraint(a=[1, 1], lb=0, ub=0, vars=x)
         prog.AddLinearConstraint(e=x[0], lb=0, ub=1)
         prog.AddLinearConstraint(v=x, lb=[0, 0], ub=[1, 1])
         prog.AddLinearConstraint(f=(x[0] == 0))
 
-        prog.AddLinearEqualityConstraint(np.eye(2), np.zeros(2), x)
-        prog.AddLinearEqualityConstraint(x[0] == 1)
-        prog.AddLinearEqualityConstraint(x[0] + x[1], 1)
+        dense2 = prog.AddLinearEqualityConstraint(
+            Aeq=A_dense, beq=np.zeros(2), vars=x)
+        # Ensure that the dense version of the binding has been called.
+        self.assertTrue(dense2.evaluator().is_dense_A_constructed())
+
+        sparse2 = prog.AddLinearEqualityConstraint(
+            Aeq=A_sparse, beq=np.zeros(2), vars=x)
+        # Ensure that the sparse version of the binding has been called.
+        self.assertFalse(sparse2.evaluator().is_dense_A_constructed())
+        prog.AddLinearEqualityConstraint(a=[1, 1], beq=0, vars=x)
+        prog.AddLinearEqualityConstraint(f=x[0] == 1)
+        prog.AddLinearEqualityConstraint(e=x[0] + x[1], b=1)
         prog.AddLinearEqualityConstraint(
-            2 * x[:2] + np.array([0, 1]), np.array([3, 2]))
+            v=2 * x[:2] + np.array([0, 1]), b=np.array([3, 2]))
 
     def test_constraint_set_bounds(self):
         prog = mp.MathematicalProgram()

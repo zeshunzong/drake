@@ -26,10 +26,14 @@ def _actually_find_packages():
     """Work around broken(?!) setuptools."""
     result = find_packages()
     result.extend([
+        'pydrake.autodiffutils',
+        'pydrake.common',
         'pydrake.examples',
         'pydrake.geometry',
         'pydrake.manipulation',
+        'pydrake.math',
         'pydrake.solvers',
+        'pydrake.symbolic',
         'pydrake.visualization',
     ])
     print(f'Using packages={result}')

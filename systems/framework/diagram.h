@@ -11,7 +11,6 @@
 
 #include "drake/common/default_scalars.h"
 #include "drake/common/drake_copyable.h"
-#include "drake/common/drake_deprecated.h"
 #include "drake/common/pointer_cast.h"
 #include "drake/systems/framework/diagram_context.h"
 #include "drake/systems/framework/diagram_continuous_state.h"
@@ -233,20 +232,6 @@ class Diagram : public System<T>, internal::SystemParentServiceInterface {
   const State<T>& GetSubsystemState(const System<T>& subsystem,
                                     const State<T>& state) const;
 
-  DRAKE_DEPRECATED(
-      "2024-01-01",
-      "Instead of calling this function, call GetGraphvizFragment().")
-  void GetGraphvizInputPortToken(const InputPort<T>& port,
-                                 int max_depth,
-                                 std::stringstream* dot) const final;
-
-  DRAKE_DEPRECATED(
-      "2024-01-01",
-      "Instead of calling this function, call GetGraphvizFragment()")
-  void GetGraphvizOutputPortToken(const OutputPort<T>& port,
-                                  int max_depth,
-                                  std::stringstream* dot) const final;
-
   /// Returns the index of the given @p sys in this diagram, or aborts if @p sys
   /// is not a member of the diagram.
   SubsystemIndex GetSystemIndexOrAbort(const System<T>* sys) const;
@@ -433,7 +418,7 @@ class Diagram : public System<T>, internal::SystemParentServiceInterface {
   // For each subsystem, if there is a publish event in its corresponding
   // subevent collection, calls its Publish method with the appropriate
   // subcontext and subevent collection.
-  void DispatchPublishHandler(
+  [[nodiscard]] EventStatus DispatchPublishHandler(
       const Context<T>& context,
       const EventCollection<PublishEvent<T>>& event_info) const final;
 
@@ -441,7 +426,7 @@ class Diagram : public System<T>, internal::SystemParentServiceInterface {
   // corresponding subevent collection, calls its CalcDiscreteVariableUpdate()
   // method with the appropriate subcontext, subevent collection and
   // substate.
-  void DispatchDiscreteVariableUpdateHandler(
+  [[nodiscard]] EventStatus DispatchDiscreteVariableUpdateHandler(
       const Context<T>& context,
       const EventCollection<DiscreteUpdateEvent<T>>& events,
       DiscreteValues<T>* discrete_state) const final;
@@ -453,7 +438,7 @@ class Diagram : public System<T>, internal::SystemParentServiceInterface {
   // For each subsystem, if there is an unrestricted update event in its
   // corresponding subevent collection, calls its CalcUnrestrictedUpdate
   // method with the appropriate subcontext, subevent collection and substate.
-  void DispatchUnrestrictedUpdateHandler(
+  [[nodiscard]] EventStatus DispatchUnrestrictedUpdateHandler(
       const Context<T>& context,
       const EventCollection<UnrestrictedUpdateEvent<T>>& events,
       State<T>* state) const final;

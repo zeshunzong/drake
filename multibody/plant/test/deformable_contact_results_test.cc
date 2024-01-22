@@ -24,7 +24,7 @@ GTEST_TEST(CompliantContactManagerTest, ContactResultsWithDeformable) {
 
   MultibodyPlantConfig plant_config;
   plant_config.time_step = 1.0e-3;
-  plant_config.discrete_contact_solver = "sap";
+  plant_config.discrete_contact_approximation = "sap";
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
   /* Add a hydro ground weld to the world*/
@@ -85,6 +85,7 @@ GTEST_TEST(CompliantContactManagerTest, ContactResultsWithDeformable) {
           plant_context);
   EXPECT_EQ(contact_results.num_point_pair_contacts(), 1);
   EXPECT_EQ(contact_results.num_hydroelastic_contacts(), 1);
+  EXPECT_EQ(contact_results.num_deformable_contacts(), 1);
 }
 
 }  // namespace internal

@@ -1,8 +1,13 @@
 load(
     "//tools/skylark:drake_cc.bzl",
+    "drake_cc_binary",
     "drake_cc_googletest",
     "drake_cc_library",
     "drake_cc_package_library",
+)
+load(
+    "//tools/skylark:drake_py.bzl",
+    "drake_py_unittest",
 )
 load("//tools/lint:lint.bzl", "add_lint_tests")
 
@@ -19,6 +24,7 @@ drake_cc_package_library(
         ":contact_surface_utility",
         ":deformable_contact_geometries",
         ":deformable_contact_internal",
+        ":deformable_field_intersection",
         ":deformable_mesh_intersection",
         ":deformable_volume_mesh",
         ":detect_zero_simplex",
@@ -54,6 +60,7 @@ drake_cc_package_library(
         ":tessellation_strategy",
         ":triangle_surface_mesh",
         ":volume_mesh",
+        ":volume_mesh_refiner",
         ":volume_to_surface_mesh",
         ":vtk_to_volume_mesh",
     ],
@@ -185,10 +192,24 @@ drake_cc_library(
     hdrs = ["deformable_contact_internal.h"],
     deps = [
         ":collision_filter",
+        ":deformable_field_intersection",
         ":deformable_mesh_intersection",
         "//common:essential",
         "//geometry:geometry_ids",
         "//geometry:shape_specification",
+        "//geometry/query_results:deformable_contact",
+    ],
+)
+
+drake_cc_library(
+    name = "deformable_field_intersection",
+    srcs = ["deformable_field_intersection.cc"],
+    hdrs = ["deformable_field_intersection.h"],
+    deps = [
+        ":deformable_contact_geometries",
+        ":field_intersection",
+        ":mesh_field",
+        "//geometry:geometry_ids",
         "//geometry/query_results:deformable_contact",
     ],
 )
@@ -262,11 +283,28 @@ drake_cc_library(
     deps = [
         ":collision_filter",
         ":distance_to_point_callback",
+        ":distance_to_shape_touching",
         ":proximity_utilities",
         "//common:default_scalars",
         "//common:drake_export",
         "//common:nice_type_name",
         "//geometry/query_results:signed_distance_pair",
+    ],
+)
+
+drake_cc_library(
+    name = "distance_to_shape_touching",
+    srcs = ["distance_to_shape_touching.cc"],
+    hdrs = ["distance_to_shape_touching.h"],
+    internal = True,
+    visibility = [
+        "//geometry:__pkg__",
+    ],
+    deps = [
+        "//common:drake_export",
+        "//common:essential",
+        "//math:geometric_transform",
+        "@fcl_internal//:fcl",
     ],
 )
 
@@ -802,6 +840,17 @@ drake_cc_library(
 )
 
 drake_cc_library(
+    name = "volume_mesh_refiner",
+    srcs = ["volume_mesh_refiner.cc"],
+    hdrs = ["volume_mesh_refiner.h"],
+    deps = [
+        ":detect_zero_simplex",
+        ":volume_mesh",
+        "//common:essential",
+    ],
+)
+
+drake_cc_library(
     name = "volume_to_surface_mesh",
     srcs = [
         "volume_to_surface_mesh.cc",
@@ -834,6 +883,38 @@ drake_cc_library(
         "@vtk_internal//:vtkCommonCore",
         "@vtk_internal//:vtkCommonDataModel",
         "@vtk_internal//:vtkIOLegacy",
+    ],
+)
+
+drake_cc_binary(
+    name = "refine_mesh",
+    srcs = ["refine_mesh.cc"],
+    deps = [
+        ":mesh_to_vtk",
+        ":volume_mesh_refiner",
+        ":vtk_to_volume_mesh",
+        "//common:add_text_logging_gflags",
+        "@gflags",
+    ],
+)
+
+drake_cc_binary(
+    name = "zero_simplex_manual_test",
+    testonly = 1,
+    srcs = ["test/zero_simplex_manual_test.cc"],
+    add_test_rule = 1,
+    data = [
+        "//geometry:test_vtk_files",
+    ],
+    test_rule_args = [
+        "--expect_fail",
+        "geometry/test/one_tetrahedron.vtk",
+    ],
+    deps = [
+        ":detect_zero_simplex",
+        ":vtk_to_volume_mesh",
+        "//common:add_text_logging_gflags",
+        "@gflags",
     ],
 )
 
@@ -963,6 +1044,15 @@ drake_cc_googletest(
 )
 
 drake_cc_googletest(
+    name = "deformable_field_intersection_test",
+    deps = [
+        ":deformable_field_intersection",
+        ":make_box_mesh",
+        ":volume_mesh",
+    ],
+)
+
+drake_cc_googletest(
     name = "deformable_mesh_intersection_test",
     deps = [
         ":deformable_mesh_intersection",
@@ -1026,6 +1116,16 @@ drake_cc_googletest(
         ":distance_to_shape_callback",
         "//common:temp_directory",
         "//geometry:proximity_engine",
+        "//math:geometric_transform",
+    ],
+)
+
+drake_cc_googletest(
+    name = "distance_to_shape_touching_test",
+    deps = [
+        ":distance_to_shape_touching",
+        "//common:essential",
+        "//common/test_utilities:eigen_matrix_compare",
         "//math:geometric_transform",
     ],
 )
@@ -1411,6 +1511,14 @@ drake_cc_googletest(
 )
 
 drake_cc_googletest(
+    name = "volume_mesh_refiner_test",
+    deps = [
+        ":mesh_to_vtk",
+        ":volume_mesh_refiner",
+    ],
+)
+
+drake_cc_googletest(
     name = "volume_mesh_test",
     deps = [
         ":mesh_field",
@@ -1439,6 +1547,17 @@ drake_cc_googletest(
         ":vtk_to_volume_mesh",
         "//common:find_resource",
         "//common/test_utilities",
+    ],
+)
+
+drake_py_unittest(
+    name = "refine_mesh_test",
+    data = [
+        ":refine_mesh",
+        "//geometry:test_vtk_files",
+    ],
+    deps = [
+        "@bazel_tools//tools/python/runfiles",
     ],
 )
 

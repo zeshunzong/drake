@@ -54,9 +54,6 @@ from drake.tools.workspace.metadata import read_repository_metadata
 _IGNORED_REPOSITORIES = [
     # We don't know how to check non-default branches yet.
     "clang_cindex_python3_internal",
-    # The @petsc external is deprecated in Drake's WORKSPACE and will be
-    # removed on or after 2023-11-01.
-    "petsc",
     "pybind11",
     "usockets_internal",  # Pinned due to upstream regression.
     "uwebsockets_internal",  # Pinned due to upstream regression.
@@ -205,10 +202,9 @@ def _check_for_upgrades(gh, args, metadata):
         key = data["repository_rule_type"]
         if key == "github":
             old_commit, new_commit = _handle_github(workspace_name, gh, data)
-        elif key in ["pypi", "pypi_wheel"]:
-            # TODO(jwnimmer-tri) Implement for real.
-            print("{} version {} needs manual inspection".format(
-                workspace_name, data["version"]))
+        elif key == "crate_universe":
+            # For details, see drake/tools/workspace/crate_universe/README.md.
+            print(f"Ignoring {workspace_name} from rules_rust")
             continue
         elif workspace_name == "buildifier":
             assert key == "manual"
@@ -316,7 +312,8 @@ def _do_upgrade(temp_dir, gh, local_drake_checkout, workspace_name, metadata):
     print("Downloading new archive...")
     new_url = f"https://github.com/{repository}/archive/{new_commit}.tar.gz"
     hasher = hashlib.sha256()
-    with open(f"{temp_dir}/{new_commit}.tar.gz", "wb") as temp:
+    new_commit_filename = new_commit.replace("/", "_")
+    with open(f"{temp_dir}/{new_commit_filename}.tar.gz", "wb") as temp:
         with urllib.request.urlopen(new_url) as response:
             while True:
                 data = response.read(4096)

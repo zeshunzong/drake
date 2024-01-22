@@ -15,6 +15,7 @@
 #include <vtkMatrix4x4.h>      // vtkCommonMath
 #include <vtkVersionMacros.h>  // vtkCommonCore
 
+#include "drake/common/drake_deprecated.h"
 #include "drake/common/never_destroyed.h"
 #include "drake/common/ssize.h"
 #include "drake/common/text_logging.h"
@@ -313,14 +314,7 @@ void ChangeToLabelMaterials(nlohmann::json* gltf, const ColorD& color) {
 
 RenderEngineGltfClient::RenderEngineGltfClient(
     const RenderEngineGltfClientParams& parameters)
-    : RenderEngineVtk({.default_label = parameters.default_label}),
-      render_client_{std::make_unique<RenderClient>(parameters)} {
-  if (parameters.default_label.has_value()) {
-    static const logging::Warn log_once(
-        "RenderEngineGltfClient(): the default_label configuration option is "
-        "deprecated and will be removed from Drake on or after 2023-12-01.");
-  }
-}
+    : render_client_{std::make_unique<RenderClient>(parameters)} {}
 
 RenderEngineGltfClient::RenderEngineGltfClient(
     const RenderEngineGltfClient& other)

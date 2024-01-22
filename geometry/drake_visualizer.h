@@ -274,8 +274,7 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
   /* Dispatches a "draw geometry" message (see lcmt_viewer_draw) -- the
    definition of the poses of all non-deformable geometries. */
   static void SendDrawNonDeformableMessage(
-      const QueryObject<T>& query_object,
-      const DrakeVisualizerParams& params,
+      const QueryObject<T>& query_object, const DrakeVisualizerParams& params,
       const std::vector<internal::DynamicFrameData>& dynamic_frames,
       double time, lcm::DrakeLcmInterface* lcm);
 
@@ -326,6 +325,10 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
 
   const std::vector<internal::DeformableMeshData>& EvalDeformableMeshData(
       const systems::Context<T>& context) const;
+
+  typename systems::LeafSystem<T>::GraphvizFragment DoGetGraphvizFragment(
+      const typename systems::LeafSystem<T>::GraphvizFragmentParams& params)
+      const final;
 
   /* DrakeVisualizer stores a "model" of what it thinks is registered in the
    receiving application. Because that application is not part of the

@@ -2,12 +2,13 @@
 
 #include <thread>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <msgpack.hpp>
 
 #include "drake/common/find_resource.h"
 #include "drake/common/test_utilities/expect_throws_message.h"
-#include "drake/geometry/meshcat_types.h"
+#include "drake/geometry/meshcat_types_internal.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/systems/analysis/simulator.h"
@@ -66,8 +67,7 @@ class MeshcatVisualizerWithIiwaTest : public ::testing::Test {
 
   void CheckVisible(const std::string& path, bool visibility) {
     ASSERT_TRUE(meshcat_->HasPath(path));
-    const std::string property =
-        meshcat_->GetPackedProperty(path, "visible");
+    const std::string property = meshcat_->GetPackedProperty(path, "visible");
     ASSERT_GT(property.size(), 0);
     msgpack::object_handle oh =
         msgpack::unpack(property.data(), property.size());
@@ -145,8 +145,7 @@ TEST_F(MeshcatVisualizerWithIiwaTest, Roles) {
   }
 
   params.role = Role::kUnassigned;
-  DRAKE_EXPECT_THROWS_MESSAGE(SetUpDiagram(params),
-                              ".*Role::kUnassigned.*");
+  DRAKE_EXPECT_THROWS_MESSAGE(SetUpDiagram(params), ".*Role::kUnassigned.*");
 }
 
 // Tests that adding multiple MeshcatVisualizers using the same role to a
@@ -200,13 +199,15 @@ TEST_F(MeshcatVisualizerWithIiwaTest, DeletePrefixOnInitialization) {
   SetUpDiagram(params);
   // Scribble a transform onto the scene tree beneath the visualizer prefix.
   meshcat_->SetTransform("/drake/visualizer/my_random_path",
-                        math::RigidTransformd());
+                         math::RigidTransformd());
   EXPECT_TRUE(meshcat_->HasPath("/drake/visualizer/my_random_path"));
 
   {  // Send an initialization event.
     auto events = diagram_->AllocateCompositeEventCollection();
     diagram_->GetInitializationEvents(*context_, events.get());
-    diagram_->Publish(*context_, events->get_publish_events());
+    const systems::EventStatus status =
+        diagram_->Publish(*context_, events->get_publish_events());
+    EXPECT_TRUE(status.succeeded());
   }
   // Confirm that my scribble was deleted.
   EXPECT_FALSE(meshcat_->HasPath("/drake/visualizer/my_random_path"));
@@ -215,11 +216,13 @@ TEST_F(MeshcatVisualizerWithIiwaTest, DeletePrefixOnInitialization) {
   params.delete_on_initialization_event = false;
   SetUpDiagram(params);
   meshcat_->SetTransform("/drake/visualizer/my_random_path",
-                        math::RigidTransformd());
+                         math::RigidTransformd());
   {  // Send an initialization event.
     auto events = diagram_->AllocateCompositeEventCollection();
     diagram_->GetInitializationEvents(*context_, events.get());
-    diagram_->Publish(*context_, events->get_publish_events());
+    const systems::EventStatus status =
+        diagram_->Publish(*context_, events->get_publish_events());
+    EXPECT_TRUE(status.did_nothing());
   }
   // Confirm that my scribble remains.
   EXPECT_TRUE(meshcat_->HasPath("/drake/visualizer/my_random_path"));
@@ -238,8 +241,8 @@ TEST_F(MeshcatVisualizerWithIiwaTest, Delete) {
 // "position".
 bool has_iiwa_frame(const MeshcatAnimation& animation, int frame) {
   return animation
-      .get_key_frame<std::vector<double>>(
-          0, "visualizer/iiwa14/iiwa_link_1", "position")
+      .get_key_frame<std::vector<double>>(0, "visualizer/iiwa14/iiwa_link_1",
+                                          "position")
       .has_value();
 }
 
@@ -620,6 +623,12 @@ GTEST_TEST(MeshcatVisualizerTest, RealtimeRate) {
   // kernel's details of process scheduling, or else we could be flaky.)
   simulator.AdvanceTo(0.005);
   EXPECT_NE(meshcat->GetRealtimeRate(), slow_rate);
+}
+
+TEST_F(MeshcatVisualizerWithIiwaTest, Graphviz) {
+  SetUpDiagram();
+  EXPECT_THAT(visualizer_->GetGraphvizString(),
+              testing::HasSubstr("-> meshcat_in"));
 }
 
 }  // namespace

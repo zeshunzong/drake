@@ -198,9 +198,6 @@ Frame F's origin point Fo locates the frame and its basis orients the frame.
 Newton's laws of motion are valid in a non-rotating, non-accelerating "inertial
 frame", herein called the _World_ frame W (also called _Ground_ frame G or
 _Newtonian Frame_ N).  Any frame with fixed pose in W is also an inertial frame.
-Drake supports _Model_ frames (inertial frames fixed in W) so a simulation can
-be built from multiple independent models, each defined with respect to its own
-Model frame. This corresponds to the `<model>` tag in an `.sdf` file.
 
 In unambiguous situations, abbreviated notation uses the _frame_ name to also
 designate the frame's _origin_ or the frame's _basis_.  For example, if `A` and
@@ -214,7 +211,7 @@ combination of `w_AB` and `v_AB`.
 See @ref multibody_quantities for more information about notation.
 
 Each _body_ contains a _body frame_  and we use the same symbol `B` for both a
-body `B` and its body frame. Body B's location is defined via `Bo` (the
+body `B` and its body frame.  Body B's location is defined via `Bo` (the
 origin of the body frame) and body B's pose is defined via the pose of B's
 body frame.  Body properties (e.g., inertia and geometry) are measured with
 respect to the body frame.  Body B's center of mass is denoted `Bcm`
@@ -223,7 +220,6 @@ from Bo to Bcm.  Bcm is not necessarily coincident with Bo and body B's
 translational and spatial properties (e.g., position, velocity, acceleration)
 are measured using Bo (not Bcm).  If an additional frame is fixed to a rigid
 body, its position is located from the body frame.
-For a flexible body, deformations are measured with respect to the body frame.
 
 When a user initially specifies a body, such as in a `<link>` tag of an `.sdf`
 or `.urdf` file, there is a link frame L that may differ from Drake's body frame

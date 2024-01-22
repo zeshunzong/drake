@@ -98,10 +98,9 @@ class HydroelasticModelTests : public ::testing::Test {
 
   // @param compliant_hydroelastic_modulus is required for the compliant box
   //                                       but not the rigid box.
-  void AddGroundBox(
-      double friction_coefficient, MultibodyPlant<double>* plant,
-      BoxType box_type,
-      std::optional<double> compliant_hydroelastic_modulus) {
+  void AddGroundBox(double friction_coefficient, MultibodyPlant<double>* plant,
+                    BoxType box_type,
+                    std::optional<double> compliant_hydroelastic_modulus) {
     const double kSize = 10;
     const RigidTransformd X_WG{Vector3d{0, 0, -kSize / 2}};
     const Vector4<double> green(0.5, 1.0, 0.5, 1.0);
@@ -147,8 +146,8 @@ class HydroelasticModelTests : public ::testing::Test {
 
     geometry::ProximityProperties props;
     // This should produce a level-2 refinement (two steps beyond octahedron).
-    geometry::AddCompliantHydroelasticProperties(
-        radius / 2, hydroelastic_modulus, &props);
+    geometry::AddCompliantHydroelasticProperties(radius / 2,
+                                                 hydroelastic_modulus, &props);
     geometry::AddContactMaterial(
         dissipation, {},
         CoulombFriction<double>(friction_coefficient, friction_coefficient),
@@ -221,7 +220,7 @@ class HydroelasticModelTests : public ::testing::Test {
     const auto& F_BBo_W_array =
         MultibodyPlantTester::EvalHydroelasticContactForces(*plant_,
                                                             plant_context);
-    *F_BBo_W = F_BBo_W_array[body_->node_index()];
+    *F_BBo_W = F_BBo_W_array[body_->mobod_index()];
     *p_WB_W = plant_->GetFreeBodyPose(plant_context, *body_).translation();
   }
 
@@ -230,8 +229,8 @@ class HydroelasticModelTests : public ::testing::Test {
   const double kElasticModulus{1.e5};      // [Pa]
   // A non-zero dissipation value is used to quickly dissipate energy in tests
   // running a simulation on this case.
-  const double kDissipation{10.0};         // [s/m]
-  const double kMass{1.2};                 // [kg]
+  const double kDissipation{10.0};  // [s/m]
+  const double kMass{1.2};          // [kg]
 
   MultibodyPlant<double>* plant_{nullptr};
   SceneGraph<double>* scene_graph_{nullptr};
@@ -260,7 +259,7 @@ TEST_F(HydroelasticModelTests, ContactForce) {
     const auto& F_BBo_W_array =
         MultibodyPlantTester::EvalHydroelasticContactForces(*plant_,
                                                             *plant_context_);
-    const SpatialForce<double>& F_BBo_W = F_BBo_W_array[body_->node_index()];
+    const SpatialForce<double>& F_BBo_W = F_BBo_W_array[body_->mobod_index()];
     return F_BBo_W.translational()[2];  // Normal force.
   };
 
@@ -306,7 +305,7 @@ TEST_F(HydroelasticModelTests, ContactDynamics) {
   const auto& F_BBo_W_array =
       MultibodyPlantTester::EvalHydroelasticContactForces(*plant_,
                                                           *plant_context_);
-  const SpatialForce<double>& F_BBo_W = F_BBo_W_array[body_->node_index()];
+  const SpatialForce<double>& F_BBo_W = F_BBo_W_array[body_->mobod_index()];
   // Contact force by hydroelastics.
   const Vector3<double> fhydro_BBo_W = F_BBo_W.translational();
 
@@ -536,8 +535,8 @@ class ContactModelTest : public ::testing::Test {
     const double kSize = 10;
     const RigidTransformd X_WG{Vector3d{0, 0, -kSize / 2}};
     geometry::Box ground = geometry::Box::MakeCube(kSize);
-    geometry::AddCompliantHydroelasticProperties(
-        kSize, kElasticModulus, &contact_material);
+    geometry::AddCompliantHydroelasticProperties(kSize, kElasticModulus,
+                                                 &contact_material);
     plant->RegisterCollisionGeometry(plant->world_body(), X_WG, ground,
                                      "GroundCollisionGeometry",
                                      std::move(contact_material));
@@ -572,8 +571,8 @@ class ContactModelTest : public ::testing::Test {
   // MultibodyPlant::EvalSpatialContactForcesContinuous() from contact results.
   // EvalSpatialContactForcesContinuous() is an internal private method of
   // MultibodyPlant and, as many other multibody methods, sorts the results in
-  // the returned array of spatial forces by BodyNodeIndex. Therefore, the
-  // expected results being generated must also be sorted by BodyNodeIndex.
+  // the returned array of spatial forces by MobodIndex. Therefore, the
+  // expected results being generated must also be sorted by MobodIndex.
   std::vector<SpatialForce<double>> SpatialForceFromContactResults(
       const ContactResults<double>& contacts) {
     std::vector<SpatialForce<double>> F_BBo_W_array(
@@ -597,9 +596,9 @@ class ContactModelTest : public ::testing::Test {
       // N.B. Since we are using this method to test the internal (private)
       // MultibodyPlant::EvalSpatialContactForcesContinuous(), we must use
       // internal API to generate a forces vector sorted in the same way, by
-      // internal::BodyNodeIndex.
-      F_BBo_W_array[bodyB.node_index()] += F_Bc_W.Shift(p_CBo_W);
-      F_BBo_W_array[bodyA.node_index()] -= F_Bc_W.Shift(p_CAo_W);
+      // internal::MobodIndex.
+      F_BBo_W_array[bodyB.mobod_index()] += F_Bc_W.Shift(p_CBo_W);
+      F_BBo_W_array[bodyA.mobod_index()] -= F_Bc_W.Shift(p_CAo_W);
     }
 
     for (int i = 0; i < contacts.num_hydroelastic_contacts(); ++i) {
@@ -609,10 +608,10 @@ class ContactModelTest : public ::testing::Test {
 
       const GeometryId A_id = surface.id_M();
       const FrameId fA_id = inspector.GetFrameId(A_id);
-      const Body<double>& body_A = *plant_->GetBodyFromFrameId(fA_id);
+      const RigidBody<double>& body_A = *plant_->GetBodyFromFrameId(fA_id);
       const GeometryId B_id = surface.id_N();
       const FrameId fB_id = inspector.GetFrameId(B_id);
-      const Body<double>& body_B = *plant_->GetBodyFromFrameId(fB_id);
+      const RigidBody<double>& body_B = *plant_->GetBodyFromFrameId(fB_id);
 
       const Vector3d& p_WC = surface.centroid();
       const Vector3d& p_WAo =
@@ -625,8 +624,8 @@ class ContactModelTest : public ::testing::Test {
       // The force applied to body A at a fixed point coincident with the
       // centroid point C.
       const SpatialForce<double>& F_Ac_W = contact_info.F_Ac_W();
-      F_BBo_W_array[body_A.node_index()] += F_Ac_W.Shift(p_CAo_W);
-      F_BBo_W_array[body_B.node_index()] -= F_Ac_W.Shift(p_CBo_W);
+      F_BBo_W_array[body_A.mobod_index()] += F_Ac_W.Shift(p_CAo_W);
+      F_BBo_W_array[body_B.mobod_index()] -= F_Ac_W.Shift(p_CBo_W);
     }
 
     return F_BBo_W_array;
@@ -739,8 +738,9 @@ class CalcContactSurfacesTest : public ContactModelTest {
     EXPECT_TRUE(
         contact_results.hydroelastic_contact_info(0).contact_surface().Equal(
             plant_->get_geometry_query_input_port()
-            .template Eval<geometry::QueryObject<double>>(*plant_context_)
-            .ComputeContactSurfaces(expected_rep).at(0)));
+                .template Eval<geometry::QueryObject<double>>(*plant_context_)
+                .ComputeContactSurfaces(expected_rep)
+                .at(0)));
   }
 };
 
@@ -811,9 +811,8 @@ class CalcHydroelasticWithFallbackTest : public CalcContactSurfacesTest {
     std::vector<geometry::PenetrationAsPointPair<double>> expected_point_pairs;
     plant_->get_geometry_query_input_port()
         .template Eval<geometry::QueryObject<double>>(*plant_context_)
-        .ComputeContactSurfacesWithFallback(
-            expected_rep,
-            &expected_surfaces, &expected_point_pairs);
+        .ComputeContactSurfacesWithFallback(expected_rep, &expected_surfaces,
+                                            &expected_point_pairs);
 
     // We only check the penetration depth as an evidence that the tested
     // result is what expected.

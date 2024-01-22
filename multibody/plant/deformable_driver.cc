@@ -2,6 +2,7 @@
 
 #include <array>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -16,6 +17,8 @@
 #include "drake/multibody/fem/fem_model.h"
 #include "drake/multibody/fem/velocity_newmark_scheme.h"
 #include "drake/multibody/plant/contact_properties.h"
+#include "drake/multibody/plant/force_density_field.h"
+#include "drake/multibody/plant/multibody_plant.h"
 #include "drake/systems/framework/context.h"
 
 using drake::geometry::GeometryId;
@@ -359,8 +362,11 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
   const DeformableContact<T>& deformable_contact =
       EvalDeformableContact(context);
 
-  for (const DeformableContactSurface<double>& surface :
-       deformable_contact.contact_surfaces()) {
+  for (int surface_index = 0;
+       surface_index < ssize(deformable_contact.contact_surfaces());
+       ++surface_index) {
+    const DeformableContactSurface<T>& surface =
+        deformable_contact.contact_surfaces()[surface_index];
     /* While our discrete solvers might model constraints as compliant, an
     infinite stiffness indicates to use the stiffest approximation possible
     without sacrifycing numerical conditioning. SAP will use the "near rigid"
@@ -379,7 +385,7 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
         fmt::format("deformable body with geometry id {}", surface.id_A()));
     const BodyIndex body_B_index =
         manager_->geometry_id_to_body_index().at(surface.id_B());
-    const Body<T>& body_B = manager_->plant().get_body(body_B_index);
+    const RigidBody<T>& body_B = manager_->plant().get_body(body_B_index);
     /* We use dt as the default dissipation constant so that the contact is in
      near-rigid regime and the compliance is only used as stabilization. */
     const T tau = GetCombinedDissipationTimeConstant(
@@ -394,9 +400,9 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
       const T& phi0 = surface.signed_distances()[i];
       const T fn0 = NAN;  // not used.
       const T d = NAN;    // not used.
-      result->AppendDeformableData(
-          DiscreteContactPair<T>{surface.id_A(), surface.id_B(), p_WC,
-                                 nhat_BA_W, phi0, fn0, k, d, tau, mu});
+      result->AppendDeformableData(DiscreteContactPair<T>{
+          surface.id_A(), surface.id_B(), p_WC, nhat_BA_W, phi0, fn0, k, d, tau,
+          mu, surface_index, i});
     }
   }
 }
@@ -498,15 +504,16 @@ void DeformableDriver<T>::AppendContactKinematics(
       const TreeIndex tree_index = tree_topology.body_to_tree_index(index_B);
       const Vector3<T>& p_WC = surface.contact_points_W()[i];
       if (tree_index.is_valid()) {
-        const Body<T>& rigid_body = manager_->plant().get_body(index_B);
+        const RigidBody<T>& rigid_body = manager_->plant().get_body(index_B);
         const Frame<T>& frame_W = manager_->plant().world_frame();
         manager_->internal_tree().CalcJacobianTranslationalVelocity(
             context, JacobianWrtVariable::kV, rigid_body.body_frame(), frame_W,
             p_WC, frame_W, frame_W, &Jv_v_WBc_W);
         Matrix3X<T> J =
-            R_CW.matrix() * Jv_v_WBc_W.middleCols(
-                                tree_topology.tree_velocities_start(tree_index),
-                                tree_topology.num_tree_velocities(tree_index));
+            R_CW.matrix() *
+            Jv_v_WBc_W.middleCols(
+                tree_topology.tree_velocities_start_in_v(tree_index),
+                tree_topology.num_tree_velocities(tree_index));
         jacobian_blocks.emplace_back(tree_index, MatrixBlock<T>(std::move(J)));
       }
 
@@ -562,7 +569,6 @@ void DeformableDriver<T>::AppendDeformableRigidFixedConstraintKinematics(
    and rigid bodies are mutually exclusive, and Jv_v_WAp = 0 for rigid dofs
    and Jv_v_WBq = 0 for deformable dofs. */
   const int nv = manager_->plant().num_velocities();
-  Matrix3X<T> Jv_v_WBq(3, nv);
   const MultibodyTreeTopology& tree_topology =
       manager_->internal_tree().get_topology();
   const auto& configurations =
@@ -607,7 +613,7 @@ void DeformableDriver<T>::AppendDeformableRigidFixedConstraintKinematics(
       /* The Jacobian block for the rigid body B. */
       const BodyIndex index_B = spec.body_B;
       const TreeIndex tree_index = tree_topology.body_to_tree_index(index_B);
-      const Body<T>& rigid_body = manager_->plant().get_body(index_B);
+      const RigidBody<T>& rigid_body = manager_->plant().get_body(index_B);
       const math::RigidTransform<T>& X_WB =
           manager_->plant().EvalBodyPoseInWorld(context, rigid_body);
       /* The positions of the anchor points on the rigid body in world frame. */
@@ -648,13 +654,14 @@ void DeformableDriver<T>::AppendDeformableRigidFixedConstraintKinematics(
         /* Rigid body is not welded to world. */
         const int clique_index_B = tree_index;
         const Frame<T>& frame_W = manager_->plant().world_frame();
+        MatrixX<T> Jv_v_WBq(3 * num_vertices_in_constraint, nv);
         manager_->internal_tree().CalcJacobianTranslationalVelocity(
             context, JacobianWrtVariable::kV, rigid_body.body_frame(), frame_W,
             Eigen::Map<const Matrix3X<T>>(p_WQs.data(), 3, p_WQs.size() / 3),
             frame_W, frame_W, &Jv_v_WBq);
-        MatrixBlock<T> jacobian_block_B(
-            Jv_v_WBq.middleCols(tree_topology.tree_velocities_start(tree_index),
-                                tree_topology.num_tree_velocities(tree_index)));
+        MatrixBlock<T> jacobian_block_B(Jv_v_WBq.middleCols(
+            tree_topology.tree_velocities_start_in_v(tree_index),
+            tree_topology.num_tree_velocities(tree_index)));
         SapConstraintJacobian<T> J(clique_index_A, std::move(jacobian_block_A),
                                    clique_index_B, std::move(jacobian_block_B));
         result->emplace_back(object_A, std::move(p_WPs), object_B,
@@ -667,6 +674,113 @@ void DeformableDriver<T>::AppendDeformableRigidFixedConstraintKinematics(
                              std::move(J));
       }
     }
+  }
+}
+
+template <typename T>
+void DeformableDriver<T>::CalcDeformableContactInfo(
+    const systems::Context<T>& context,
+    std::vector<DeformableContactInfo<T>>* contact_info) const {
+  DRAKE_DEMAND(contact_info != nullptr);
+
+  const DeformableContact<T>& deformable_contact =
+      EvalDeformableContact(context);
+
+  const std::vector<DeformableContactSurface<T>>& contact_surfaces =
+      deformable_contact.contact_surfaces();
+  const int num_surfaces = contact_surfaces.size();
+
+  contact_info->clear();
+  contact_info->reserve(num_surfaces);
+
+  const DiscreteContactData<DiscreteContactPair<T>>& discrete_pairs =
+      manager_->EvalDiscreteContactPairs(context);
+  const DiscreteContactData<ContactPairKinematics<T>>& contact_kinematics =
+      manager_->EvalContactKinematics(context);
+  const contact_solvers::internal::ContactSolverResults<T>& solver_results =
+      manager_->EvalContactSolverResults(context);
+
+  const VectorX<T>& fn = solver_results.fn;
+  const VectorX<T>& ft = solver_results.ft;
+  const VectorX<T>& vt = solver_results.vt;
+  const VectorX<T>& vn = solver_results.vn;
+
+  const int num_contacts = discrete_pairs.size();
+  DRAKE_DEMAND(fn.size() == num_contacts);
+  DRAKE_DEMAND(ft.size() == 2 * num_contacts);
+  DRAKE_DEMAND(vn.size() == num_contacts);
+  DRAKE_DEMAND(vt.size() == 2 * num_contacts);
+
+  /* The spatial force on the deformable body A at the centroid of the contact
+   patch Ao, expressed in the world frame. */
+  std::vector<SpatialForce<T>> F_Ao_W_per_surface(num_surfaces,
+                                                  SpatialForce<T>::Zero());
+  std::vector<std::vector<DeformableContactPointData<T>>> contact_point_data(
+      num_surfaces);
+  for (int surface_index = 0; surface_index < num_surfaces; ++surface_index) {
+    contact_point_data[surface_index].reserve(
+        contact_surfaces[surface_index].num_contact_points());
+  }
+
+  for (int icontact = discrete_pairs.deformable_contact_start();
+       icontact < discrete_pairs.deformable_contact_start() +
+                      discrete_pairs.num_deformable_contacts();
+       ++icontact) {
+    const auto& pair = discrete_pairs[icontact];
+    /* Contact point C. */
+    const Vector3<T>& p_WC = pair.p_WC;
+    const math::RotationMatrix<T>& R_WC =
+        contact_kinematics[icontact].configuration.R_WC;
+
+    /* Contact forces applied on B at contact point point C expressed in the
+     contact frame. */
+    const Vector3<T> f_Bc_C(ft(2 * icontact), ft(2 * icontact + 1),
+                            fn(icontact));
+    /* Contact force applied on A at contact point C in the world frame. */
+    const Vector3<T> f_Ac_W = -(R_WC * f_Bc_C);
+
+    /* All deformable discrete contact pair has `surface_index` attribute. */
+    DRAKE_DEMAND(pair.surface_index.has_value());
+    const int surface_index = pair.surface_index.value();
+    const auto& s = contact_surfaces[surface_index];
+    /* Surface's centroid point O. */
+    const Vector3<T>& p_WO = s.contact_mesh_W().centroid();
+
+    /* Accumulate spatial force at the centroid of the contact patch for the
+     corresponding contact surface. */
+    const Vector3<T> p_CO_W = p_WO - p_WC;
+    const SpatialForce<T> Fc_Ao_W =
+        SpatialForce<T>(Vector3<T>::Zero(), f_Ac_W).Shift(p_CO_W);
+    F_Ao_W_per_surface[surface_index] += Fc_Ao_W;
+
+    /* Velocity of Ac relative to Bc in the tangent direction. */
+    /* N.B. Computation of contact kinematics uses the convention of computing
+     J_AcBc_C and thus J_AcBc_C * v = v_AcBc_W (i.e. it computes the relative
+     velocity of Bc with respect to Ac). Thus we flip the sign here for the
+     convention used by DeformableContactPointData, which measures the relative
+     velocity of Ac w.r.t. Bc). */
+    const Vector3<T> vt_BcAc_C(-vt(2 * icontact), -vt(2 * icontact + 1), 0);
+    const Vector3<T> vt_BcAc_W = R_WC * vt_BcAc_C;
+
+    /* Traction vector applied to body A at point Ac (Ac and Bc are coincident)
+     expressed in the world frame. */
+    DRAKE_DEMAND(pair.face_index.has_value());
+    const int face_index = pair.face_index.value();
+    const Vector3<T> traction_Ac_W =
+        f_Ac_W / s.contact_mesh_W().area(face_index);
+
+    contact_point_data[surface_index].emplace_back(p_WC, face_index, vt_BcAc_W,
+                                                   traction_Ac_W);
+  }
+  for (int surface_index = 0; surface_index < num_surfaces; ++surface_index) {
+    const DeformableContactSurface<T>& surface =
+        contact_surfaces[surface_index];
+    // TODO(xuchenhan-tri): consider avoid making a copy of the contact mesh
+    // every time DeformableContactInfo is computed.
+    contact_info->emplace_back(surface.id_A(), surface.id_B(),
+                               contact_surfaces[surface_index].contact_mesh_W(),
+                               F_Ao_W_per_surface[surface_index],
+                               std::move(contact_point_data[surface_index]));
   }
 }
 
@@ -781,7 +895,12 @@ void DeformableDriver<T>::CalcFreeMotionFemSolver(
       nonparticipating_vertices.insert(v);
     }
   }
-  fem_solver->AdvanceOneTimeStep(fem_state, nonparticipating_vertices);
+  /* Collect all external forces affecting this body and store them into the
+   FemPlantData for the associated FEM model. */
+  const fem::FemPlantData<T> plant_data{
+      context, deformable_model_->GetExternalForces(body_id)};
+  fem_solver->AdvanceOneTimeStep(fem_state, plant_data,
+                                 nonparticipating_vertices);
 }
 
 template <typename T>

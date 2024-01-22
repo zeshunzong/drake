@@ -76,13 +76,14 @@ namespace geometry {
  - Perception role
     - The following notes apply to all Drake RenderEngine implementations.
     - The mesh must have surface normals (Drake throws if they are missing).
-    - Texture coordinates are not required, but if present at all, all faces
-      must have texture coordinates assigned.
+    - Texture coordinates are not required, but texture maps are only applied
+      if an entire mesh "piece" has texture coordinates.
     - The material associated with the mesh is that defined by the
       @ref geometry_materials "material heuristic".
     - In contrast to the Proximity role, the mesh *can* have multiple objects
-      (but only a single material -- see below). This requirement will be
-      relaxed in the future.
+      and multiple materials. The obj's mesh data is partitioned into disjoint
+      parts based on the applied material. The material heuristic is applied to
+      each part individually.
 
  - Proximity role
     - The material file is ignored.
@@ -101,12 +102,9 @@ namespace geometry {
       and materials as appropriate. Even if Drake doesn't complain about them
       missing, there are undefined behaviors across the set of visualizing
       technologies when they are missing.
-    - If a source .obj has multiple materials, it currently needs to be
-      converted to a single material (with varying properties "baked" into
-      textures). There are various methods for baking materials into textures
-      (such as those referenced
-      <a href="https://github.com/RobotLocomotion/drake/issues/11949#issuecomment-1492230915">here</a>).
-    - You might find it simpler to use a @ref gltf_support ".gltf" file instead.
+    - Using .obj files usually produce objects with *simpler* materials. For
+      materials with a greater fidelity, you might find it simpler to use a
+      @ref gltf_support ".gltf" file instead.
 
  @subsection gltf_support glTFᵀᴹ (.gltf)
 
@@ -183,7 +181,19 @@ namespace geometry {
  Depending on the application (hydroelastics or deformable bodies), not every
  tetrahedralization is created equal. There are best practices for each domain
  which must be followed to get best results. More details on these best
- practices are coming. 
+ practices are coming.
+
+ In addition to specifying the tetrahedral mesh for deformable or compliant
+ hydroelastic geometries, the .vtk file can be used more generally:
+
+   - When specified as Convex without hydroelastic properties, it produces the
+     same representation for point contact as if you'd provided an .obj of
+     just the surface polygons.
+   - When specified as Mesh without hydroelastic properties, it is treated as
+     a non-convex surface mesh; its convex hull is used for point contact.
+
+  N.B. The .vtk file must still define a tetrahedral mesh and *not* a surface
+  mesh.
 
  @section geometry_materials Drake materials and the specification heuristic
 

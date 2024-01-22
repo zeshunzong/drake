@@ -11,7 +11,6 @@
 #include "drake/systems/framework/abstract_value_cloner.h"
 #include "drake/systems/primitives/pass_through.h"
 #include "drake/systems/primitives/zero_order_hold.h"
-
 namespace drake {
 namespace multibody {
 namespace internal {
@@ -91,7 +90,7 @@ class DummyDiscreteUpdateManager final : public DiscreteUpdateManager<T> {
 
   /* Extracts information about the additional discrete state that
    DummyModel declares if one exists in the owning MultibodyPlant. */
-  void ExtractModelInfo() final {
+  void DoExtractModelInfo() final {
     /* For unit testing we verify there is a single physical model of type
      DummyModel. */
     DRAKE_DEMAND(this->plant().physical_models().size() == 1);
@@ -156,14 +155,13 @@ class DummyDiscreteUpdateManager final : public DiscreteUpdateManager<T> {
     }
   }
 
-  // TODO(joemasterjohn): Add a unit test here for when the contact results
-  // calculated by the manager are hooked up to MultibodyPlant.
-  void DoCalcContactResults(const systems::Context<T>& context,
-                            ContactResults<T>* contact_results) const final {}
-
   // Not used in these tests.
   void DoCalcDiscreteUpdateMultibodyForces(const systems::Context<T>&,
                                            MultibodyForces<T>*) const final {
+    throw std::logic_error("Must implement if needed for these tests.");
+  }
+
+  void DoCalcActuation(const systems::Context<T>&, VectorX<T>*) const final {
     throw std::logic_error("Must implement if needed for these tests.");
   }
 
@@ -179,8 +177,7 @@ class DiscreteUpdateManagerTest : public ::testing::Test {
  protected:
   void SetUp() override {
     // To avoid unnecessary warnings/errors, use a non-zero spatial inertia.
-    plant_.AddRigidBody("rigid body",
-        SpatialInertia<double>::MakeUnitary());
+    plant_.AddRigidBody("rigid body", SpatialInertia<double>::MakeUnitary());
     auto dummy_model = std::make_unique<DummyModel<double>>();
     dummy_model_ = dummy_model.get();
     plant_.AddPhysicalModel(std::move(dummy_model));
@@ -292,12 +289,13 @@ class AlgebraicLoopDetection
  public:
   // Makes a system containing a multibody plant. When with_algebraic_loop =
   // true the model includes a feedback system that creates an algebraic loop.
-  void MakeDiagram(bool with_algebraic_loop, std::string_view solver_type) {
+  void MakeDiagram(bool with_algebraic_loop,
+                   std::string_view contact_approximation) {
     systems::DiagramBuilder<double> builder;
 
     MultibodyPlantConfig plant_config;
     plant_config.time_step = 1.0e-3;
-    plant_config.discrete_contact_solver = solver_type;
+    plant_config.discrete_contact_approximation = contact_approximation;
     std::tie(plant_, scene_graph_) =
         multibody::AddMultibodyPlant(plant_config, &builder);
     plant_->Finalize();
@@ -366,10 +364,12 @@ INSTANTIATE_TEST_SUITE_P(AlgebraicLoopTests, AlgebraicLoopDetection,
                          ::testing::Combine(::testing::Bool(),
                                             ::testing::Values("tamsi", "sap")));
 
+// N.B. We want to exercise the TAMSI and SAP code paths. Therefore we
+// arbitrarily choose two model approximations to accomplish this.
 TEST_P(AlgebraicLoopDetection, LoopDetectionTest) {
-  const auto& [with_algebraic_loop, solver_type] = GetParam();
+  const auto& [with_algebraic_loop, contact_approximation] = GetParam();
 
-  MakeDiagram(with_algebraic_loop, solver_type);
+  MakeDiagram(with_algebraic_loop, contact_approximation);
   if (with_algebraic_loop) {
     VerifyLoopIsDetected();
   } else {
@@ -387,9 +387,9 @@ TEST_P(AlgebraicLoopDetection, LoopDetectionTest) {
 }
 
 TEST_P(AlgebraicLoopDetection, LoopDetectionTestWhenCachingIsDisabled) {
-  const auto& [with_algebraic_loop, solver_type] = GetParam();
+  const auto& [with_algebraic_loop, contact_approximation] = GetParam();
 
-  MakeDiagram(with_algebraic_loop, solver_type);
+  MakeDiagram(with_algebraic_loop, contact_approximation);
   diagram_context_->DisableCaching();
 
   if (with_algebraic_loop) {

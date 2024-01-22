@@ -51,7 +51,6 @@ void MpmTransfer<T>::G2P(const SparseGrid<T>& grid,
         }
       }
     }
-
     // write particle v, B, and grad v to particles_data
     particles.WriteParticlesDataFromG2pPad(i, scratch->g2p_pad, particles_data);
   }

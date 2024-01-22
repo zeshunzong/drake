@@ -9,14 +9,10 @@
 #include <fmt/format.h>
 
 #include "drake/common/autodiff_overloads.h"
+#include "drake/common/overloaded.h"
 #include "drake/common/scope_exit.h"
 #include "drake/common/unused.h"
-
-namespace {
-// Boilerplate for std::visit.
-template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-}  // namespace
+#include "drake/geometry/meshcat_graphviz.h"
 
 namespace drake {
 namespace multibody {
@@ -246,6 +242,19 @@ void JointSliders<T>::CalcOutput(
       (*output)[position_index] = meshcat_->GetSliderValue(slider_name);
     }
   }
+}
+
+template <typename T>
+typename systems::LeafSystem<T>::GraphvizFragment
+JointSliders<T>::DoGetGraphvizFragment(
+    const typename systems::LeafSystem<T>::GraphvizFragmentParams& params)
+    const {
+  geometry::internal::MeshcatGraphviz meshcat_graphviz(
+      /* path = */ std::nullopt,
+      /* subscribe = */ true);
+  return meshcat_graphviz.DecorateResult(
+      systems::LeafSystem<T>::DoGetGraphvizFragment(
+          meshcat_graphviz.DecorateParams(params)));
 }
 
 template <typename T>

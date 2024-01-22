@@ -34,6 +34,7 @@ drake_cc_package_library(
         ":binding",
         ":branch_and_bound",
         ":choose_best_solver",
+        ":clarabel_solver",
         ":clp_solver",
         ":constraint",
         ":cost",
@@ -63,6 +64,7 @@ drake_cc_package_library(
         ":osqp_solver",
         ":program_attribute",
         ":rotation_constraint",
+        ":scs_clarabel_common",
         ":scs_solver",
         ":sdpa_free_format",
         ":semidefinite_relaxation",
@@ -139,6 +141,7 @@ drake_cc_library(
         ":solver_interface",
     ],
     deps = [
+        ":clarabel_solver",
         ":clp_solver",
         ":csdp_solver",
         ":equality_constrained_qp_solver",
@@ -418,7 +421,9 @@ drake_cc_library(
         ":binding",
         ":mathematical_program",
     ],
-    deps = [],
+    deps = [
+        "//math:eigen_sparse_triplet",
+    ],
 )
 
 drake_cc_library(
@@ -585,6 +590,7 @@ drake_cc_library(
     srcs = ["test/optimization_examples.cc"],
     hdrs = ["test/optimization_examples.h"],
     deps = [
+        ":clarabel_solver",
         ":clp_solver",
         ":gurobi_solver",
         ":ipopt_solver",
@@ -800,6 +806,7 @@ drake_cc_variant_library(
     ],
     deps_enabled = [
         "//math:eigen_sparse_triplet",
+        "//common:find_resource",
         "//common:scope_exit",
         "//common:scoped_singleton",
         "@gurobi//:gurobi_c",
@@ -951,6 +958,40 @@ drake_cc_variant_library(
 )
 
 drake_cc_variant_library(
+    name = "clarabel_solver",
+    opt_out_condition = "//tools:no_clarabel",
+    srcs_always = ["clarabel_solver_common.cc"],
+    srcs_enabled = ["clarabel_solver.cc"],
+    srcs_disabled = ["no_clarabel.cc"],
+    hdrs = ["clarabel_solver.h"],
+    interface_deps = [
+        ":solver_base",
+        "//common:essential",
+    ],
+    deps_always = [
+        ":aggregate_costs_constraints",
+        ":mathematical_program",
+        "//math:quadratic_form",
+    ],
+    deps_enabled = [
+        ":scs_clarabel_common",
+        "//math:eigen_sparse_triplet",
+        "//tools/workspace/clarabel_cpp_internal:serialize",
+        "@clarabel_cpp_internal//:clarabel_cpp",
+    ],
+)
+
+drake_cc_library(
+    name = "scs_clarabel_common",
+    srcs = ["scs_clarabel_common.cc"],
+    hdrs = ["scs_clarabel_common.h"],
+    deps = [
+        ":mathematical_program",
+        ":mathematical_program_result",
+    ],
+)
+
+drake_cc_variant_library(
     name = "scs_solver",
     opt_out_condition = "//tools:no_scs",
     srcs_always = ["scs_solver_common.cc"],
@@ -967,6 +1008,7 @@ drake_cc_variant_library(
         "//math:quadratic_form",
     ],
     deps_enabled = [
+        ":scs_clarabel_common",
         "//common:scope_exit",
         "//math:eigen_sparse_triplet",
         "@scs_internal//:scsdir",
@@ -990,6 +1032,7 @@ drake_cc_library(
     hdrs = ["semidefinite_relaxation.h"],
     interface_deps = [
         ":mathematical_program",
+        "//math:matrix_util",
     ],
     deps = [],
 )
@@ -1630,6 +1673,22 @@ drake_cc_googletest(
 )
 
 drake_cc_googletest(
+    name = "clarabel_solver_test",
+    deps = [
+        ":clarabel_solver",
+        ":exponential_cone_program_examples",
+        ":linear_program_examples",
+        ":mathematical_program",
+        ":mathematical_program_test_util",
+        ":quadratic_program_examples",
+        ":second_order_cone_program_examples",
+        ":semidefinite_program_examples",
+        ":sos_examples",
+        "//common/test_utilities:expect_throws_message",
+    ],
+)
+
+drake_cc_googletest(
     name = "scs_solver_test",
     deps = [
         ":exponential_cone_program_examples",
@@ -1660,6 +1719,7 @@ drake_cc_googletest(
         ":quadratic_program_examples",
         ":second_order_cone_program_examples",
         ":snopt_solver",
+        "//common:find_resource",
         "//common:temp_directory",
         "//common/test_utilities:eigen_matrix_compare",
         "//common/test_utilities:expect_throws_message",
@@ -1762,8 +1822,28 @@ drake_cc_googletest(
 )
 
 drake_cc_googletest(
+    name = "diagonally_dominant_dual_cone_matrix_test",
+    deps = [
+        ":mathematical_program",
+        ":snopt_solver",
+        ":solve",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_googletest(
     name = "scaled_diagonally_dominant_matrix_test",
     tags = gurobi_test_tags() + mosek_test_tags(),
+    deps = [
+        ":mathematical_program",
+        ":solve",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:symbolic_test_util",
+    ],
+)
+
+drake_cc_googletest(
+    name = "scaled_diagonally_dominant_dual_cone_matrix_test",
     deps = [
         ":mathematical_program",
         ":solve",
@@ -1789,6 +1869,7 @@ drake_cc_googletest(
     name = "choose_best_solver_test",
     deps = [
         ":choose_best_solver",
+        ":clarabel_solver",
         ":clp_solver",
         ":csdp_solver",
         ":equality_constrained_qp_solver",

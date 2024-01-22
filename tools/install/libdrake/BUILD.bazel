@@ -223,7 +223,6 @@ cc_library(
         "//lcmtypes:lcmtypes_drake_cc",
         "@eigen",
         "@fmt",
-        "@optitrack_driver//lcmtypes:optitrack_lcmtypes",
     ],
 )
 
@@ -239,6 +238,27 @@ drake_cc_googletest(
     tags = ["no_kcov"],  # See #10788.
     deps = [
         "//:drake_shared_library",
+    ],
+)
+
+# The exported_symbols_test is skipped in some build configurations.
+selects.config_setting_group(
+    name = "skip_exported_symbols_test",
+    match_any = [
+        # Debug builds have a lot more symbols (no dead code elimination) so
+        # are too much work to tidy up.
+        "//tools/cc_toolchain:debug",
+    ],
+)
+
+drake_py_unittest(
+    name = "exported_symbols_test",
+    args = selects.with_or({
+        ":skip_exported_symbols_test": ["--help"],
+        "//conditions:default": [],
+    }),
+    data = [
+        ":libdrake.so",
     ],
 )
 

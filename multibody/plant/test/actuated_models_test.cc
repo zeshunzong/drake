@@ -1,5 +1,6 @@
 #include <limits>
 #include <memory>
+#include <tuple>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -10,12 +11,14 @@
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/multibody_plant_config.h"
+#include "drake/multibody/plant/multibody_plant_config_functions.h"
 #include "drake/multibody/tree/prismatic_joint.h"
 #include "drake/multibody/tree/revolute_joint.h"
 #include "drake/systems/framework/context.h"
 
 namespace drake {
 
+using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using multibody::Parser;
 using systems::Context;
@@ -43,19 +46,24 @@ namespace {
 // gripper.
 class ActuatedIiiwaArmTest : public ::testing::Test {
  public:
+  // Enum to control the PD model for ther kuka arm and its gripper.
+  // This does not affect the acrobot model, which has no PD controllers.
   enum class ModelConfiguration {
+    // None of the models have PD controllers.
+    kNoPdControl,
     kArmIsControlled,
     kArmIsNotControlled,
     kArmIsPartiallyControlled,
     kModelWithZeroGains,
   };
 
-  // - arm not controlled
-  // - arm controlled
-  // - arm partially controlled
+  // Sets a model with PD controllers as specified by `model_config`. The
+  // MultibodyPlant model is discrete and uses the SAP model approximation by
+  // default, but this can be changed with `config`.
   void SetUpModel(
       ModelConfiguration model_config = ModelConfiguration::kArmIsNotControlled,
-      bool is_discrete = true) {
+      const MultibodyPlantConfig& config = MultibodyPlantConfig{
+          .time_step = 0.01, .discrete_contact_approximation = "sap"}) {
     const char kArmSdfPath[] =
         "drake/manipulation/models/iiwa_description/iiwa7/"
         "iiwa7_no_collision.sdf";
@@ -64,16 +72,19 @@ class ActuatedIiiwaArmTest : public ::testing::Test {
         "drake/manipulation/models/wsg_50_description/sdf/schunk_wsg_50.sdf";
 
     // Make a discrete model.
-    const double update_period = is_discrete ? 0.01 : 0.0;
-    plant_ = std::make_unique<MultibodyPlant<double>>(update_period);
-    // Use the SAP solver. Thus far only SAP support the modeling of PD
-    // controllers.
-    plant_->set_discrete_contact_solver(DiscreteContactSolver::kSap);
+    plant_ = std::make_unique<MultibodyPlant<double>>(config.time_step);
+    ApplyMultibodyPlantConfig(config, plant_.get());
 
     Parser parser(plant_.get());
 
     // Add the arm.
     arm_model_ = parser.AddModels(FindResourceOrThrow(kArmSdfPath)).at(0);
+
+    // A model of an underactuated robot.
+    acrobot_model_ = parser
+                         .AddModels(FindResourceOrThrow(
+                             "drake/multibody/benchmarks/acrobot/acrobot.sdf"))
+                         .at(0);
 
     // Add the gripper.
     gripper_model_ = parser.AddModels(FindResourceOrThrow(kWsg50SdfPath)).at(0);
@@ -89,43 +100,57 @@ class ActuatedIiiwaArmTest : public ::testing::Test {
     plant_->WeldFrames(plant_->world_frame(), base_body.body_frame());
     plant_->WeldFrames(end_effector.body_frame(), gripper_body.body_frame());
 
-    // Set PD controllers for the gripper.
-    SetGripperModel();
+    if (model_config != ModelConfiguration::kNoPdControl) {
+      // Set PD controllers for the gripper.
+      SetGripperModel();
 
-    // Arm actuators.
-    std::vector<JointActuatorIndex> arm_actuators;
-    for (JointActuatorIndex actuator_index(0);
-         actuator_index < plant_->num_actuators(); ++actuator_index) {
-      if (plant_->get_joint_actuator(actuator_index).model_instance() ==
-          arm_model_) {
-        arm_actuators.push_back(actuator_index);
-      }
-    }
-
-    // Set PD controllers for the arm, depending on the desired configuration.
-    if (model_config == ModelConfiguration::kArmIsControlled) {
-      // Define PD controllers for the arm.
-      for (JointActuatorIndex actuator_index : arm_actuators) {
-        JointActuator<double>& actuator =
-            plant_->get_mutable_joint_actuator(actuator_index);
-        actuator.set_controller_gains({kProportionalGain_, kDerivativeGain_});
-      }
-    } else if (model_config == ModelConfiguration::kArmIsPartiallyControlled) {
-      // Add PD control only on a subset of actuators.
-      auto& actuator1 = plant_->get_mutable_joint_actuator(arm_actuators[1]);
-      actuator1.set_controller_gains({kProportionalGain_, kDerivativeGain_});
-      auto& actuator3 = plant_->get_mutable_joint_actuator(arm_actuators[3]);
-      actuator3.set_controller_gains({kProportionalGain_, kDerivativeGain_});
-    } else if (model_config == ModelConfiguration::kModelWithZeroGains) {
+      // Arm actuators.
+      std::vector<JointActuatorIndex> arm_actuators;
       for (JointActuatorIndex actuator_index(0);
            actuator_index < plant_->num_actuators(); ++actuator_index) {
-        JointActuator<double>& actuator =
-            plant_->get_mutable_joint_actuator(actuator_index);
-        // N.B. Proportional gains must be strictly positive, so we choose a
-        // small positive number to approximate zero.
-        actuator.set_controller_gains({1.0e-10, 0.0});
+        if (plant_->get_joint_actuator(actuator_index).model_instance() ==
+            arm_model_) {
+          arm_actuators.push_back(actuator_index);
+        }
+      }
+
+      // Set PD controllers for the arm, depending on the desired configuration.
+      if (model_config == ModelConfiguration::kArmIsControlled) {
+        // Define PD controllers for the arm.
+        for (JointActuatorIndex actuator_index : arm_actuators) {
+          JointActuator<double>& actuator =
+              plant_->get_mutable_joint_actuator(actuator_index);
+          actuator.set_controller_gains({kProportionalGain_, kDerivativeGain_});
+        }
+      } else if (model_config ==
+                 ModelConfiguration::kArmIsPartiallyControlled) {
+        // Add PD control only on a subset of actuators.
+        auto& actuator1 = plant_->get_mutable_joint_actuator(arm_actuators[1]);
+        actuator1.set_controller_gains({kProportionalGain_, kDerivativeGain_});
+        auto& actuator3 = plant_->get_mutable_joint_actuator(arm_actuators[3]);
+        actuator3.set_controller_gains({kProportionalGain_, kDerivativeGain_});
+      } else if (model_config == ModelConfiguration::kModelWithZeroGains) {
+        for (JointActuatorIndex actuator_index(0);
+             actuator_index < plant_->num_actuators(); ++actuator_index) {
+          JointActuator<double>& actuator =
+              plant_->get_mutable_joint_actuator(actuator_index);
+          // We do not add PD controllers to the acrobot.
+          if (actuator.model_instance() == acrobot_model_) continue;
+          // N.B. Proportional gains must be strictly positive, so we choose a
+          // small positive number to approximate zero.
+          actuator.set_controller_gains({1.0e-10, 0.0});
+        }
       }
     }
+
+    // We make the acrobot fully actuated.
+    const Joint<double>& acrobot_shoulder =
+        plant_->GetJointByName("ShoulderJoint", acrobot_model_);
+    plant_->AddJointActuator("ShoulderActuator", acrobot_shoulder);
+    // N.B. Notice that this actuator is added at a later state long after other
+    // model instances were added to the plant. This will allow testing that
+    // actuation input is assembled as documented by monotonically
+    // increasing JointActuatorIndex, regardless of model instance index.
 
     plant_->Finalize();
 
@@ -143,12 +168,112 @@ class ActuatedIiiwaArmTest : public ::testing::Test {
     }
   }
 
+  // Makes a set of actuation values for each model instance. Values are
+  // arbitrary, though non-zero.
+  // If iiwa_within_limits is false, the actuation vector for the iiwa arm will
+  // be above effort limits (300 Nm) for joints 1 and 2 and below effort limits
+  // (-300 Nm) for joints 4, 5, and 6. The returned tuple packs each model's
+  // actuation as {arm, acrobot, gripper, box}.
+  static std::tuple<VectorXd, VectorXd, VectorXd> MakeActuationForEachModel(
+      bool iiwa_within_limits) {
+    // N.B. Per SDFormat model, effort limits are 300 Nm. We set some of the
+    // actuation values to be outside this limit.
+    const VectorXd arm_u =
+        iiwa_within_limits
+            ? (VectorXd(7) << 50, 40, 55, -35, -40, -45, -40).finished()
+            : (VectorXd(7) << 350, 400, 55, -350, -400, -450, -40).finished();
+    const VectorXd gripper_u = VectorXd::LinSpaced(2, 1.0, 2.0);
+    const VectorXd acrobot_u = VectorXd::LinSpaced(2, 3.0, 4.0);
+    return std::make_tuple(arm_u, acrobot_u, gripper_u);
+  }
+
+  // Given the actuation for each model instance separately, this function
+  // assembles the actuation vector for the full MultibodyPlant model. This is
+  // the actuation vector consumed by
+  // MultibodyPlant::get_actuation_input_port(), ordered by JointActuatorIndex,
+  // regardless of model instance.
+  VectorXd AssembleFullModelActuation(const VectorXd& arm_u,
+                                      const VectorXd& acrobot_u,
+                                      const VectorXd& gripper_u) {
+    // Reported actuation values are indexed by JointActuatorIndex. That is, in
+    // the order actuators were added to the model. For this test, recall that
+    // the acrobot shoulder is added last programmatically.
+    const int nu = plant_->num_actuated_dofs();
+    // clang-format off
+    const VectorXd full_model_u =
+      (VectorXd(nu) <<
+        arm_u,
+        acrobot_u(0), /* Acrobot elbow */
+        gripper_u,
+        acrobot_u(1)  /* Acrobot shoulder */).finished();
+    // clang-format on
+    return full_model_u;
+  }
+
+  // This method sets arm and gripper actuation inputs with
+  // MakeActuationForEachModel(false) (iiwa outside effort limits) and verifies
+  // the actuation output port copies them to the output.
+  // Note: Since the arm actuation is outside effort limits, for SAP this will
+  // only be true in the absence of PD controllers.
+  void VerifyActuationOutputFeedsThroughActuationInputs() {
+    auto [arm_u, acrobot_u, gripper_u] =
+        MakeActuationForEachModel(false /* iiwa outside limits */);
+
+    // Set arbitrary actuation values.
+    plant_->get_actuation_input_port(arm_model_)
+        .FixValue(context_.get(), arm_u);
+    plant_->get_actuation_input_port(gripper_model_)
+        .FixValue(context_.get(), gripper_u);
+    plant_->get_actuation_input_port(acrobot_model_)
+        .FixValue(context_.get(), acrobot_u);
+
+    // Reported actuation values are indexed by JointActuatorIndex. That is, in
+    // the order actuators were added to the model. For this test, recall that
+    // the acrobot elbow is added last programmatically. For continuous models,
+    // we do not expect the actuators to enforce limits, see section @ref
+    // mbp_actuation, in the MultibodyPlant documentation.
+    const int nu = plant_->num_actuated_dofs();
+    // clang-format off
+    const VectorXd expected_u =
+      (VectorXd(nu) <<
+        arm_u,
+        acrobot_u(0), /* Acrobot shoulder */
+        gripper_u,
+        acrobot_u(1) /* Acrobot elbow */).finished();
+    // clang-format on
+
+    // Verify that net actuation output is an exact copy of the inputs.
+    VerifyNetActuationOutputPorts(arm_u, acrobot_u, gripper_u, expected_u);
+  }
+
+  // Helper to verify that the net actuation output ports report the values
+  // provided within `tolerance`.
+  void VerifyNetActuationOutputPorts(const VectorXd& arm_u,
+                                     const VectorXd& acrobot_u,
+                                     const VectorXd& gripper_u,
+                                     const VectorXd& u,
+                                     double tolerance = 0) const {
+    EXPECT_TRUE(CompareMatrices(
+        plant_->get_net_actuation_output_port(arm_model_).Eval(*context_),
+        arm_u, tolerance, MatrixCompareType::relative));
+    EXPECT_TRUE(CompareMatrices(
+        plant_->get_net_actuation_output_port(gripper_model_).Eval(*context_),
+        gripper_u, tolerance, MatrixCompareType::relative));
+    EXPECT_TRUE(CompareMatrices(
+        plant_->get_net_actuation_output_port(acrobot_model_).Eval(*context_),
+        acrobot_u, tolerance, MatrixCompareType::relative));
+    EXPECT_TRUE(
+        CompareMatrices(plant_->get_net_actuation_output_port().Eval(*context_),
+                        u, tolerance, MatrixCompareType::relative));
+  }
+
  protected:
   const int kKukaNumPositions_{7};
   const int kGripperNumPositions_{2};
   const double kProportionalGain_{10000.0};
   const double kDerivativeGain_{100.0};
   std::unique_ptr<MultibodyPlant<double>> plant_;
+  ModelInstanceIndex acrobot_model_;
   ModelInstanceIndex arm_model_;
   ModelInstanceIndex gripper_model_;
   ModelInstanceIndex box_model_;
@@ -207,65 +332,36 @@ TEST_F(ActuatedIiiwaArmTest, GetDesiredStatePort) {
       "num_model_instances\\(\\)' failed.");
 }
 
-// Verify that MultibodyPlant::AssembleActuationInput() throws an exception if
-// the actuation input port for a model instance without PD controllers is not
-// connected.
-TEST_F(ActuatedIiiwaArmTest, AssembleActuationInput_ActuationInputRequired) {
-  SetUpModel();
-
-  DRAKE_EXPECT_THROWS_MESSAGE(
-      MultibodyPlantTester::AssembleActuationInput(*plant_, *context_),
-      "Actuation input port for model instance iiwa7 must be connected or PD "
-      "gains must be specified for each actuator.");
-}
-
-// Verify that actuation port is not required to be connected if the model is PD
-// controlled.
-TEST_F(ActuatedIiiwaArmTest, AssembleActuationInput_NotRequiredIfPdControlled) {
-  SetUpModel();
-
-  // The actuation input port for the arm is required to be connected.
-  plant_->get_actuation_input_port(arm_model_)
-      .FixValue(context_.get(), VectorXd::Zero(kKukaNumPositions_));
-
-  // The actuation input port for the gripper is not required to be connected
-  // since its actuators are PD controlled.
-  EXPECT_NO_THROW(
-      MultibodyPlantTester::AssembleActuationInput(*plant_, *context_));
-}
-
-// Verify the assembly of actuation input ports defaults to zero actuation when
-// a model instance input port is not connected.
-TEST_F(ActuatedIiiwaArmTest,
-       AssembleActuationInput_DisconnectedPortHasZeroValues) {
-  // We set up a PD controlled arm so that we can test the feed-forward term
-  // defaults to zero values when not connected.
-  SetUpModel(ModelConfiguration::kArmIsControlled);
+// Verify the assembly of actuation input ports. In particular, we verify this
+// assembly is performed in the order of JointActuatorIndex and that
+// disconnected ports default to zero values.
+TEST_F(ActuatedIiiwaArmTest, AssembleActuationInput) {
+  // We setup a model with one PD controlled model instance (the gripper) and a
+  // model instance without PD control (the arm).
+  SetUpModel(ModelConfiguration::kArmIsNotControlled);
 
   // Desired state is required to be connected, even if values are not relevant
   // for this test.
   const VectorXd gripper_xd = (VectorXd(4) << 1.0, 2.0, 3.0, 4.0).finished();
   plant_->get_desired_state_input_port(gripper_model_)
       .FixValue(context_.get(), gripper_xd);
-  const VectorXd arm_xd = VectorXd::LinSpaced(14, 1.0, 14.0);
-  plant_->get_desired_state_input_port(arm_model_)
-      .FixValue(context_.get(), arm_xd);
 
   // Fix input input ports to known values.
-  const VectorXd gripper_u = (VectorXd(2) << 1.0, 2.0).finished();
+  // We leave the arm's port disconnected to verify it's value defaults to zero
+  // actuation.
+  auto [arm_u, acrobot_u, gripper_u] =
+      MakeActuationForEachModel(false /* irrelevant for this test */);
   plant_->get_actuation_input_port(gripper_model_)
       .FixValue(context_.get(), gripper_u);
+  plant_->get_actuation_input_port(acrobot_model_)
+      .FixValue(context_.get(), acrobot_u);
 
   const VectorXd full_u =
       MultibodyPlantTester::AssembleActuationInput(*plant_, *context_);
-  const int nu = plant_->num_actuated_dofs();
-  // AssembleActuationInput() will always return a vector of size nu. It fills
-  // in values for those models with feed-forward actuation and set all other
-  // entries to zero. In this case, entries corresponding to the arm are
-  // expected to be zero.
+
   const int arm_nu = plant_->num_actuated_dofs(arm_model_);
   VectorXd expected_u =
-      (VectorXd(nu) << VectorXd::Zero(arm_nu), gripper_u).finished();
+      AssembleFullModelActuation(VectorXd::Zero(arm_nu), acrobot_u, gripper_u);
 
   EXPECT_EQ(full_u, expected_u);
 }
@@ -314,14 +410,24 @@ TEST_F(ActuatedIiiwaArmTest,
 
   const int nu = plant_->num_actuated_dofs();
   // AssembleDesiredStateInput will always return a vector of size 2 * nu. It
-  // fill in values for those models with PD control and set all other entries
+  // fills in values for those models with PD control and set all other entries
   // to zero. In this case, entries corresponding to the arm are expected to be
   // zero. All qd values go first, followed by vd values.
   const int arm_nu = plant_->num_actuated_dofs(arm_model_);
+  // clang-format off
   VectorXd expected_xd =
-      (VectorXd(2 * nu) << VectorXd::Zero(arm_nu), gripper_xd.head<2>(),
-       VectorXd::Zero(arm_nu), gripper_xd.tail<2>())
-          .finished();
+      (VectorXd(2 * nu) <<
+        // Desired positions.
+        VectorXd::Zero(arm_nu),
+        0.0, /* Acrobot shoulder */
+        gripper_xd.head<2>(),
+        0.0, /* Acrobot elbow */
+        // Desired velocities.
+        VectorXd::Zero(arm_nu),
+        0.0, /* Acrobot shoulder */
+        gripper_xd.tail<2>(),
+        0.0 /* Acrobot elbow */).finished();
+  // clang-format on
 
   EXPECT_EQ(full_xd, expected_xd);
 }
@@ -347,10 +453,20 @@ TEST_F(ActuatedIiiwaArmTest,
   // therefore in this case arm first followed by gripper. All qd values go
   // first, followed by vd values.
   const int nu = plant_->num_actuated_dofs();
+  // clang-format off
   const VectorXd expected_xd =
-      (VectorXd(2 * nu) << arm_xd.head<7>(), gripper_xd.head<2>(),
-       arm_xd.tail<7>(), gripper_xd.tail<2>())
-          .finished();
+      (VectorXd(2 * nu) <<
+        // Desired positions.
+        arm_xd.head<7>(),
+        0.0, /* Acrobot shoulder */
+        gripper_xd.head<2>(),
+        0.0, /* Acrobot elbow */
+        // Desired velocities.
+        arm_xd.tail<7>(),
+        0.0, /* Acrobot shoulder */
+        gripper_xd.tail<2>(),
+        0.0 /* Acrobot elbow */).finished();
+  // clang-format on
 
   EXPECT_EQ(full_xd, expected_xd);
 }
@@ -358,7 +474,8 @@ TEST_F(ActuatedIiiwaArmTest,
 TEST_F(ActuatedIiiwaArmTest,
        PdControlledActuatorsOnlySupportedForDiscreteModels) {
   DRAKE_EXPECT_THROWS_MESSAGE(
-      SetUpModel(ModelConfiguration::kArmIsControlled, false),
+      SetUpModel(ModelConfiguration::kArmIsControlled,
+                 MultibodyPlantConfig{.time_step = 0.0}),
       "Continuous model with PD controlled joint actuators. This feature is "
       "only supported for discrete models. Refer to MultibodyPlant's "
       "documentation for further details.");
@@ -394,10 +511,14 @@ TEST_F(ActuatedIiiwaArmTest,
 
   // N.B. These values of actuation are well within effort limits, for both arm
   // and gripper.
-  const VectorXd arm_u = VectorXd::LinSpaced(7, 1.0, 7.0);
-  const VectorXd gripper_u = VectorXd::LinSpaced(2, 1.0, 2.0);
-  const VectorXd free_box = VectorXd::Zero(6);
-  const VectorXd tau = (VectorXd(15) << arm_u, gripper_u, free_box).finished();
+  auto [arm_u, acrobot_u, gripper_u] =
+      MakeActuationForEachModel(true /* iiwa inside limits */);
+  const VectorXd expected_u =
+      AssembleFullModelActuation(arm_u, acrobot_u, gripper_u);
+
+  // Map actuation to generalized forces.
+  const MatrixXd B = plant_->MakeActuationMatrix();
+  VectorXd tau = B * expected_u;
 
   auto updates = plant_->AllocateDiscreteVariables();
 
@@ -409,8 +530,10 @@ TEST_F(ActuatedIiiwaArmTest,
 
   // Input through actuation. Zero generalized forces first.
   plant_->get_applied_generalized_force_input_port().FixValue(
-      context_.get(), VectorXd::Zero(15));
+      context_.get(), VectorXd::Zero(17));
   plant_->get_actuation_input_port(arm_model_).FixValue(context_.get(), arm_u);
+  plant_->get_actuation_input_port(acrobot_model_)
+      .FixValue(context_.get(), acrobot_u);
   plant_->get_actuation_input_port(gripper_model_)
       .FixValue(context_.get(), gripper_u);
   plant_->CalcForcedDiscreteVariableUpdate(*context_, updates.get());
@@ -422,6 +545,10 @@ TEST_F(ActuatedIiiwaArmTest,
   const double kTolerance = 1.0e-12;
   EXPECT_TRUE(CompareMatrices(x_actuation, x_tau, kTolerance,
                               MatrixCompareType::relative));
+
+  // Verify the net actuation values reported by the plant.
+  VerifyNetActuationOutputPorts(arm_u, acrobot_u, gripper_u, expected_u,
+                                kTolerance);
 }
 
 // We verify that the PD controlled actuators exert effort limits.
@@ -450,17 +577,18 @@ TEST_F(ActuatedIiiwaArmTest,
   plant_->get_desired_state_input_port(arm_model_)
       .FixValue(context_.get(), arm_x0);
 
-  // N.B. Per SDF model, effort limits are 300 Nm. We set some of the actuation
-  // values to be outside this limit.
-  const VectorXd arm_u =
-      (VectorXd(7) << 350, 400, 55, -350, -400, -450, -40).finished();
-  const VectorXd gripper_u = VectorXd::LinSpaced(2, 1.0, 2.0);
-  const VectorXd free_box = VectorXd::Zero(6);
-  // To obtain the same actuation with generalized forces, we clamp u to be
-  // within effort limits.
+  auto [arm_u, acrobot_u, gripper_u] =
+      MakeActuationForEachModel(false /* iiwa outside limits */);
+
+  // We clamp u to be within the iiwa effort limits so that we can make an
+  // equivalent vector or generalized forces below.
   const VectorXd arm_u_clamped = arm_u.array().min(300).max(-300);
-  const VectorXd tau =
-      (VectorXd(15) << arm_u_clamped, gripper_u, free_box).finished();
+  const VectorXd expected_u =
+      AssembleFullModelActuation(arm_u_clamped, acrobot_u, gripper_u);
+
+  // Map actuation to generalized forces.
+  const MatrixXd B = plant_->MakeActuationMatrix();
+  VectorXd tau = B * expected_u;
 
   auto updates = plant_->AllocateDiscreteVariables();
 
@@ -472,19 +600,67 @@ TEST_F(ActuatedIiiwaArmTest,
 
   // Input through actuation. Zero generalized forces first.
   plant_->get_applied_generalized_force_input_port().FixValue(
-      context_.get(), VectorXd::Zero(15));
+      context_.get(), VectorXd::Zero(17));
   plant_->get_actuation_input_port(arm_model_).FixValue(context_.get(), arm_u);
   plant_->get_actuation_input_port(gripper_model_)
       .FixValue(context_.get(), gripper_u);
+  plant_->get_actuation_input_port(acrobot_model_)
+      .FixValue(context_.get(), acrobot_u);
   plant_->CalcForcedDiscreteVariableUpdate(*context_, updates.get());
   const VectorXd x_actuation = updates->get_vector().CopyToVector();
 
   // N.B. Generalized forces inputs and actuation inputs feed into the result in
   // very different ways. Actuation input goes through the SAP solver and
   // therefore the accuracy of the solution is affected by solver tolerances.
-  const double kTolerance = 1.0e-12;
+  const double kTolerance = 1.0e-10;
   EXPECT_TRUE(CompareMatrices(x_actuation, x_tau, kTolerance,
                               MatrixCompareType::relative));
+
+  // Verify the actuation values reported by the plant.
+  VerifyNetActuationOutputPorts(arm_u_clamped, acrobot_u, gripper_u, expected_u,
+                                kTolerance);
+
+  // Joint 4 is actuated beyond its effort limits. Here we verify that when the
+  // joint is locked (and only for this joint), it's PD controller is ignored
+  // and only the input actuation (through the actuation input port) is reported
+  // in the actuation output.
+  plant_->GetJointByName("iiwa_joint_4").Lock(context_.get());
+  const VectorXd arm_u_when_joint4_is_locked =
+      (VectorXd(7) << 300, 300, 55, -350, -300, -300, -40).finished();
+  const VectorXd expected_u_when_joint4_is_locked = AssembleFullModelActuation(
+      arm_u_when_joint4_is_locked, acrobot_u, gripper_u);
+  VerifyNetActuationOutputPorts(arm_u_when_joint4_is_locked, acrobot_u,
+                                gripper_u, expected_u_when_joint4_is_locked,
+                                kTolerance);
+}
+
+// This test verifies that for continuous models the actuation output port
+// simply feeds through the actuation inputs.
+TEST_F(ActuatedIiiwaArmTest,
+       ActuationOutputForContinuousModelsFeedsThroughActuationInput) {
+  SetUpModel(ModelConfiguration::kNoPdControl,
+             MultibodyPlantConfig{.time_step = 0.0});
+  VerifyActuationOutputFeedsThroughActuationInputs();
+}
+
+// This test verifies that discrete models using a solver other than SAP, simply
+// feed through the actuation inputs.
+TEST_F(ActuatedIiiwaArmTest,
+       ActuationOutputForDiscreteNonSapModelsFeedsThroughActuationInput) {
+  SetUpModel(ModelConfiguration::kNoPdControl,
+             MultibodyPlantConfig{.time_step = 0.01,
+                                  .discrete_contact_approximation = "tamsi"});
+  VerifyActuationOutputFeedsThroughActuationInputs();
+}
+
+// This test verifies that SAP models without PD controllers also feed through
+// the actuation input to the actuation output.
+TEST_F(ActuatedIiiwaArmTest,
+       ActuationOutputForDiscreteSapModelsFeedsThroughActuationInput) {
+  SetUpModel(ModelConfiguration::kNoPdControl,
+             MultibodyPlantConfig{.time_step = 0.01,
+                                  .discrete_contact_approximation = "sap"});
+  VerifyActuationOutputFeedsThroughActuationInputs();
 }
 
 }  // namespace

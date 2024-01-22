@@ -338,6 +338,39 @@ void DoScalarIndependentDefinitions(py::module m) {
   }
 
   {
+    using Class = geometry::NullTexture;
+    constexpr auto& cls_doc = doc_geometry.NullTexture;
+    py::class_<Class> cls(m, "NullTexture", cls_doc.doc);
+    cls  // BR
+        .def(ParamInit<Class>());
+    DefAttributesUsingSerialize(&cls);
+    DefReprUsingSerialize(&cls);
+    DefCopyAndDeepCopy(&cls);
+  }
+
+  {
+    using Class = geometry::EquirectangularMap;
+    constexpr auto& cls_doc = doc_geometry.EquirectangularMap;
+    py::class_<Class> cls(m, "EquirectangularMap", cls_doc.doc);
+    cls  // BR
+        .def(ParamInit<Class>());
+    DefAttributesUsingSerialize(&cls);
+    DefReprUsingSerialize(&cls);
+    DefCopyAndDeepCopy(&cls);
+  }
+
+  {
+    using Class = geometry::EnvironmentMap;
+    constexpr auto& cls_doc = doc_geometry.EnvironmentMap;
+    py::class_<Class> cls(m, "EnvironmentMap", cls_doc.doc);
+    cls  // BR
+        .def(ParamInit<Class>());
+    DefAttributesUsingSerialize(&cls);
+    DefReprUsingSerialize(&cls);
+    DefCopyAndDeepCopy(&cls);
+  }
+
+  {
     using Class = geometry::render::LightParameter;
     constexpr auto& cls_doc = doc.LightParameter;
     py::class_<Class> cls(m, "LightParameter", cls_doc.doc);
@@ -357,16 +390,6 @@ void DoScalarIndependentDefinitions(py::module m) {
     DefAttributesUsingSerialize(&cls, cls_doc);
     DefReprUsingSerialize(&cls);
     DefCopyAndDeepCopy(&cls);
-    // Shim in the vestigial (deprecated) attribute; it's not part of Serialize.
-    // Remove this on 2023-12-01.
-    cls.def_property("default_label",
-        WrapDeprecated(cls_doc.default_label.doc,
-            [](const Class& self) { return self.default_label; }),
-        WrapDeprecated(cls_doc.default_label.doc,
-            [](Class& self, const RenderLabel& value) {
-              self.default_label = value;
-            }),
-        cls_doc.default_label.doc);
   }
 
   m.def("MakeRenderEngineVtk", &MakeRenderEngineVtk, py::arg("params"),
@@ -381,16 +404,6 @@ void DoScalarIndependentDefinitions(py::module m) {
     DefAttributesUsingSerialize(&cls, cls_doc);
     DefReprUsingSerialize(&cls);
     DefCopyAndDeepCopy(&cls);
-    // Shim in the vestigial (deprecated) attribute; it's not part of Serialize.
-    // Remove this on 2023-12-01.
-    cls.def_property("default_label",
-        WrapDeprecated(cls_doc.default_label.doc,
-            [](const Class& self) { return self.default_label; }),
-        WrapDeprecated(cls_doc.default_label.doc,
-            [](Class& self, const RenderLabel& value) {
-              self.default_label = value;
-            }),
-        cls_doc.default_label.doc);
   }
 
   m.def("MakeRenderEngineGl", &MakeRenderEngineGl,
@@ -406,16 +419,6 @@ void DoScalarIndependentDefinitions(py::module m) {
     DefAttributesUsingSerialize(&cls, cls_doc);
     DefReprUsingSerialize(&cls);
     DefCopyAndDeepCopy(&cls);
-    // Shim in the vestigial (deprecated) attribute; it's not part of Serialize.
-    // Remove this on 2023-12-01.
-    cls.def_property("default_label",
-        WrapDeprecated(cls_doc.default_label.doc,
-            [](const Class& self) { return self.default_label; }),
-        WrapDeprecated(cls_doc.default_label.doc,
-            [](Class& self, const RenderLabel& value) {
-              self.default_label = value;
-            }),
-        cls_doc.default_label.doc);
   }
 
   m.def("MakeRenderEngineGltfClient", &MakeRenderEngineGltfClient,

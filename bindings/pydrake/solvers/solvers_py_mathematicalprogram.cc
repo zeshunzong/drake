@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <memory>
+#include <set>
 
 #include "drake/bindings/pydrake/autodiff_types_pybind.h"
 #include "drake/bindings/pydrake/common/cpp_param_pybind.h"
@@ -823,6 +824,10 @@ void BindMathematicalProgram(py::module m) {
               &MathematicalProgram::AddMaximizeLogDeterminantCost),
           py::arg("X"),
           doc.MathematicalProgram.AddMaximizeLogDeterminantCost.doc)
+      .def("AddLogDeterminantLowerBoundConstraint",
+          &MathematicalProgram::AddLogDeterminantLowerBoundConstraint,
+          py::arg("X"), py::arg("lower"),
+          doc.MathematicalProgram.AddLogDeterminantLowerBoundConstraint.doc)
       .def("AddMaximizeGeometricMeanCost",
           overload_cast_explicit<Binding<LinearCost>,
               const Eigen::Ref<const Eigen::MatrixXd>&,
@@ -883,7 +888,7 @@ void BindMathematicalProgram(py::module m) {
               const Eigen::Ref<const VectorXDecisionVariable>&)>(
               &MathematicalProgram::AddLinearConstraint),
           py::arg("A"), py::arg("lb"), py::arg("ub"), py::arg("vars"),
-          doc.MathematicalProgram.AddLinearConstraint.doc_4args_A_lb_ub_vars)
+          doc.MathematicalProgram.AddLinearConstraint.doc_4args_A_lb_ub_dense)
       .def("AddLinearConstraint",
           static_cast<Binding<LinearConstraint> (MathematicalProgram::*)(
               const Eigen::Ref<const Eigen::RowVectorXd>&, double, double,
@@ -891,6 +896,15 @@ void BindMathematicalProgram(py::module m) {
               &MathematicalProgram::AddLinearConstraint),
           py::arg("a"), py::arg("lb"), py::arg("ub"), py::arg("vars"),
           doc.MathematicalProgram.AddLinearConstraint.doc_4args_a_lb_ub_vars)
+      .def("AddLinearConstraint",
+          static_cast<Binding<LinearConstraint> (MathematicalProgram::*)(
+              const Eigen::SparseMatrix<double>&,
+              const Eigen::Ref<const Eigen::VectorXd>&,
+              const Eigen::Ref<const Eigen::VectorXd>&,
+              const Eigen::Ref<const VectorXDecisionVariable>&)>(
+              &MathematicalProgram::AddLinearConstraint),
+          py::arg("A"), py::arg("lb"), py::arg("ub"), py::arg("vars"),
+          doc.MathematicalProgram.AddLinearConstraint.doc_4args_A_lb_ub_sparse)
       .def("AddLinearConstraint",
           static_cast<Binding<LinearConstraint> (MathematicalProgram::*)(
               const Expression&, double, double)>(
@@ -925,7 +939,25 @@ void BindMathematicalProgram(py::module m) {
               &MathematicalProgram::AddLinearEqualityConstraint),
           py::arg("Aeq"), py::arg("beq"), py::arg("vars"),
           doc.MathematicalProgram.AddLinearEqualityConstraint
-              .doc_3args_Aeq_beq_vars)
+              .doc_3args_Aeq_beq_dense)
+      .def("AddLinearEqualityConstraint",
+          static_cast<Binding<LinearEqualityConstraint> (
+              MathematicalProgram::*)(
+              const Eigen::Ref<const Eigen::RowVectorXd>&, double,
+              const Eigen::Ref<const VectorXDecisionVariable>&)>(
+              &MathematicalProgram::AddLinearEqualityConstraint),
+          py::arg("a"), py::arg("beq"), py::arg("vars"),
+          doc.MathematicalProgram.AddLinearEqualityConstraint
+              .doc_3args_a_beq_vars)
+      .def("AddLinearEqualityConstraint",
+          static_cast<Binding<LinearEqualityConstraint> (
+              MathematicalProgram::*)(const Eigen::SparseMatrix<double>&,
+              const Eigen::Ref<const Eigen::VectorXd>&,
+              const Eigen::Ref<const VectorXDecisionVariable>&)>(
+              &MathematicalProgram::AddLinearEqualityConstraint),
+          py::arg("Aeq"), py::arg("beq"), py::arg("vars"),
+          doc.MathematicalProgram.AddLinearEqualityConstraint
+              .doc_3args_Aeq_beq_sparse)
       .def("AddLinearEqualityConstraint",
           static_cast<Binding<LinearEqualityConstraint> (
               MathematicalProgram::*)(const Expression&, double)>(
@@ -1092,6 +1124,25 @@ void BindMathematicalProgram(py::module m) {
           },
           doc.MathematicalProgram.AddPositiveSemidefiniteConstraint.doc_1args_e)
       .def(
+          "AddPrincipalSubmatrixIsPsdConstraint",
+          [](MathematicalProgram* self,
+              const Eigen::Ref<const MatrixXDecisionVariable>& vars,
+              std::set<int> minor_indices) {
+            return self->AddPrincipalSubmatrixIsPsdConstraint(
+                vars, minor_indices);
+          },
+          doc.MathematicalProgram.AddPrincipalSubmatrixIsPsdConstraint
+              .doc_2args_symmetric_matrix_var_minor_indices)
+      .def(
+          "AddPrincipalSubmatrixIsPsdConstraint",
+          [](MathematicalProgram* self,
+              const Eigen::Ref<const MatrixX<Expression>>& e,
+              std::set<int> minor_indices) {
+            return self->AddPrincipalSubmatrixIsPsdConstraint(e, minor_indices);
+          },
+          doc.MathematicalProgram.AddPrincipalSubmatrixIsPsdConstraint
+              .doc_2args_e_minor_indices)
+      .def(
           "AddLinearMatrixInequalityConstraint",
           [](MathematicalProgram* self,
               const std::vector<Eigen::Ref<const Eigen::MatrixXd>>& F,
@@ -1105,6 +1156,31 @@ void BindMathematicalProgram(py::module m) {
           py::arg("X"),
           doc.MathematicalProgram.AddPositiveDiagonallyDominantMatrixConstraint
               .doc)
+      .def("TightenPsdConstraintToDd",
+          &MathematicalProgram::TightenPsdConstraintToDd, py::arg("constraint"),
+          doc.MathematicalProgram.TightenPsdConstraintToDd.doc)
+      .def("AddPositiveDiagonallyDominantDualConeMatrixConstraint",
+          static_cast<Binding<LinearConstraint> (MathematicalProgram::*)(
+              const Eigen::Ref<const MatrixX<symbolic::Expression>>&)>(
+              &MathematicalProgram::
+                  AddPositiveDiagonallyDominantDualConeMatrixConstraint),
+          py::arg("X"),
+          doc.MathematicalProgram
+              .AddPositiveDiagonallyDominantDualConeMatrixConstraint
+              .doc_expression)
+      .def("AddPositiveDiagonallyDominantDualConeMatrixConstraint",
+          static_cast<Binding<LinearConstraint> (MathematicalProgram::*)(
+              const Eigen::Ref<const MatrixX<symbolic::Variable>>&)>(
+              &MathematicalProgram::
+                  AddPositiveDiagonallyDominantDualConeMatrixConstraint),
+          py::arg("X"),
+          doc.MathematicalProgram
+              .AddPositiveDiagonallyDominantDualConeMatrixConstraint
+              .doc_variable)
+      .def("RelaxPsdConstraintToDdDualCone",
+          &MathematicalProgram::RelaxPsdConstraintToDdDualCone,
+          py::arg("constraint"),
+          doc.MathematicalProgram.RelaxPsdConstraintToDdDualCone.doc)
       .def("AddScaledDiagonallyDominantMatrixConstraint",
           static_cast<std::vector<std::vector<Matrix2<symbolic::Expression>>> (
               MathematicalProgram::*)(
@@ -1123,6 +1199,33 @@ void BindMathematicalProgram(py::module m) {
           py::arg("X"),
           doc.MathematicalProgram.AddScaledDiagonallyDominantMatrixConstraint
               .doc_variable)
+      .def("TightenPsdConstraintToSdd",
+          &MathematicalProgram::TightenPsdConstraintToSdd,
+          py::arg("constraint"),
+          doc.MathematicalProgram.TightenPsdConstraintToSdd.doc)
+      .def("AddScaledDiagonallyDominantDualConeMatrixConstraint",
+          static_cast<std::vector<Binding<RotatedLorentzConeConstraint>> (
+              MathematicalProgram::*)(
+              const Eigen::Ref<const MatrixX<symbolic::Expression>>&)>(
+              &MathematicalProgram::
+                  AddScaledDiagonallyDominantDualConeMatrixConstraint),
+          py::arg("X"),
+          doc.MathematicalProgram
+              .AddScaledDiagonallyDominantDualConeMatrixConstraint
+              .doc_expression)
+      .def("AddScaledDiagonallyDominantDualConeMatrixConstraint",
+          static_cast<std::vector<Binding<RotatedLorentzConeConstraint>> (
+              MathematicalProgram::*)(
+              const Eigen::Ref<const MatrixX<symbolic::Variable>>&)>(
+              &MathematicalProgram::
+                  AddScaledDiagonallyDominantDualConeMatrixConstraint),
+          py::arg("X"),
+          doc.MathematicalProgram
+              .AddScaledDiagonallyDominantDualConeMatrixConstraint.doc_variable)
+      .def("RelaxPsdConstraintToSddDualCone",
+          &MathematicalProgram::RelaxPsdConstraintToSddDualCone,
+          py::arg("constraint"),
+          doc.MathematicalProgram.RelaxPsdConstraintToSddDualCone.doc)
       .def("AddSosConstraint",
           static_cast<MatrixXDecisionVariable (MathematicalProgram::*)(
               const Polynomial&, const Eigen::Ref<const VectorX<Monomial>>&,

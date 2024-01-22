@@ -259,12 +259,6 @@ Vertex* GraphOfConvexSets::AddVertex(const ConvexSet& set, std::string name) {
   return iter->second.get();
 }
 
-Edge* GraphOfConvexSets::AddEdge(VertexId u_id, VertexId v_id,
-                                 std::string name) {
-  return AddEdge(vertices_.at(u_id).get(), vertices_.at(v_id).get(),
-                 std::move(name));
-}
-
 Edge* GraphOfConvexSets::AddEdge(Vertex* u, Vertex* v, std::string name) {
   DRAKE_DEMAND(u != nullptr);
   DRAKE_DEMAND(v != nullptr);
@@ -280,10 +274,6 @@ Edge* GraphOfConvexSets::AddEdge(Vertex* u, Vertex* v, std::string name) {
   return e;
 }
 
-void GraphOfConvexSets::RemoveVertex(VertexId vertex_id) {
-  RemoveVertex(vertices_.at(vertex_id).get());
-}
-
 void GraphOfConvexSets::RemoveVertex(Vertex* vertex) {
   DRAKE_THROW_UNLESS(vertex != nullptr);
   VertexId vertex_id = vertex->id();
@@ -297,10 +287,6 @@ void GraphOfConvexSets::RemoveVertex(Vertex* vertex) {
     }
   }
   vertices_.erase(vertex_id);
-}
-
-void GraphOfConvexSets::RemoveEdge(EdgeId edge_id) {
-  RemoveEdge(edges_.at(edge_id).get());
 }
 
 void GraphOfConvexSets::RemoveEdge(Edge* edge) {
@@ -726,6 +712,7 @@ void GraphOfConvexSets::AddPerspectiveConstraint(
       // Then do nothing.
     } else {
       // Need to go constraint by constraint.
+      // TODO(Alexandre.Amice) make this only access the sparse matrix.
       const Eigen::MatrixXd& A = lc->GetDenseA();
       RowVectorXd a(vars.size());
       for (int i = 0; i < A.rows(); ++i) {
@@ -766,13 +753,6 @@ void GraphOfConvexSets::AddPerspectiveConstraint(
                     "binding type: {}",
                     binding.to_string()));
   }
-}
-
-MathematicalProgramResult GraphOfConvexSets::SolveShortestPath(
-    VertexId source_id, VertexId target_id,
-    const GraphOfConvexSetsOptions& options) const {
-  return SolveShortestPath(*vertices_.at(source_id), *vertices_.at(target_id),
-                           options);
 }
 
 MathematicalProgramResult GraphOfConvexSets::SolveShortestPath(

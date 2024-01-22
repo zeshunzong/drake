@@ -95,7 +95,6 @@ class InterpolationWeights {
    * follow the APIC transfer routine as in equations (172), (173), (189) in
    * https://www.math.ucla.edu/~cffjiang/research/mpmcourse/mpmcourse.pdf
    */
-
   void SplatParticleDataToP2gPad(const T& m_p, const Vector3<T>& x_p,
                                  const Vector3<T>& v_p, const Matrix3<T>& C_p,
                                  const T& V0_p, const Matrix3<T>& P_p,

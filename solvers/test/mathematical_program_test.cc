@@ -19,6 +19,7 @@
 #include "drake/common/drake_assert.h"
 #include "drake/common/drake_copyable.h"
 #include "drake/common/polynomial.h"
+#include "drake/common/ssize.h"
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
 #include "drake/common/test_utilities/expect_no_throw.h"
 #include "drake/common/test_utilities/expect_throws_message.h"
@@ -804,6 +805,18 @@ void ExpectBadVar(MathematicalProgram* prog, int num_var, Args&&... args) {
                               ".*is not a decision variable.*");
 }
 
+// Returns True if all the elements of the matrix m1 and m2 are EqualTo as
+// Expressions.
+bool MatrixExprAllEqual(const MatrixX<Expression>& m1,
+                        const MatrixX<Expression>& m2) {
+  return m1
+      .binaryExpr(m2,
+                  [](const Expression& u, const Expression& v) {
+                    return u.EqualTo(v);
+                  })
+      .all();
+}
+
 }  // namespace
 
 GTEST_TEST(TestMathematicalProgram, TestMakePolynomial) {
@@ -1202,6 +1215,195 @@ GTEST_TEST(TestMathematicalProgram, AddLinearCostSymbolic) {
   CheckAddedSymbolicLinearCost(&prog, x(1) * x(1) + x(0) - x(1) * x(1));
 }
 
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearConstraintMatrixVectorVariablesTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(4, "x");
+  Matrix4d A;
+  // clang-format off
+  A << 1, 2, 3, 4,
+       5, 6, 7, 8,
+       -9, -10, -11, -12,
+       13, 14, 15, 16;
+  // clang-format on
+  const Vector4d lb{-10, -11, -12, -13};
+  const Vector4d ub{3, 7, 11, 17};
+  const auto binding = prog.AddLinearConstraint(A, lb, ub, x);
+
+  // Check if the binding includes the correct linear constraint.
+  const VectorXDecisionVariable& var_vec{binding.variables()};
+  const auto constraint_ptr = binding.evaluator();
+  EXPECT_EQ(constraint_ptr->num_constraints(), 4);
+
+  const MatrixX<Expression> Ax{(constraint_ptr->GetDenseA() * var_vec)};
+  const VectorX<Expression> lb_in_constraint{constraint_ptr->lower_bound()};
+  const VectorX<Expression> ub_in_constraint{constraint_ptr->upper_bound()};
+
+  EXPECT_TRUE(MatrixExprAllEqual(A * x - lb, Ax - lb_in_constraint));
+  EXPECT_TRUE(MatrixExprAllEqual(A * x - ub, Ax - ub_in_constraint));
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearConstraintMatrixVariableRefListTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(1, "x");
+  auto y = prog.NewContinuousVariables(3, "y");
+  VariableRefList vars{x, y};
+  VectorXDecisionVariable vars_as_vec{ConcatenateVariableRefList(vars)};
+
+  Matrix4d A;
+  // clang-format off
+  A << 1, 2, 3, 4,
+       5, 6, 7, 8,
+       -9, -10, -11, -12,
+       13, 14, 15, 16;
+  // clang-format on
+  const Vector4d lb{-10, -11, -12, -13};
+  const Vector4d ub{3, 7, 11, 17};
+  const auto binding = prog.AddLinearConstraint(A, lb, ub, vars);
+
+  // Check if the binding includes the correct linear constraint.
+  const VectorXDecisionVariable& var_vec{binding.variables()};
+  const auto constraint_ptr = binding.evaluator();
+  EXPECT_EQ(constraint_ptr->num_constraints(), 4);
+
+  const MatrixX<Expression> Ax{(constraint_ptr->GetDenseA() * var_vec)};
+  const VectorX<Expression> lb_in_constraint{constraint_ptr->lower_bound()};
+  const VectorX<Expression> ub_in_constraint{constraint_ptr->upper_bound()};
+
+  EXPECT_TRUE(MatrixExprAllEqual(A * vars_as_vec - lb, Ax - lb_in_constraint));
+  EXPECT_TRUE(MatrixExprAllEqual(A * vars_as_vec - ub, Ax - ub_in_constraint));
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearConstraintSparseMatrixVectorVariablesTest) {
+  MathematicalProgram prog;
+  const int n = 4;
+  auto x = prog.NewContinuousVariables(n, "x");
+  std::vector<Eigen::Triplet<double>> A_triplet_list;
+  A_triplet_list.reserve(3 * (n - 2) + 4);
+  double count = 1;
+  for (int i = 0; i < n; ++i) {
+    for (int j = std::max(0, i - 1); j < std::min(n, i + 1); ++j) {
+      A_triplet_list.emplace_back(i, j, count);
+      ++count;
+    }
+  }
+
+  Eigen::SparseMatrix<double> A(n, n);
+  A.setFromTriplets(A_triplet_list.begin(), A_triplet_list.end());
+  const Vector4d lb{-10, -11, -12, -13};
+  const Vector4d ub{3, 7, 11, 17};
+  const auto binding = prog.AddLinearConstraint(A, lb, ub, x);
+
+  // Check if the binding called the sparse matrix constructor by checking that
+  // a dense A has not been computed yet.
+  EXPECT_FALSE(binding.evaluator()->is_dense_A_constructed());
+
+  // Check if the binding includes the correct linear constraint.
+  const VectorXDecisionVariable& var_vec{binding.variables()};
+  const auto constraint_ptr = binding.evaluator();
+  EXPECT_EQ(constraint_ptr->num_constraints(), 4);
+
+  const MatrixX<Expression> Ax{(constraint_ptr->GetDenseA() * var_vec)};
+  const VectorX<Expression> lb_in_constraint{constraint_ptr->lower_bound()};
+  const VectorX<Expression> ub_in_constraint{constraint_ptr->upper_bound()};
+
+  EXPECT_TRUE(MatrixExprAllEqual((A * x - lb), Ax - lb_in_constraint));
+  EXPECT_TRUE(MatrixExprAllEqual((A * x - ub), Ax - ub_in_constraint));
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearConstraintSparseMatrixVariableRefListTest) {
+  MathematicalProgram prog;
+  const int n = 4;
+  auto x = prog.NewContinuousVariables(1, "x");
+  auto y = prog.NewContinuousVariables(n - 1, "y");
+  VariableRefList vars{x, y};
+  VectorXDecisionVariable vars_as_vec{ConcatenateVariableRefList(vars)};
+
+  std::vector<Eigen::Triplet<double>> A_triplet_list;
+  A_triplet_list.reserve(3 * (n - 2) + 4);
+  double count = 1;
+  for (int i = 0; i < n; ++i) {
+    for (int j = std::max(0, i - 1); j < std::min(n, i + 1); ++j) {
+      A_triplet_list.emplace_back(i, j, count);
+      ++count;
+    }
+  }
+
+  Eigen::SparseMatrix<double> A(n, n);
+  A.setFromTriplets(A_triplet_list.begin(), A_triplet_list.end());
+  const Vector4d lb{-10, -11, -12, -13};
+  const Vector4d ub{3, 7, 11, 17};
+  const auto binding = prog.AddLinearConstraint(A, lb, ub, vars);
+
+  // Check if the binding called the sparse matrix constructor by checking that
+  // a dense A has not been computed yet.
+  EXPECT_FALSE(binding.evaluator()->is_dense_A_constructed());
+
+  // Check if the binding includes the correct linear constraint.
+  const VectorXDecisionVariable& var_vec{binding.variables()};
+  const auto constraint_ptr = binding.evaluator();
+  EXPECT_EQ(constraint_ptr->num_constraints(), 4);
+
+  const MatrixX<Expression> Ax{(constraint_ptr->GetDenseA() * var_vec)};
+  const VectorX<Expression> lb_in_constraint{constraint_ptr->lower_bound()};
+  const VectorX<Expression> ub_in_constraint{constraint_ptr->upper_bound()};
+
+  EXPECT_TRUE(
+      MatrixExprAllEqual((A * vars_as_vec - lb), Ax - lb_in_constraint));
+  EXPECT_TRUE(
+      MatrixExprAllEqual((A * vars_as_vec - ub), Ax - ub_in_constraint));
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearConstraintRowVectorVectorVariablesTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(4, "x");
+  const Eigen::RowVector4d a{1, 2, 3, 4};
+  const double lb = -10;
+  const double ub = 3;
+  const auto binding = prog.AddLinearConstraint(a, lb, ub, x);
+
+  // Check if the binding includes the correct linear constraint.
+  const VectorXDecisionVariable& var_vec{binding.variables()};
+  const auto constraint_ptr = binding.evaluator();
+  EXPECT_EQ(constraint_ptr->num_constraints(), 1);
+
+  const MatrixX<Expression> ax{(constraint_ptr->GetDenseA() * var_vec)};
+  const VectorX<Expression> lb_in_constraint{constraint_ptr->lower_bound()};
+  const VectorX<Expression> ub_in_constraint{constraint_ptr->upper_bound()};
+
+  EXPECT_TRUE((a * x - lb).EqualTo((ax - lb_in_constraint)(0)));
+  EXPECT_TRUE((a * x - ub).EqualTo((ax - ub_in_constraint)(0)));
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearConstraintRowVectorVariableRefListTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(1, "x");
+  auto y = prog.NewContinuousVariables(3, "y");
+  VariableRefList vars{x, y};
+  VectorXDecisionVariable vars_as_vec{ConcatenateVariableRefList(vars)};
+
+  const Eigen::RowVector4d a{1, 2, 3, 4};
+  const double lb = -10;
+  const double ub = 3;
+  const auto binding = prog.AddLinearConstraint(a, lb, ub, vars);
+
+  // Check if the binding includes the correct linear constraint.
+  const VectorXDecisionVariable& var_vec{binding.variables()};
+  const auto constraint_ptr = binding.evaluator();
+  EXPECT_EQ(constraint_ptr->num_constraints(), 1);
+
+  const MatrixX<Expression> ax{(constraint_ptr->GetDenseA() * var_vec)};
+  const VectorX<Expression> lb_in_constraint{constraint_ptr->lower_bound()};
+  const VectorX<Expression> ub_in_constraint{constraint_ptr->upper_bound()};
+  EXPECT_TRUE((a * vars_as_vec - lb).EqualTo((ax - lb_in_constraint)(0)));
+  EXPECT_TRUE((a * vars_as_vec - ub).EqualTo((ax - ub_in_constraint)(0)));
+}
+
 GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolic1) {
   // Add linear constraint: -10 <= 3 - 5*x0 + 10*x2 - 7*y1 <= 10
   MathematicalProgram prog;
@@ -1217,10 +1419,10 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolic1) {
   const auto constraint_ptr = binding.evaluator();
   EXPECT_EQ(constraint_ptr->num_constraints(), 1);
   const Expression Ax{(constraint_ptr->GetDenseA() * var_vec)(0, 0)};
-  const Expression lb_in_ctr{constraint_ptr->lower_bound()[0]};
-  const Expression ub_in_ctr{constraint_ptr->upper_bound()[0]};
-  EXPECT_TRUE((e - lb).EqualTo(Ax - lb_in_ctr));
-  EXPECT_TRUE((e - ub).EqualTo(Ax - ub_in_ctr));
+  const Expression lb_in_constraint{constraint_ptr->lower_bound()[0]};
+  const Expression ub_in_constraint{constraint_ptr->upper_bound()[0]};
+  EXPECT_TRUE((e - lb).EqualTo(Ax - lb_in_constraint));
+  EXPECT_TRUE((e - ub).EqualTo(Ax - ub_in_constraint));
 }
 
 GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolic2) {
@@ -1241,10 +1443,10 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolic2) {
   // Check if the binding includes the correct linear constraint.
   const VectorXDecisionVariable& var_vec{binding.variables()};
   const Expression Ax{(constraint_ptr->GetDenseA() * var_vec)(0, 0)};
-  const Expression lb_in_ctr{constraint_ptr->lower_bound()[0]};
-  const Expression ub_in_ctr{constraint_ptr->upper_bound()[0]};
-  EXPECT_TRUE((e - -10).EqualTo(Ax - lb_in_ctr));
-  EXPECT_TRUE((e - 10).EqualTo(Ax - ub_in_ctr));
+  const Expression lb_in_constraint{constraint_ptr->lower_bound()[0]};
+  const Expression ub_in_constraint{constraint_ptr->upper_bound()[0]};
+  EXPECT_TRUE((e - -10).EqualTo(Ax - lb_in_constraint));
+  EXPECT_TRUE((e - 10).EqualTo(Ax - ub_in_constraint));
 }
 
 GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolic3) {
@@ -1295,12 +1497,12 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolic3) {
   const auto constraint_ptr = binding.evaluator();
   EXPECT_EQ(constraint_ptr->num_constraints(), 5);
   const auto Ax = constraint_ptr->GetDenseA() * var_vec;
-  const auto lb_in_ctr = constraint_ptr->lower_bound();
-  const auto ub_in_ctr = constraint_ptr->upper_bound();
+  const auto lb_in_constraint = constraint_ptr->lower_bound();
+  const auto ub_in_constraint = constraint_ptr->upper_bound();
 
   for (int i = 0; i < M_e.size(); ++i) {
-    EXPECT_PRED2(ExprEqual, M_e(i) - M_lb(i), Ax(i) - lb_in_ctr(i));
-    EXPECT_PRED2(ExprEqual, M_e(i) - M_ub(i), Ax(i) - ub_in_ctr(i));
+    EXPECT_PRED2(ExprEqual, M_e(i) - M_lb(i), Ax(i) - lb_in_constraint(i));
+    EXPECT_PRED2(ExprEqual, M_e(i) - M_ub(i), Ax(i) - ub_in_constraint(i));
   }
 }
 
@@ -1698,16 +1900,16 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolicFormulaAnd1) {
   EXPECT_TRUE(is_dynamic_castable<LinearEqualityConstraint>(constraint_ptr));
   EXPECT_EQ(constraint_ptr->num_constraints(), b.size());
   const auto Ax = constraint_ptr->GetDenseA() * var_vec;
-  const auto lb_in_ctr = constraint_ptr->lower_bound();
-  const auto ub_in_ctr = constraint_ptr->upper_bound();
+  const auto lb_in_constraint = constraint_ptr->lower_bound();
+  const auto ub_in_constraint = constraint_ptr->upper_bound();
 
   set<Expression> constraint_set;
   constraint_set.emplace(x(0) + 2 * x(1) - 5);
   constraint_set.emplace(3 * x(0) + 4 * x(1) - 6);
-  EXPECT_EQ(constraint_set.count(Ax(0) - lb_in_ctr(0)), 1);
-  EXPECT_EQ(constraint_set.count(Ax(0) - ub_in_ctr(0)), 1);
-  EXPECT_EQ(constraint_set.count(Ax(1) - lb_in_ctr(1)), 1);
-  EXPECT_EQ(constraint_set.count(Ax(1) - ub_in_ctr(1)), 1);
+  EXPECT_EQ(constraint_set.count(Ax(0) - lb_in_constraint(0)), 1);
+  EXPECT_EQ(constraint_set.count(Ax(0) - ub_in_constraint(0)), 1);
+  EXPECT_EQ(constraint_set.count(Ax(1) - lb_in_constraint(1)), 1);
+  EXPECT_EQ(constraint_set.count(Ax(1) - ub_in_constraint(1)), 1);
 }
 
 GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolicFormulaAnd2) {
@@ -1734,24 +1936,24 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolicFormulaAnd2) {
   EXPECT_FALSE(is_dynamic_castable<LinearEqualityConstraint>(constraint_ptr));
   EXPECT_EQ(constraint_ptr->num_constraints(), 3);
   const auto Ax = constraint_ptr->GetDenseA() * var_vec;
-  const auto lb_in_ctr = constraint_ptr->lower_bound();
-  const auto ub_in_ctr = constraint_ptr->upper_bound();
+  const auto lb_in_constraint = constraint_ptr->lower_bound();
+  const auto ub_in_constraint = constraint_ptr->upper_bound();
 
   set<Expression> constraint_set;
   constraint_set.emplace(e11 - e12);
   constraint_set.emplace(e21 - e22);
   constraint_set.emplace(e31 - e32);
   for (int i = 0; i < 3; ++i) {
-    if (!std::isinf(lb_in_ctr(i))) {
+    if (!std::isinf(lb_in_constraint(i))) {
       // Either `Ax - lb` or `-(Ax - lb)` should be in the constraint set.
-      EXPECT_EQ(constraint_set.count(Ax(i) - lb_in_ctr(i)) +
-                    constraint_set.count(-(Ax(i) - lb_in_ctr(i))),
+      EXPECT_EQ(constraint_set.count(Ax(i) - lb_in_constraint(i)) +
+                    constraint_set.count(-(Ax(i) - lb_in_constraint(i))),
                 1);
     }
-    if (!std::isinf(ub_in_ctr(i))) {
+    if (!std::isinf(ub_in_constraint(i))) {
       // Either `Ax - ub` or `-(Ax - ub)` should be in the constraint set.
-      EXPECT_EQ(constraint_set.count(Ax(i) - ub_in_ctr(i)) +
-                    constraint_set.count(-(Ax(i) - ub_in_ctr(i))),
+      EXPECT_EQ(constraint_set.count(Ax(i) - ub_in_constraint(i)) +
+                    constraint_set.count(-(Ax(i) - ub_in_constraint(i))),
                 1);
     }
   }
@@ -1816,18 +2018,18 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolicArrayFormula1) {
   const auto constraint_ptr = binding.evaluator();
   EXPECT_EQ(constraint_ptr->num_constraints(), 5);
   const auto Ax = constraint_ptr->GetDenseA() * var_vec;
-  const auto lb_in_ctr = constraint_ptr->lower_bound();
-  const auto ub_in_ctr = constraint_ptr->upper_bound();
+  const auto lb_in_constraint = constraint_ptr->lower_bound();
+  const auto ub_in_constraint = constraint_ptr->upper_bound();
   for (int i{0}; i < M_f.size(); ++i) {
-    if (!std::isinf(lb_in_ctr(i))) {
+    if (!std::isinf(lb_in_constraint(i))) {
       EXPECT_PRED2(ExprEqual,
                    get_lhs_expression(M_f(i)) - get_rhs_expression(M_f(i)),
-                   Ax(i) - lb_in_ctr(i));
+                   Ax(i) - lb_in_constraint(i));
     }
-    if (!std::isinf(ub_in_ctr(i))) {
+    if (!std::isinf(ub_in_constraint(i))) {
       EXPECT_PRED2(ExprEqual,
                    get_lhs_expression(M_f(i)) - get_rhs_expression(M_f(i)),
-                   Ax(i) - ub_in_ctr(i));
+                   Ax(i) - ub_in_constraint(i));
     }
   }
 }
@@ -1865,12 +2067,13 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolicArrayFormula2) {
   const auto constraint_ptr = binding.evaluator();
   EXPECT_EQ(constraint_ptr->num_constraints(), M_e.rows() * M_e.cols());
   const auto Ax = constraint_ptr->GetDenseA() * var_vec;
-  const auto lb_in_ctr = constraint_ptr->lower_bound();
-  const auto ub_in_ctr = constraint_ptr->upper_bound();
+  const auto lb_in_constraint = constraint_ptr->lower_bound();
+  const auto ub_in_constraint = constraint_ptr->upper_bound();
   int k{0};
   for (int j{0}; j < M_e.cols(); ++j) {
     for (int i{0}; i < M_e.rows(); ++i) {
-      EXPECT_PRED2(ExprEqual, M_e(i, j) - M_lb(i, j), Ax(k) - lb_in_ctr(k));
+      EXPECT_PRED2(ExprEqual, M_e(i, j) - M_lb(i, j),
+                   Ax(k) - lb_in_constraint(k));
       ++k;
     }
   }
@@ -1904,10 +2107,10 @@ GTEST_TEST(TestMathematicalProgram, AddLinearConstraintSymbolicArrayFormula3) {
   const auto constraint_ptr = binding.evaluator();
   EXPECT_EQ(constraint_ptr->num_constraints(), b.size());
   const auto Ax = constraint_ptr->GetDenseA() * var_vec;
-  const auto lb_in_ctr = constraint_ptr->lower_bound();
-  const auto ub_in_ctr = constraint_ptr->upper_bound();
-  EXPECT_PRED2(ExprEqual, x(0) + 2 * x(1) - 5, Ax(0) - lb_in_ctr(0));
-  EXPECT_PRED2(ExprEqual, 3 * x(0) + 4 * x(1) - 6, Ax(1) - lb_in_ctr(1));
+  const auto lb_in_constraint = constraint_ptr->lower_bound();
+  const auto ub_in_constraint = constraint_ptr->upper_bound();
+  EXPECT_PRED2(ExprEqual, x(0) + 2 * x(1) - 5, Ax(0) - lb_in_constraint(0));
+  EXPECT_PRED2(ExprEqual, 3 * x(0) + 4 * x(1) - 6, Ax(1) - lb_in_constraint(1));
 }
 
 // Checks AddLinearConstraint function which takes an Eigen::Array<Formula>.
@@ -1997,6 +2200,123 @@ void CheckAddedNonSymmetricSymbolicLinearEqualityConstraint(
       prog, Vector1<Expression>(e), Vector1d(b));
 }
 }  // namespace
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearEqualityConstraintMatrixVectorVariablesTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(4, "x");
+  Matrix4d A;
+  // clang-format off
+  A << 1, 2, 3, 4,
+       5, 6, 7, 8,
+       -9, -10, -11, -12,
+       13, 14, 15, 16;
+  // clang-format on
+  const Vector4d b{-10, -11, -12, -13};
+  const auto binding = prog.AddLinearEqualityConstraint(A, b, x);
+  CheckAddedLinearEqualityConstraintCommon(binding, prog, 0);
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearEqualityConstraintMatrixVariableRefListTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(1, "x");
+  auto y = prog.NewContinuousVariables(3, "y");
+  VariableRefList vars{x, y};
+  Matrix4d A;
+  // clang-format off
+  A << 1, 2, 3, 4,
+       5, 6, 7, 8,
+       -9, -10, -11, -12,
+       13, 14, 15, 16;
+  // clang-format on
+  const Vector4d b{-10, -11, -12, -13};
+  const auto binding = prog.AddLinearEqualityConstraint(A, b, vars);
+  CheckAddedLinearEqualityConstraintCommon(binding, prog, 0);
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearEqualityConstraintSparseMatrixVariableRefListTest) {
+  MathematicalProgram prog;
+  const int n = 4;
+  auto x = prog.NewContinuousVariables(1, "x");
+  auto y = prog.NewContinuousVariables(3, "y");
+  VariableRefList vars{x, y};
+
+  std::vector<Eigen::Triplet<double>> A_triplet_list;
+  A_triplet_list.reserve(3 * (n - 2) + 4);
+  double count = 1;
+  for (int i = 0; i < n; ++i) {
+    for (int j = std::max(0, i - 1); j < std::min(n, i + 1); ++j) {
+      A_triplet_list.emplace_back(i, j, count);
+      ++count;
+    }
+  }
+
+  Eigen::SparseMatrix<double> A(n, n);
+  A.setFromTriplets(A_triplet_list.begin(), A_triplet_list.end());
+  const Vector4d b{-10, -11, -12, -13};
+
+  const auto binding = prog.AddLinearEqualityConstraint(A, b, vars);
+
+  // Check if the binding called the sparse matrix constructor by checking that
+  // a dense A has not been computed yet.
+  EXPECT_FALSE(binding.evaluator()->is_dense_A_constructed());
+
+  CheckAddedLinearEqualityConstraintCommon(binding, prog, 0);
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearEqualityConstraintSparseMatrixVectorVariablesTest) {
+  MathematicalProgram prog;
+  const int n = 4;
+  auto x = prog.NewContinuousVariables(n, "x");
+  std::vector<Eigen::Triplet<double>> A_triplet_list;
+  A_triplet_list.reserve(3 * (n - 2) + 4);
+  double count = 1;
+  for (int i = 0; i < n; ++i) {
+    for (int j = std::max(0, i - 1); j < std::min(n, i + 1); ++j) {
+      A_triplet_list.emplace_back(i, j, count);
+      ++count;
+    }
+  }
+
+  Eigen::SparseMatrix<double> A(n, n);
+  A.setFromTriplets(A_triplet_list.begin(), A_triplet_list.end());
+  const Vector4d b{-10, -11, -12, -13};
+
+  const auto binding = prog.AddLinearEqualityConstraint(A, b, x);
+
+  // Check if the binding called the sparse matrix constructor by checking that
+  // a dense A has not been computed yet.
+  EXPECT_FALSE(binding.evaluator()->is_dense_A_constructed());
+
+  CheckAddedLinearEqualityConstraintCommon(binding, prog, 0);
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearEqualityConstraintRowVectorVectorVariablesTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(4, "x");
+  const Eigen::RowVector4d a{1, 2, 3, 4};
+  const double b = -10;
+  const auto binding = prog.AddLinearEqualityConstraint(a, b, x);
+  CheckAddedLinearEqualityConstraintCommon(binding, prog, 0);
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddLinearEqualityConstraintRowVectorVariableRefListTest) {
+  MathematicalProgram prog;
+  auto x = prog.NewContinuousVariables(1, "x");
+  auto y = prog.NewContinuousVariables(3, "y");
+  VariableRefList vars{x, y};
+  VectorXDecisionVariable vars_as_vec{ConcatenateVariableRefList(vars)};
+
+  const Eigen::RowVector4d a{1, 2, 3, 4};
+  const double b = -10;
+  const auto binding = prog.AddLinearEqualityConstraint(a, b, vars);
+  CheckAddedLinearEqualityConstraintCommon(binding, prog, 0);
+}
 
 GTEST_TEST(TestMathematicalProgram, AddSymbolicLinearEqualityConstraint1) {
   // Checks the single row linear equality constraint one by one:
@@ -2347,9 +2667,7 @@ TEST_F(SymbolicLorentzConeTest, Test3) {
   // [               x(2)]
   // [  -x(1)            ]
   Matrix<Expression, 4, 1> e;
-  // clang-format on
   e << 2 * x_(0) + 3 * x_(2), -x_(0) + 2 * x_(2), +x_(2), -x_(1);
-  // clang-format off;
   CheckParsedSymbolicLorentzConeConstraint(&prog_, e);
 }
 
@@ -2655,6 +2973,79 @@ GTEST_TEST(TestMathematicalProgram, AddPositiveSemidefiniteConstraint) {
        Matrix2d::Zero(), Matrix2d::Identity() * X.bottomRightCorner<2, 2>();
   // clang-format on
   CheckAddedSymbolicPositiveSemidefiniteConstraint(&prog, Y);
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddPrincipalSubmatrixIsPsdConstraintVariable) {
+  MathematicalProgram prog;
+  auto X = prog.NewSymmetricContinuousVariables<4>("X");
+
+  std::set<int> minor_indices{0, 1, 3};
+  MatrixXDecisionVariable minor_manual(3, 3);
+  // clang-format off
+  minor_manual << X(0, 0), X(0, 1), X(0, 3),
+                  X(1, 0), X(1, 1), X(1, 3),
+                  X(3, 0), X(3, 1), X(3, 3);
+  // clang-format on
+
+  auto psd_cnstr =
+      prog.AddPrincipalSubmatrixIsPsdConstraint(X, minor_indices)
+          .evaluator();
+  EXPECT_EQ(prog.positive_semidefinite_constraints().size(), 1);
+  EXPECT_EQ(prog.GetAllConstraints().size(), 1);
+  const auto& new_psd_cnstr = prog.positive_semidefinite_constraints().back();
+  EXPECT_EQ(psd_cnstr.get(), new_psd_cnstr.evaluator().get());
+  Eigen::Map<Eigen::Matrix<Variable, 9, 1>> minor_flat(&minor_manual(0, 0));
+  EXPECT_TRUE(CheckStructuralEquality(minor_flat, new_psd_cnstr.variables()));
+}
+
+GTEST_TEST(TestMathematicalProgram,
+           AddPrincipalSubmatrixIsPsdConstraintExpression) {
+  MathematicalProgram prog;
+  auto X = prog.NewSymmetricContinuousVariables<4>("X");
+  std::set<int> minor_indices{0, 1, 3};
+  MatrixXDecisionVariable minor_manual(3, 3);
+  // clang-format off
+  minor_manual << X(0, 0), X(0, 1), X(0, 3),
+                  X(1, 0), X(1, 1), X(1, 3),
+                  X(3, 0), X(3, 1), X(3, 3);
+  // clang-format on
+
+  auto psd_cnstr = prog.AddPrincipalSubmatrixIsPsdConstraint(
+                           2 * Matrix4d::Identity() * X, minor_indices)
+                       .evaluator();
+
+  EXPECT_EQ(prog.positive_semidefinite_constraints().size(), 1);
+  EXPECT_EQ(prog.GetAllConstraints().size(), 2);
+
+  const auto& new_psd_cnstr = prog.positive_semidefinite_constraints().back();
+  EXPECT_EQ(psd_cnstr.get(), new_psd_cnstr.evaluator().get());
+
+  MathematicalProgram prog_manual;
+  prog_manual.AddDecisionVariables(minor_manual);
+  auto psd_cnstr_manual = prog_manual
+                              .AddPositiveSemidefiniteConstraint(
+                                  2 * Matrix3d::Identity() * minor_manual)
+                              .evaluator();
+  const auto& new_psd_cnstr_manual =
+      prog.positive_semidefinite_constraints().back();
+
+  EXPECT_TRUE(CheckStructuralEquality(new_psd_cnstr_manual.variables(),
+                                      new_psd_cnstr.variables()));
+  EXPECT_EQ(prog.positive_semidefinite_constraints().size(),
+            prog_manual.positive_semidefinite_constraints().size());
+  EXPECT_EQ(prog.linear_equality_constraints().size(),
+            prog_manual.linear_equality_constraints().size());
+  EXPECT_EQ(prog.linear_equality_constraints().size(), 1);
+  EXPECT_EQ(prog.GetAllConstraints().size(),
+            prog_manual.GetAllConstraints().size());
+
+  EXPECT_TRUE(CompareMatrices(
+      prog.linear_equality_constraints()[0].evaluator()->upper_bound(),
+      prog_manual.linear_equality_constraints()[0].evaluator()->upper_bound()));
+  EXPECT_TRUE(CompareMatrices(
+      prog.linear_equality_constraints()[0].evaluator()->lower_bound(),
+      prog_manual.linear_equality_constraints()[0].evaluator()->lower_bound()));
 }
 
 GTEST_TEST(TestMathematicalProgram, TestExponentialConeConstraint) {
@@ -3430,7 +3821,7 @@ GTEST_TEST(TestMathematicalProgram, TestNonlinearExpressionConstraints) {
 
   prog.AddConstraint(x.transpose() * x == 1.);
 
-  if (SnoptSolver().available()) {
+  if (SnoptSolver().available() && SnoptSolver().enabled()) {
     // Add equivalent constraints using all of the other entry points.
     // Note: restricted to SNOPT because IPOPT complains about the redundant
     // constraints.
@@ -4109,6 +4500,261 @@ GTEST_TEST(TestMathematicalProgram, RemoveConstraint) {
   TestRemoveConstraint(&prog, lcp_con,
                        &(prog.linear_complementarity_constraints()),
                        ProgramAttribute::kLinearComplementarityConstraint);
+}
+
+class ApproximatePSDConstraint : public ::testing::Test {
+  // An arbitrary semidefinite program with 2 PSD constraints, 2 linear
+  // constraints, and 1 equality constraint for testing the
+  // Replace/TightenPsdConstraint methods.
+ public:
+  ApproximatePSDConstraint()
+      : prog_(),
+        X_{prog_.NewSymmetricContinuousVariables<3>()},
+        Y_{prog_.NewSymmetricContinuousVariables<4>()},
+        psd_constraint_X_{prog_.AddPositiveSemidefiniteConstraint(X_)},
+        psd_constraint_Y_{prog_.AddPositiveSemidefiniteConstraint(Y_)} {
+    // Add an arbitrary linear constraint on X.
+    Eigen::MatrixXd A(2, 3);
+    // clang-format off
+    A << 1,  0, 1,
+         0, -1, 1;
+    // clang-format on
+    Eigen::VectorXd lb(2);
+    lb << -10, -7;
+    Eigen::VectorXd ub(2);
+    ub << 11, 9;
+
+    prog_.AddLinearConstraint(A * X_ * Eigen::VectorXd::Ones(3) <= ub);
+    prog_.AddLinearConstraint(A * X_ * Eigen::VectorXd::Ones(3) >= lb);
+    prog_.AddLinearEqualityConstraint(Y_ == Eigen::MatrixXd::Identity(4, 4));
+  }
+
+ protected:
+  MathematicalProgram prog_;
+  MatrixXDecisionVariable X_;
+  MatrixXDecisionVariable Y_;
+  Binding<PositiveSemidefiniteConstraint> psd_constraint_X_;
+  Binding<PositiveSemidefiniteConstraint> psd_constraint_Y_;
+};
+
+TEST_F(ApproximatePSDConstraint, TightenPsdConstraintToDd) {
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+
+  auto dd_constraint_X = prog_.TightenPsdConstraintToDd(psd_constraint_X_);
+
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 1);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), X_.rows() * X_.rows() + 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+
+  auto dd_constraint_Y = prog_.TightenPsdConstraintToDd(psd_constraint_Y_);
+
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 0);
+  EXPECT_EQ(ssize(prog_.linear_constraints()),
+            Y_.rows() * Y_.rows() + X_.rows() * X_.rows() + 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+}
+
+GTEST_TEST(TightenPsdConstraintToDd, UnregisteredVariableError) {
+  MathematicalProgram prog1;
+  auto X1 = prog1.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint1 = prog1.AddPositiveSemidefiniteConstraint(X1);
+
+  MathematicalProgram prog2;
+  auto X2 = prog2.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint2 = prog2.AddPositiveSemidefiniteConstraint(X2);
+
+  DRAKE_EXPECT_THROWS_MESSAGE(prog1.TightenPsdConstraintToDd(psd_constraint2),
+                              ".*is not a decision variable.*");
+}
+
+GTEST_TEST(TightenPsdConstraintToDd, NoConstraintToReplace) {
+  MathematicalProgram prog;
+  auto X = prog.NewSymmetricContinuousVariables<3>();
+  // A constraint not in the program.
+  auto constraint = internal::CreateBinding(
+      std::make_shared<PositiveSemidefiniteConstraint>(X.rows()),
+      Eigen::Map<VectorXDecisionVariable>(X.data(), X.size()));
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  prog.TightenPsdConstraintToDd(constraint);
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  // Still adds the DD constraint even though the constraint was not found in
+  // the program.
+  EXPECT_EQ(ssize(prog.linear_constraints()), X.rows() * X.rows());
+}
+
+TEST_F(ApproximatePSDConstraint, TightenPsdConstraintToSdd) {
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+
+  prog_.TightenPsdConstraintToSdd(psd_constraint_X_);
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 1);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  // An sdd constraint on X adds an equality constraints on the upper diagonal
+  // of X to represent slack variables
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 2);
+  // 3 choose 2 rotated lorentz cone constraints for constraint X to be sdd
+  EXPECT_EQ(ssize(prog_.rotated_lorentz_cone_constraints()), 3);
+
+  prog_.TightenPsdConstraintToSdd(psd_constraint_Y_);
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 0);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  // An sdd constraint on Y adds an equality constraints on the upper diagonal
+  // of Y to represent slack variables
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 3);
+  // 3 choose 2 rotated lorentz cone constraints for the constraint that X be
+  // sdd and 4 choose 2 for the constraint that Y be sdd.
+  EXPECT_EQ(ssize(prog_.rotated_lorentz_cone_constraints()), 9);
+}
+
+GTEST_TEST(TightenPsdConstraintToSdd, UnregisteredVariableError) {
+  MathematicalProgram prog1;
+  auto X1 = prog1.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint1 = prog1.AddPositiveSemidefiniteConstraint(X1);
+
+  MathematicalProgram prog2;
+  auto X2 = prog2.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint2 = prog2.AddPositiveSemidefiniteConstraint(X2);
+
+  DRAKE_EXPECT_THROWS_MESSAGE(prog1.TightenPsdConstraintToDd(psd_constraint2),
+                              ".*is not a decision variable.*");
+}
+
+GTEST_TEST(TightenPsdConstraintToSdd, NoConstraintToReplace) {
+  MathematicalProgram prog;
+  auto X = prog.NewSymmetricContinuousVariables<3>();
+  // A constraint not in the program.
+  auto constraint = internal::CreateBinding(
+      std::make_shared<PositiveSemidefiniteConstraint>(X.rows()),
+      Eigen::Map<VectorXDecisionVariable>(X.data(), X.size()));
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  prog.TightenPsdConstraintToSdd(constraint);
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  // Still adds the SDD constraint even though the constraint was not found in
+  // the program.
+  EXPECT_EQ(ssize(prog.rotated_lorentz_cone_constraints()), 3);
+}
+
+TEST_F(ApproximatePSDConstraint, RelaxPsdConstraintToDdDualCone) {
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+
+  prog_.RelaxPsdConstraintToDdDualCone(psd_constraint_X_);
+
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 1);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 3);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+
+  prog_.RelaxPsdConstraintToDdDualCone(psd_constraint_Y_);
+
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 0);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 4);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+}
+
+GTEST_TEST(RelaxPsdConstraintToDdDualCone, UnregisteredVariableError) {
+  MathematicalProgram prog1;
+  auto X1 = prog1.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint1 = prog1.AddPositiveSemidefiniteConstraint(X1);
+
+  MathematicalProgram prog2;
+  auto X2 = prog2.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint2 = prog2.AddPositiveSemidefiniteConstraint(X2);
+
+  DRAKE_EXPECT_THROWS_MESSAGE(
+      prog1.RelaxPsdConstraintToDdDualCone(psd_constraint2),
+      ".*is not a decision variable.*");
+}
+
+GTEST_TEST(RelaxPsdConstraintToDdDualCone, NoConstraintToReplace) {
+  MathematicalProgram prog;
+  auto X = prog.NewSymmetricContinuousVariables<3>();
+  // A constraint not in the program.
+  auto constraint = internal::CreateBinding(
+      std::make_shared<PositiveSemidefiniteConstraint>(X.rows()),
+      Eigen::Map<VectorXDecisionVariable>(X.data(), X.size()));
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  prog.RelaxPsdConstraintToDdDualCone(constraint);
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  // Still adds the DD constraint even though the constraint was not found in
+  // the program.
+  EXPECT_EQ(ssize(prog.linear_constraints()), 1);
+}
+
+TEST_F(ApproximatePSDConstraint, RelaxPsdConstraintToSddDualCone) {
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+
+  prog_.RelaxPsdConstraintToSddDualCone(psd_constraint_X_);
+
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 1);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+  // 3 choose 2 rotated lorentz cone constraints for constraint X to be sdd
+  EXPECT_EQ(ssize(prog_.rotated_lorentz_cone_constraints()), 3);
+
+  prog_.RelaxPsdConstraintToSddDualCone(psd_constraint_Y_);
+
+  EXPECT_EQ(ssize(prog_.positive_semidefinite_constraints()), 0);
+  EXPECT_EQ(ssize(prog_.linear_constraints()), 2);
+  EXPECT_EQ(ssize(prog_.linear_equality_constraints()), 1);
+  // 3 choose 2 rotated lorentz cone constraints for the constraint that X be
+  // sdd and 4 choose 2 for the constraint that Y be sdd.
+  EXPECT_EQ(ssize(prog_.rotated_lorentz_cone_constraints()), 9);
+}
+
+GTEST_TEST(RelaxPsdConstraintToSddDualCone, UnregisteredVariableError) {
+  MathematicalProgram prog1;
+  auto X1 = prog1.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint1 = prog1.AddPositiveSemidefiniteConstraint(X1);
+
+  MathematicalProgram prog2;
+  auto X2 = prog2.NewSymmetricContinuousVariables<3>();
+  auto psd_constraint2 = prog2.AddPositiveSemidefiniteConstraint(X2);
+
+  DRAKE_EXPECT_THROWS_MESSAGE(
+      prog1.RelaxPsdConstraintToSddDualCone(psd_constraint2),
+      ".*is not a decision variable.*");
+}
+
+GTEST_TEST(RelaxPsdConstraintToSddDualCone, NoConstraintToReplace) {
+  MathematicalProgram prog;
+  auto X = prog.NewSymmetricContinuousVariables<3>();
+  // A constraint not in the program.
+  auto constraint = internal::CreateBinding(
+      std::make_shared<PositiveSemidefiniteConstraint>(X.rows()),
+      Eigen::Map<VectorXDecisionVariable>(X.data(), X.size()));
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  prog.RelaxPsdConstraintToSddDualCone(constraint);
+  EXPECT_EQ(ssize(prog.positive_semidefinite_constraints()), 0);
+  // Still adds the SDD dual cone constraint even though the constraint was not
+  // found in the program.
+  EXPECT_EQ(ssize(prog.rotated_lorentz_cone_constraints()), 3);
+}
+
+GTEST_TEST(MathematicalProgramTest, AddLogDeterminantLowerBoundConstraint) {
+  MathematicalProgram prog;
+  auto X = prog.NewSymmetricContinuousVariables<3>("X");
+  auto ret = prog.AddLogDeterminantLowerBoundConstraint(
+      X.cast<symbolic::Expression>(), 1);
+  const auto& constraint = std::get<0>(ret);
+  const auto& t = std::get<1>(ret);
+  EXPECT_TRUE(CompareMatrices(constraint.evaluator()->GetDenseA(),
+                              Eigen::RowVector3d::Ones()));
+  EXPECT_TRUE(
+      CompareMatrices(constraint.evaluator()->lower_bound(), Vector1d(1)));
+  EXPECT_TRUE(
+      CompareMatrices(constraint.evaluator()->upper_bound(), Vector1d(kInf)));
+  EXPECT_EQ(constraint.variables().size(), 3);
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_TRUE(constraint.variables()(i).equal_to(t(i)));
+  }
+  EXPECT_EQ(prog.exponential_cone_constraints().size(), 3);
+  EXPECT_EQ(prog.positive_semidefinite_constraints().size(), 1);
 }
 }  // namespace test
 }  // namespace solvers

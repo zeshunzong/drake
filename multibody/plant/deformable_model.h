@@ -16,11 +16,15 @@
 #include "drake/multibody/mpm/mpm_state.h"
 #include "drake/multibody/plant/constraint_specs.h"
 #include "drake/multibody/plant/deformable_ids.h"
-#include "drake/multibody/plant/multibody_plant.h"
+#include "drake/multibody/plant/force_density_field.h"
 #include "drake/multibody/plant/physical_model.h"
+#include "drake/multibody/tree/rigid_body.h"
 
 namespace drake {
 namespace multibody {
+
+template <typename T>
+class MultibodyPlant;
 
 /** DeformableModel implements the interface in PhysicalModel and provides the
  functionalities to specify deformable bodies. Unlike rigid bodies, the shape of
@@ -38,10 +42,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   /** Constructs a DeformableModel to be owned by the given MultibodyPlant.
    @pre plant != nullptr.
    @pre Finalize() has not been called on `plant`. */
-  explicit DeformableModel(MultibodyPlant<T>* plant) : plant_(plant) {
-    DRAKE_DEMAND(plant_ != nullptr);
-    DRAKE_DEMAND(!plant_->is_finalized());
-  }
+  explicit DeformableModel(MultibodyPlant<T>* plant);
 
   // ---------------- newly added for MPM ---------------
 
@@ -162,9 +163,11 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
            shapes include Box, Capsule, Cylinder, Ellipsoid, HalfSpace, and
            Sphere.
    @throws std::exception if Finalize() has been called on the multibody plant
-           owning this deformable model. */
+           owning this deformable model.
+   @throws std::exception if no constraint is added (i.e. no vertex of the
+           deformable body is inside the given `shape` with the given poses). */
   MultibodyConstraintId AddFixedConstraint(
-      DeformableBodyId body_A_id, const Body<T>& body_B,
+      DeformableBodyId body_A_id, const RigidBody<T>& body_B,
       const math::RigidTransform<double>& X_BA, const geometry::Shape& shape,
       const math::RigidTransform<double>& X_BG);
 
@@ -174,6 +177,25 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    or if no deformable body with the given `id` has been registered in this
    model. */
   systems::DiscreteStateIndex GetDiscreteStateIndex(DeformableBodyId id) const;
+
+  /** Registers an external force density field that applies external force to
+   all deformable bodies.
+   @throws std::exception if Finalize() has been called on the multibody plant
+           owning this deformable model. */
+  void AddExternalForce(std::unique_ptr<ForceDensityField<T>> external_force);
+
+  // TODO(xuchenhan-tri): We should allow instrospecting external forces
+  // pre-finalize. Currently we add gravity forces at finalize time (instead of
+  // immediately after a deformable body is registered) because when gravity is
+  // modified via MbP's API, there's no easy way to propagate that information
+  // to deformable models.
+  /** Returns the force density fields acting on the deformable body with the
+   given `id`.
+   @throws std::exception if MultibodyPlant::Finalize() has not been called yet.
+   or if no deformable body with the given `id` has been registered in this
+   model. */
+  const std::vector<const ForceDensityField<T>*>& GetExternalForces(
+      DeformableBodyId id) const;
 
   /** Returns the FemModel for the body with `id`.
    @throws exception if no deformable body with `id` is registered with `this`
@@ -308,8 +330,16 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       geometry_id_to_body_id_;
   std::unordered_map<DeformableBodyId, std::unique_ptr<fem::FemModel<T>>>
       fem_models_;
+  /*The collection all external forces. */
+  std::vector<std::unique_ptr<ForceDensityField<T>>> force_densities_;
+  /* body_index_to_force_densities_[i] is the collection of pointers to external
+   forces applied to body i. */
+  std::vector<std::vector<const ForceDensityField<T>*>>
+      body_index_to_force_densities_;
   std::unordered_map<DeformableBodyId, std::vector<MultibodyConstraintId>>
       body_id_to_constraint_ids_;
+  /* Only used pre-finalize. Empty post-finalize. */
+  std::unordered_map<DeformableBodyId, T> body_id_to_density_prefinalize_;
   std::unordered_map<DeformableBodyId, DeformableBodyIndex> body_id_to_index_;
   std::vector<DeformableBodyId> body_ids_;
   std::map<MultibodyConstraintId, internal::DeformableRigidFixedConstraintSpec>

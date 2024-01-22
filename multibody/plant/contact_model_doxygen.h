@@ -1,6 +1,7 @@
 /** @file
  Doxygen-only documentation for @ref drake_contacts.  */
 
+// clang-format off (to preserve link to images)
 /** @defgroup drake_contacts   Contact Modeling in Drake
     @ingroup multibody
 
@@ -198,7 +199,7 @@ Next topic: @ref contact_engineering
    2. Global parameters controlling the stiffness of normal penalty forces.
       @ref drake::multibody::MultibodyPlant "MultibodyPlant" offers a single
       global parameter, the "penetration allowance", described in detail in
-      section @ref mbp_penalty_method "Contact by penalty method".
+      section @ref mbp_compliant_point_contact "Compliant point contact model".
    3. Global parameter controlling the Stribeck approximation of Coulomb
       friction, refer to section @ref stribeck_approximation for details.
       @ref drake::multibody::MultibodyPlant::set_stiction_tolerance()
@@ -236,9 +237,9 @@ Next topic: @ref contact_engineering
  for @ref drake::multibody::TamsiSolver "TamsiSolver" and in
  [Castro et al., 2019].
 
- [Castro et al., 2019] Castro, A.M, Qu, A., Kuppuswamy, N., Alspach, A., Sherman,
-   M.A., 2019. A Transition-Aware Method for the Simulation of Compliant Contact
-   with Regularized Friction. arXiv:1909.05700 [cs.RO].
+ [Castro et al., 2019] Castro, A.M, Qu, A., Kuppuswamy, N., Alspach, A.,
+ Sherman, M.A., 2019. A Transition-Aware Method for the Simulation of Compliant
+ Contact with Regularized Friction. arXiv:1909.05700 [cs.RO].
 
  @note For better numerical stability, the discrete model assumes
  both static and kinetic coefficients of friction to be equal, the static

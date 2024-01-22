@@ -1,0 +1,67 @@
+# -*- bazel -*-
+
+load("@drake//tools/install:install.bzl", "install")
+load("@drake//tools/skylark:cc.bzl", "cc_library")
+load("@drake//tools/skylark:cc_hidden.bzl", "cc_wrap_static_archive_hidden")
+load("@drake//tools/workspace/crate_universe:defs.bzl", "all_crate_deps")
+load("@drake//tools/workspace:vendor_cxx.bzl", "cc_library_vendored")
+load("@rules_rust//rust:defs.bzl", "rust_static_library")
+
+package(default_visibility = ["//visibility:private"])
+
+licenses(["notice"])  # Apache-2.0
+
+exports_files([
+    "LICENSE.md",
+    "include/cpp/DefaultSettings.h",
+    "rust_wrapper/Cargo.toml",
+])
+
+_HDRS = glob(["include/**"], allow_empty = False)
+
+cc_library_vendored(
+    name = "hdrs",
+    hdrs = _HDRS,
+    hdrs_vendored = [
+        x.replace("include/", "drake_hdr/")
+        for x in _HDRS
+    ],
+    defines = [
+        "FEATURE_SDP",
+    ],
+    includes = ["drake_hdr"],
+    linkstatic = True,
+)
+
+rust_static_library(
+    name = "clarabel_cpp_rust_wrapper",
+    edition = "2021",
+    srcs = glob(["rust_wrapper/src/**/*.rs"], allow_empty = False),
+    crate_features = ["sdp"],
+    deps = all_crate_deps(),
+)
+
+cc_wrap_static_archive_hidden(
+    name = "clarabel_cpp_rust_wrapper_hidden",
+    static_archive_name = "clarabel_cpp_rust_wrapper",
+)
+
+# Combine the public headers with the object code.
+cc_library(
+    name = "clarabel_cpp",
+    linkstatic = True,
+    deps = [
+        ":hdrs",
+        ":clarabel_cpp_rust_wrapper_hidden",
+        "@blas",
+        "@eigen",
+        "@lapack",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+install(
+    name = "install",
+    docs = ["LICENSE.md"],
+    visibility = ["//visibility:public"],
+)

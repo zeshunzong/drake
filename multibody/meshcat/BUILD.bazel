@@ -37,6 +37,7 @@ drake_cc_library(
         ":point_contact_visualizer",
         "//common:essential",
         "//geometry:meshcat",
+        "//geometry:meshcat_graphviz",
         "//math:geometric_transform",
         "//multibody/plant",
         "//systems/framework:context",
@@ -83,8 +84,10 @@ drake_cc_library(
     srcs = ["joint_sliders.cc"],
     hdrs = ["joint_sliders.h"],
     deps = [
+        "//common:overloaded",
         "//common:scope_exit",
         "//geometry:meshcat",
+        "//geometry:meshcat_graphviz",
         "//multibody/plant",
     ],
 )

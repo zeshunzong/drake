@@ -21,8 +21,7 @@ class CompliantContactManagerTester {
   }
 
   static BodyIndex FindBodyByGeometryId(
-      const CompliantContactManager<double>& manager,
-      geometry::GeometryId id) {
+      const CompliantContactManager<double>& manager, geometry::GeometryId id) {
     return manager.FindBodyByGeometryId(id);
   }
 
@@ -52,19 +51,7 @@ class CompliantContactManagerTester {
   static DiscreteContactData<ContactPairKinematics<double>>
   CalcContactKinematics(const CompliantContactManager<double>& manager,
                         const drake::systems::Context<double>& context) {
-    return manager.CalcContactKinematics(context);
-  }
-
-  static void DoCalcContactResults(
-      const CompliantContactManager<double>& manager,
-      const drake::systems::Context<double>& context,
-      ContactResults<double>* contact_results) {
-    return manager.DoCalcContactResults(context, contact_results);
-  }
-
-  static const DeformableDriver<double>* deformable_driver(
-      const CompliantContactManager<double>& manager) {
-    return manager.deformable_driver_.get();
+    return manager.EvalContactKinematics(context);
   }
 
   static const SapDriver<double>& sap_driver(
@@ -99,7 +86,7 @@ class CompliantContactManagerTester {
         // If added to the Jacobian, it must have a valid index.
         EXPECT_TRUE(tree_jacobian.tree.is_valid());
         const int col_offset =
-            topology.tree_velocities_start(tree_jacobian.tree);
+            topology.tree_velocities_start_in_v(tree_jacobian.tree);
         const int tree_nv = topology.num_tree_velocities(tree_jacobian.tree);
         J_AcBc_C.block(row_offset, col_offset, 3, tree_nv) =
             tree_jacobian.J.MakeDenseMatrix();

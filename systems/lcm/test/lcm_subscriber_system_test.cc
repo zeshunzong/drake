@@ -3,6 +3,7 @@
 #include <array>
 #include <future>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/expect_throws_message.h"
@@ -25,13 +26,15 @@ void EvalOutputHelper(const LcmSubscriberSystem& sub, Context<double>* context,
   if (event_info->HasEvents()) {
     std::unique_ptr<State<double>> tmp_state = context->CloneState();
     if (event_info->HasDiscreteUpdateEvents()) {
-      sub.CalcDiscreteVariableUpdate(*context,
-                                     event_info->get_discrete_update_events(),
-                                     &tmp_state->get_mutable_discrete_state());
+      const EventStatus status = sub.CalcDiscreteVariableUpdate(
+          *context, event_info->get_discrete_update_events(),
+          &tmp_state->get_mutable_discrete_state());
+      EXPECT_TRUE(status.succeeded());
     } else if (event_info->HasUnrestrictedUpdateEvents()) {
-      sub.CalcUnrestrictedUpdate(*context,
-                                 event_info->get_unrestricted_update_events(),
-                                 tmp_state.get());
+      const EventStatus status = sub.CalcUnrestrictedUpdate(
+          *context, event_info->get_unrestricted_update_events(),
+          tmp_state.get());
+      EXPECT_TRUE(status.succeeded());
     } else {
       DRAKE_DEMAND(false);
     }
@@ -257,6 +260,16 @@ GTEST_TEST(LcmSubscriberSystemTest, WaitTest) {
   wait();
   sample_data.PublishAndHandle(&lcm, channel_name);
   EXPECT_GE(second_timeout_count.get(), old_count + 1);
+}
+
+// The Graphviz should have an arrow pointing from DrakeLcmInterface to our
+// system, plus some extra metadata.
+GTEST_TEST(LcmSubscriberSystemTest, Graphviz) {
+  drake::lcm::DrakeLcm interface;
+  auto dut = LcmSubscriberSystem::Make<lcmt_drake_signal>("SIGNAL", &interface);
+  EXPECT_THAT(dut->GetGraphvizString(),
+              testing::ContainsRegex("drakelcm[a-z0-9]* -> "));
+  EXPECT_THAT(dut->GetGraphvizString(), testing::HasSubstr("channel=SIGNAL"));
 }
 
 }  // namespace

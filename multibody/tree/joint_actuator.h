@@ -84,7 +84,7 @@ class JointActuator final : public MultibodyElement<T> {
   ///   `this` joint belongs.
   /// @param[in] joint_dof
   ///   Index specifying one of the degrees of freedom for this joint. The index
-  ///   must be in the range `0 <= joint_dof < num_velocities()` or otherwise
+  ///   must be in the range `0 <= joint_dof < num_inputs()` or otherwise
   ///   this method will throw an exception.
   /// @param[in] joint_tau
   ///   Generalized force corresponding to the degree of freedom indicated by
@@ -104,7 +104,7 @@ class JointActuator final : public MultibodyElement<T> {
       MultibodyForces<T>* forces) const;
 
   /// Gets the actuation values for `this` actuator from the actuation vector u
-  /// for the entire model.
+  /// for the entire plant model.
   /// @return a reference to a nv-dimensional vector, where nv is the number
   ///         of velocity variables of joint().
   const Eigen::Ref<const VectorX<T>> get_actuation_vector(
@@ -113,24 +113,24 @@ class JointActuator final : public MultibodyElement<T> {
     return u.segment(topology_.actuator_index_start, joint().num_velocities());
   }
 
-  /// Given the actuation values u_instance for `this` actuator, this method
-  /// sets the actuation vector u for the entire MultibodyTree model
-  /// to which this actuator belongs to.
-  /// @param[in] u_instance
-  ///   Actuation values for `this` actuator. It must be of size equal to the
-  ///   number of degrees of freedom of the actuated Joint, see
-  ///   Joint::num_velocities(). For units and sign conventions refer to the
-  ///   specific Joint sub-class documentation.
-  /// @param[out] u
-  ///   The vector containing the actuation values for the entire MultibodyTree
-  ///   model to which `this` actuator belongs to.
+  /// Given the actuation values `u_actuator` for `this` actuator, updates the
+  /// actuation vector `u` for the entire multibody model to which this actuator
+  /// belongs to.
+  /// @param[in] u_actuator
+  ///   Actuation values for `this` actuator. It must be of size equal to
+  ///   num_inputs(). For units and sign conventions refer to the specific Joint
+  ///   sub-class documentation.
+  /// @param[in,out] u
+  ///   Actuation values for the entire plant model to which `this` actuator
+  ///   belongs to, indexed by JointActuatorIndex. Only values corresponding to
+  ///   this actuator are changed.
   /// @throws std::exception if
-  ///   `u_instance.size() != this->joint().num_velocities()`.
+  ///   `u_actuator.size() != this->num_inputs()`.
   /// @throws std::exception if u is nullptr.
   /// @throws std::exception if
-  ///   `u.size() != this->get_parent_tree().num_actuated_dofs()`.
+  ///   `u.size() != this->GetParentPlant().num_actuated_dofs()`.
   void set_actuation_vector(
-      const Eigen::Ref<const VectorX<T>>& u_instance,
+      const Eigen::Ref<const VectorX<T>>& u_actuator,
       EigenPtr<VectorX<T>> u) const;
 
   /// Returns the index to the first element for this joint actuator / within
@@ -348,13 +348,25 @@ class JointActuator final : public MultibodyElement<T> {
   // Implementation for MultibodyElement::DoDeclareParameters().
   void DoDeclareParameters(
       internal::MultibodyTreeSystem<T>* tree_system) final {
-    // Declare parent classes' parameters
-    MultibodyElement<T>::DoDeclareParameters(tree_system);
-    rotor_inertia_parameter_index_ = this->DeclareNumericParameter(
-        tree_system,
-        systems::BasicVector<T>(Vector1<T>(default_rotor_inertia_)));
-    gear_ratio_parameter_index_ = this->DeclareNumericParameter(
-        tree_system, systems::BasicVector<T>(Vector1<T>(default_gear_ratio_)));
+    // Sets model values to dummy values to indicate that the model values are
+    // not used. This class stores the the default values of the parameters.
+    rotor_inertia_parameter_index_ =
+        this->DeclareNumericParameter(tree_system, systems::BasicVector<T>(1));
+    gear_ratio_parameter_index_ =
+        this->DeclareNumericParameter(tree_system, systems::BasicVector<T>(1));
+  }
+
+  // Implementation for MultibodyElement::DoSetDefaultParameters().
+  void DoSetDefaultParameters(systems::Parameters<T>* parameters) const final {
+    // Set the default rotor inertia.
+    systems::BasicVector<T>& rotor_inertia_parameter =
+        parameters->get_mutable_numeric_parameter(
+            rotor_inertia_parameter_index_);
+    rotor_inertia_parameter.set_value(Vector1<T>(default_rotor_inertia_));
+    // Set the default gear ratio.
+    systems::BasicVector<T>& gear_ratio_parameter =
+        parameters->get_mutable_numeric_parameter(gear_ratio_parameter_index_);
+    gear_ratio_parameter.set_value(Vector1<T>(default_gear_ratio_));
   }
 
   // The actuator's unique name in the MultibodyTree model

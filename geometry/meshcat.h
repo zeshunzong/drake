@@ -129,6 +129,42 @@ in the visualizer.
 Delete(). You are welcome to use absolute paths to organize your data, but the
 burden on tracking and cleaning them up lie on you.
 
+@section meshcat_url_parameters Parameters for the hosted Meshcat page
+
+%Meshcat has an *experimental* AR/VR option (using WebXR). It can be enabled
+through url parameters. For example, for a meshcat url `http://localhost:7000`,
+the following will enable the VR mode:
+
+    http://localhost:7000?webxr=vr
+
+To to use augmented reality (where the meshcat background is replaced with your
+device's camera image), use:
+
+    http://localhost:7000?webxr=ar
+
+If augmented reality is not available, it will fallback to VR mode.
+
+Some notes on using the AR/VR modes:
+
+  - Before starting the WebXR session, position the interactive camera to be
+    approximately where you want the origin of the head set's origin to be.
+  - The meshcat scene controls are disabled while the WebXR session is active.
+  - WebXR sessions can only be run with *perspective* cameras.
+  - The controllers can be *visualized* but currently can't interact with the
+    Drake simulation physically. To visualize the controllers append the
+    additional url parameter `controller=on` as in
+    `http://localhost:7000?webxr=vr&controller=on`.
+
+If you do not have AR/VR hardware, you can use an emulator in your browser to
+experiment with the mode. Use an browser plugin like WebXR API Emulator (i.e.,
+for
+[Chrome](https://chrome.google.com/webstore/detail/webxr-api-emulator/mjddjgeghkdijejnciaefnkjmkafnnje)
+or
+[Firefox](https://addons.mozilla.org/en-US/firefox/addon/webxr-api-emulator/)).
+
+The AR/VR mode is not currently supported in offline mode (i.e., when saving as
+StaticHtml()).
+
 @section network_access Network access
 
 See MeshcatParams for options to control the hostname and port to bind to.
@@ -474,6 +510,36 @@ class Meshcat {
   void SetCameraPose(const Eigen::Vector3d& camera_in_world,
                      const Eigen::Vector3d& target_in_world);
 
+  /** Returns the most recently received camera pose.
+
+   A meshcat browser session can be configured to transmit its camera pose.
+   It is enabled by appending a url parameter. For example, if the url for the
+   meshcat server is:
+
+       http://localhost:7000
+
+   A particular browser can be configured to transmit its camera pose back to
+   Drake by supplying the following url:
+
+       http://localhost:7000/?tracked_camera=on
+
+   It is possible to use that URL in multiple browsers simultaneously. A
+   particular view will only transmit its camera position when its camera
+   position actually *changes*. As such, the returned camera pose will reflect
+   the pose of the camera from that most-recently manipulated browser.
+
+   std::nullopt is returned if:
+
+     - No meshcat session has transmitted its camera pose.
+     - The meshcat session that last transmitted its pose is no longer
+       connected.
+     - The meshcat session transmitting has an orthographic camera.
+
+  <!-- Note to developer. This logic is tested in the python test
+   meshcat_camera_tracking_test.py. -->
+   */
+  std::optional<math::RigidTransformd> GetTrackedCameraPose() const;
+
   // TODO(SeanCurtis-TRI): Consider the API:
   //  void SetCameraPose(const RigidTransformd& X_WC, bool target_distance = 1);
   // We'll have to confirm that picking arbitrary rotations R_WC doesn't
@@ -795,7 +861,10 @@ class Meshcat {
   way to save and share your 3D content.
 
   Note that controls (e.g. sliders and buttons) are not included in the HTML
-  output, because their usefulness relies on a connection to the server. */
+  output, because their usefulness relies on a connection to the server.
+
+  You can also use your browser to download this file, by typing "/download"
+  on the end of the URL (i.e., accessing `web_url() + "/download"`). */
   std::string StaticHtml();
 
   /** Sets a flag indicating that subsequent calls to SetTransform and
@@ -873,6 +942,14 @@ class Meshcat {
                                 std::string property) const;
 
 #ifndef DRAKE_DOXYGEN_CXX
+  /* (Internal use for unit testing only) Injects a websocket message as if it
+  came from a web browser. Note that this skips the entire network stack, so the
+  `ws` pointer will be null during message handling; some messages (e.g., slider
+  controls) do not allow a null pointer. This function blocks until the message
+  has been handled. Search meshcat_test for uses of `msgpack::pack` for examples
+  of how to prepare the `message` bytes. */
+  void InjectWebsocketMessage(std::string_view message);
+
   /* (Internal use for unit testing only) Causes the websocket worker thread to
   exit with an error, which will spit out an exception from the next Meshcat
   main thread function that gets called. The fault_number selects which fault to
