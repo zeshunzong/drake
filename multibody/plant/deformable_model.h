@@ -66,6 +66,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   bool ExistsMpmModel() const { return (mpm_model_ != nullptr); }
 
+  bool MpmUseSchur() const { return true;}
+
   const mpm::MpmModel<T>& mpm_model() const {
     if (mpm_model_ == nullptr) {
       throw std::logic_error("mpm_model(): No MPM Model registered");
@@ -243,6 +245,18 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   const systems::OutputPort<T>& vertex_positions_port() const {
     this->ThrowIfSystemResourcesNotDeclared(__func__);
     return plant_->get_output_port(vertex_positions_port_index_);
+  }
+
+  void SetMpmGravity(const Vector3<T>& g) {
+    mpm_model_->SetGravity(g);
+  }
+
+  void SetMpmFriction(double mu) {
+    mpm_model_->SetFrictionMu(mu);
+  }
+
+  void SetMpmMinParticlesPerCell(int m) {
+    mpm_model_->SetMinNumParticlesPerCell(m);
   }
 
 

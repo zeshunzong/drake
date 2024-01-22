@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/contact_solvers/block_3x3_sparse_matrix.h"
 #include "drake/multibody/contact_solvers/block_sparse_lower_triangular_or_symmetric_matrix.h"
 #include "drake/multibody/mpm/grid_data.h"
 #include "drake/multibody/mpm/mpm_state.h"
@@ -200,10 +201,44 @@ class MpmTransfer {
               particles.GetWeightAt(p, idx_local) * Matrix3<T>::Identity();
           idx_global =
               sparse_grid.To1DIndex(base_node_p + Vector3<int>(a, b, c));
-          J->template block<3, 3>(0, idx_global*3) = local_J;
+          J->template block<3, 3>(0, idx_global * 3) = local_J;
         }
       }
     }
+  }
+
+  contact_solvers::internal::Block3x3SparseMatrix<T>
+  CalcRTimesJacobianGridVToParticleVWithPermutationAtParticle(
+      const Matrix3<T>& R, size_t p, const MpmState<T>& state,
+      const MpmGridNodesPermutation<T>& perm) const {
+    DRAKE_DEMAND(!state.particles.NeedReordering());
+
+    contact_solvers::internal::Block3x3SparseMatrix<T> J(
+        1, perm.nodes_in_contact.size());
+    std::vector<std::tuple<int, int, Matrix3<T>>> triplets;
+
+    const Vector3<int> base_node_p = state.particles.GetBaseNodeAt(p);
+    int idx_local;
+    for (int a = -1; a <= 1; ++a) {
+      for (int b = -1; b <= 1; ++b) {
+        for (int c = -1; c <= 1; ++c) {
+          idx_local = (c + 1) + 3 * (b + 1) + 9 * (a + 1);
+          Matrix3<T> local_J = R * state.particles.GetWeightAt(p, idx_local) *
+                               Matrix3<T>::Identity();
+
+          int idx_global =
+              state.sparse_grid.To1DIndex(base_node_p + Vector3<int>(a, b, c));
+          int idx_global_postperm = perm.permutation.domain_index(idx_global);
+          DRAKE_DEMAND(idx_global_postperm <
+                       static_cast<int>(perm.nodes_in_contact.size()));
+
+          triplets.emplace_back(std::tuple<int, int, Matrix3<T>>(
+              0, idx_global_postperm, std::move(local_J)));
+        }
+      }
+    }
+    J.SetFromTriplets(triplets);
+    return J;
   }
 
   /**

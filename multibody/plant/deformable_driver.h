@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -75,6 +76,12 @@ class Multiplexer {
   /* The sum over `sizes_`. */
   int num_entries_{0};
 };
+
+// template <typename T>
+// struct MpmGridDataAndDPdFs {
+//     mpm::GridData<T> grid_data;
+//     std::vector<Eigen::Matrix<T, 9, 9>> final_dPdFs;
+// }
 
 /* DeformableDriver is responsible for computing dynamics information about
  all deformable bodies. It works in tandem with a DeformableModel and a
@@ -157,18 +164,20 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             .get_mutable_cache_entry_value(context)
             .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
 
-    mpm::NewtonParams params;  // TODO(zeshunzong): move this to model
-    mpm_solver_->SolveGridVelocities(params, state, *mpm_transfer_,
-                                     deformable_model_->mpm_model(), dt,
-                                     grid_data_free_motion, &mpm_scratch);
-    std::cout << "CalcGridDataFreeMotion is called at " << context.get_time()
-              << std::endl;
-    //grid_data_free_motion->PrintV(context.get_time());
+    mpm_solver_->SolveGridVelocities(
+        deformable_model_->mpm_model().newton_params(), state, *mpm_transfer_,
+        deformable_model_->mpm_model(), dt, grid_data_free_motion,
+        &mpm_scratch);
   }
+
+  //   void CalcGridDataPrevStep(const systems::Context<T>& context,
+  //                               mpm::GridData<T>* grid_data_prev_step);
+
+  //  void CalcGridDataFreeMotionAndLastdPdFs(const systems::Context<T>&
+  //  context, )
 
   const mpm::GridData<T>& EvalGridDataFreeMotion(
       const systems::Context<T>& context) const {
-    std::cout << "EvalGridDataFreeMotion is called " << std::endl;
     return manager_->plant()
         .get_cache_entry(cache_indexes_.grid_data_free_motion)
         .template Eval<mpm::GridData<T>>(context);
@@ -188,9 +197,14 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     mpm::GridData<T> grid_data_prev_step;
     mpm_transfer_->P2G(state.particles, state.sparse_grid, &grid_data_prev_step,
                        &(mpm_scratch.transfer_scratch));
-    std::cout << "participating v as initial guess is called "<< std::endl;
-    //grid_data_prev_step.PrintV(context.get_time());
-    grid_data_prev_step.GetFlattenedVelocities(result);
+    if (!deformable_model_->MpmUseSchur()) {
+      grid_data_prev_step.GetFlattenedVelocities(result);
+    } else {
+      const mpm::MpmGridNodesPermutation<T>& perm =
+          EvalMpmGridNodesPermutation(context);
+      grid_data_prev_step.ExtractVelocitiesFromIndices(perm.nodes_in_contact,
+                                                       result);
+    }
   }
 
   void CalcParticipatingFreeMotionVelocitiesMpm(
@@ -199,7 +213,14 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
               << std::endl;
     const mpm::GridData<T>& grid_data_free_motion =
         EvalGridDataFreeMotion(context);
-    grid_data_free_motion.GetFlattenedVelocities(result);
+    if (!deformable_model_->MpmUseSchur()) {
+      grid_data_free_motion.GetFlattenedVelocities(result);
+    } else {
+      const mpm::MpmGridNodesPermutation<T>& perm =
+          EvalMpmGridNodesPermutation(context);
+      grid_data_free_motion.ExtractVelocitiesFromIndices(perm.nodes_in_contact,
+                                                         result);
+    }
   }
 
   const mpm::GridData<T>& EvalGridDataPostContact(
@@ -218,12 +239,58 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         EvalGridDataFreeMotion(context);
     (*grid_data_post_contact) = grid_data_free_motion;
 
+    if (EvalMpmContactPairs(context).size() == 0) {
+      // if no contact, no further treatment
+      return;
+    }
     contact_solvers::internal::ContactSolverResults<T> results =
         manager_->EvalContactSolverResults(context);
-    int mpm_dofs = grid_data_free_motion.num_active_nodes() * 3;
-    VectorX<T> grid_v_post_contact_vec = results.v_next.tail(mpm_dofs);
+    if (!deformable_model_->MpmUseSchur()) {
+      int mpm_dofs = grid_data_free_motion.num_active_nodes() * 3;
+      VectorX<T> grid_v_post_contact_vec = results.v_next.tail(mpm_dofs);
 
-    grid_data_post_contact->SetVelocities(grid_v_post_contact_vec);
+      grid_data_post_contact->SetVelocities(grid_v_post_contact_vec);
+    } else {
+      // the velocities of the contact nodes are directly obtained from contact
+      // results
+      const mpm::MpmGridNodesPermutation<T>& perm =
+          EvalMpmGridNodesPermutation(context);
+      VectorX<T> in_contact_nodes_v_next =
+          results.v_next.tail(perm.nodes_in_contact.size() * 3);
+      // to compute the non_participating velocities,
+      // non_participating_v_next = non_participating_v_free_motion +
+      // schur.SolveForX(participating_v_next - participating_v_free_motion)
+
+      const drake::multibody::contact_solvers::internal::SchurComplement&
+          mpm_schur = EvalMpmTangentMatrixSchurComplement(context);
+
+      VectorX<T> in_contact_nodes_v_free_motion;
+      grid_data_free_motion.ExtractVelocitiesFromIndices(
+          perm.nodes_in_contact, &in_contact_nodes_v_free_motion);
+      VectorX<T> not_in_contact_nodes_v_free_motion;
+      grid_data_free_motion.ExtractVelocitiesFromIndices(
+          perm.nodes_not_in_contact, &not_in_contact_nodes_v_free_motion);
+
+      VectorX<T> not_in_contact_nodes_v_next =
+          not_in_contact_nodes_v_free_motion +
+          mpm_schur.SolveForX(in_contact_nodes_v_next -
+                              in_contact_nodes_v_free_motion);
+
+      int count_in_contact = 0;
+      int count_not_in_contact = 0;
+      for (size_t i = 0; i < grid_data_free_motion.num_active_nodes(); ++i) {
+        if (perm.nodes_in_contact.count(i)) {
+          grid_data_post_contact->SetVelocityAt(
+              in_contact_nodes_v_next.segment(3 * count_in_contact, 3), i);
+          ++count_in_contact;
+        } else {
+          grid_data_post_contact->SetVelocityAt(
+              not_in_contact_nodes_v_next.segment(3 * count_not_in_contact, 3),
+              i);
+          ++count_not_in_contact;
+        }
+      }
+    }
   }
 
   void UpdateParticlesFromGridData(const systems::Context<T>& context,
@@ -260,6 +327,31 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         output_filename, state.particles.positions(),
         state.particles.velocities(), state.particles.masses());
     std::cout << "write " << output_filename << std::endl;
+
+    WriteAvgX(context, current_step);
+  }
+
+  void WriteAvgX(const systems::Context<T>& context, int step) const {
+    const mpm::MpmState<T>& state =
+        context.template get_abstract_state<mpm::MpmState<T>>(
+            deformable_model_->mpm_model().mpm_state_index());
+    double x_avg = 0.0;
+    for (size_t p = 0; p < state.particles.num_particles(); ++p) {
+      x_avg += state.particles.GetPositionAt(p)(0);
+    }
+    x_avg = x_avg / state.particles.num_particles();
+
+    // Open a text file for writing
+    if (step == 0) {
+      std::ofstream outputFile("output.txt");
+      outputFile << "mu is " << deformable_model_->mpm_model().friction_mu() << std::endl;
+      outputFile << x_avg << "," << std::endl;
+      outputFile.close();
+    } else {
+      std::ofstream outputFile("output.txt", std::ios::app);
+      outputFile << x_avg << "," << std::endl;
+      outputFile.close();
+    }
   }
 
   const std::vector<geometry::internal::MpmParticleContactPair<T>>&
@@ -303,7 +395,26 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         }
       }
     }
-    std::cout << result->size() << " contact pairs at " << context.get_time() << std::endl;
+    std::cout << result->size() << " contact pairs at " << context.get_time()
+              << std::endl;
+  }
+
+  const mpm::MpmGridNodesPermutation<T>& EvalMpmGridNodesPermutation(
+      const systems::Context<T>& context) const {
+    return manager_->plant()
+        .get_cache_entry(cache_indexes_.mpm_grid_nodes_permutation)
+        .template Eval<mpm::MpmGridNodesPermutation<T>>(context);
+  }
+
+  void CalcMpmGridNodesPermutation(
+      const systems::Context<T>& context,
+      mpm::MpmGridNodesPermutation<T>* result) const {
+    const mpm::MpmState<T>& state =
+        context.template get_abstract_state<mpm::MpmState<T>>(
+            deformable_model_->mpm_model().mpm_state_index());
+    const std::vector<geometry::internal::MpmParticleContactPair<T>>&
+        mpm_contact_pairs = EvalMpmContactPairs(context);
+    result->Compute(mpm_contact_pairs, state);
   }
 
   // note: the linear dynamics matrix that sap needs is d2Edv2 in MPM
@@ -311,7 +422,55 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                                      std::vector<MatrixX<T>>* A) const {
     DRAKE_DEMAND(A != nullptr);
     std::cout << "AppendLinearDynamicsMatrixMpm is called" << std::endl;
-    MatrixX<T> linear_dynamics_matrix;
+
+    if (!deformable_model_->MpmUseSchur()) {
+      const mpm::MpmState<T>& state =
+          context.template get_abstract_state<mpm::MpmState<T>>(
+              deformable_model_->mpm_model().mpm_state_index());
+      // TODO(zeshunzong): figure out how to remove the copy
+      mpm::GridData<T> grid_data_free_motion_copy =
+          EvalGridDataFreeMotion(context);
+      mpm::DeformationState<T> deformation_state(
+          state.particles, state.sparse_grid, grid_data_free_motion_copy);
+
+      mpm::MpmSolverScratch<T>& mpm_scratch =
+          manager_->plant()
+              .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+              .get_mutable_cache_entry_value(context)
+              .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
+      deformation_state.Update(*mpm_transfer_, manager_->plant().time_step(),
+                               &(mpm_scratch));
+      MatrixX<T> linear_dynamics_matrix;
+      deformable_model_->mpm_model().ComputeD2EnergyDV2(
+          *mpm_transfer_, deformation_state, manager_->plant().time_step(),
+          &linear_dynamics_matrix);
+
+      A->emplace_back(std::move(linear_dynamics_matrix));
+    } else {
+      if (EvalMpmContactPairs(context).size() == 0) {
+        // no grid nodes in contact
+        A->emplace_back(MatrixX<double>(0, 0));
+      } else {
+        A->emplace_back(
+            EvalMpmTangentMatrixSchurComplement(context).get_D_complement());
+      }
+    }
+  }
+
+  const drake::multibody::contact_solvers::internal::SchurComplement&
+  EvalMpmTangentMatrixSchurComplement(
+      const systems::Context<T>& context) const {
+    return manager_->plant()
+        .get_cache_entry(cache_indexes_.mpm_tangent_matrix_schur_complement)
+        .template Eval<
+            drake::multibody::contact_solvers::internal::SchurComplement>(
+            context);
+  }
+
+  void CalcMpmTangentMatrixSchurComplement(
+      const systems::Context<T>& context,
+      drake::multibody::contact_solvers::internal::SchurComplement* result)
+      const {
     const mpm::MpmState<T>& state =
         context.template get_abstract_state<mpm::MpmState<T>>(
             deformable_model_->mpm_model().mpm_state_index());
@@ -320,18 +479,24 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         EvalGridDataFreeMotion(context);
     mpm::DeformationState<T> deformation_state(
         state.particles, state.sparse_grid, grid_data_free_motion_copy);
-    
+
     mpm::MpmSolverScratch<T>& mpm_scratch =
         manager_->plant()
             .get_cache_entry(cache_indexes_.mpm_solver_scratch)
             .get_mutable_cache_entry_value(context)
             .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
-    deformation_state.Update(*mpm_transfer_, manager_->plant().time_step(), &(mpm_scratch.transfer_scratch));
-    deformable_model_->mpm_model().ComputeD2EnergyDV2(
-        *mpm_transfer_, deformation_state, manager_->plant().time_step(),
-        &linear_dynamics_matrix);
-    
-    A->emplace_back(std::move(linear_dynamics_matrix));
+    deformation_state.Update(*mpm_transfer_, manager_->plant().time_step(),
+                             &(mpm_scratch));
+    multibody::contact_solvers::internal::
+        BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>
+            hessian = deformable_model_->mpm_model()
+                          .ComputeD2EnergyDV2SymmetricBlockSparse(
+                              *mpm_transfer_, deformation_state,
+                              manager_->plant().time_step());
+    const mpm::MpmGridNodesPermutation<T>& mpm_grid_nodes_permutation =
+        EvalMpmGridNodesPermutation(context);
+    (*result) = drake::multibody::contact_solvers::internal::SchurComplement(
+        hessian, mpm_grid_nodes_permutation.nodes_not_in_contact);
   }
 
   void AppendDiscreteContactPairsMpm(
@@ -347,13 +512,12 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const T d = NAN;  // not used.
       const T k = std::numeric_limits<double>::infinity();
       // TODO(zeshunzong): set the two values in model
-      const T tau = 0.01;
-      const T mu = 0.2;
+      const T tau = manager_->plant().time_step() * 10.0;
       result->AppendDeformableData(DiscreteContactPair<T>{
           dummy_id, mpm_contact_pair.non_mpm_id,
           mpm_contact_pair.particle_in_contact_position,
           mpm_contact_pair.normal, mpm_contact_pair.penetration_distance, fn0,
-          k, d, tau, mu});
+          k, d, tau, deformable_model_->mpm_model().friction_mu()});
     }
   }
 
@@ -392,15 +556,27 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       jacobian_blocks.reserve(2);
 
       /* MPM part of Jacobian, note this is -J_mpm */
-      MatrixX<T> J_mpm;
-      mpm_transfer_->CalcJacobianGridVToParticleVAtParticle(
-          contact_pair.particle_in_contact_index, state.particles,
-          state.sparse_grid, &J_mpm);
+      if (!deformable_model_->MpmUseSchur()) {
+        MatrixX<T> J_mpm;
+        mpm_transfer_->CalcJacobianGridVToParticleVAtParticle(
+            contact_pair.particle_in_contact_index, state.particles,
+            state.sparse_grid, &J_mpm);
 
-      J_mpm = -R_CW.matrix() * J_mpm;
-      jacobian_blocks.emplace_back(
-          clique_index_mpm,
-          contact_solvers::internal::MatrixBlock<T>(std::move(J_mpm)));
+        J_mpm = -R_CW.matrix() * J_mpm;
+        jacobian_blocks.emplace_back(
+            clique_index_mpm,
+            contact_solvers::internal::MatrixBlock<T>(std::move(J_mpm)));
+      } else {
+        contact_solvers::internal::Block3x3SparseMatrix<T> J_mpm =
+            mpm_transfer_
+                ->CalcRTimesJacobianGridVToParticleVWithPermutationAtParticle(
+                    -R_CW.matrix(), contact_pair.particle_in_contact_index,
+                    state, EvalMpmGridNodesPermutation(context));
+        // J_mpm = -R_CW.matrix() * J_mpm;
+        jacobian_blocks.emplace_back(
+            clique_index_mpm,
+            contact_solvers::internal::MatrixBlock<T>(std::move(J_mpm)));
+      }
 
       /* Non-MPM (rigid) part of Jacobian */
       const BodyIndex index_B =
@@ -555,7 +731,12 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     systems::CacheIndex grid_data_free_motion;
     systems::CacheIndex grid_data_post_contact;
     systems::CacheIndex mpm_contact_pairs;
+    // systems::CacheIndex grid_indices_in_contact;
+    // systems::CacheIndex grid_indices_not_in_contact;
+    systems::CacheIndex mpm_grid_nodes_permutation;
+    systems::CacheIndex mpm_tangent_matrix_schur_complement;
   };
+
   /* Copies the state of the deformable body with `id` in the given `context`
    to the `fem_state`.
    @pre fem_state != nullptr and has size compatible with the state of the

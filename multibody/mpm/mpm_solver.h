@@ -16,42 +16,44 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
-struct NewtonParams {
-  int max_newton_iter = 500;
-  double newton_gradient_epsilon = 1e-5;
-  bool matrix_free = true;
-  bool linear_constitutive_model = true;
-  bool apply_ground = false;
-  bool sticky_ground = true;
-};
-
 template <typename T>
 class MpmSolver {
  public:
   MpmSolver() {}
 
-  int SolveGridVelocities(const NewtonParams& params,
-                          const MpmState<T>& mpm_state,
-                          const MpmTransfer<T>& transfer,
-                          const MpmModel<T>& model, double dt,
-                          mpm::GridData<T>* grid_data_free_motion,
-                          MpmSolverScratch<T>* scratch) const {
+  void ComputeGridDataPrevStep(const MpmState<T>& mpm_state,
+                               const MpmTransfer<T>& transfer,
+                               mpm::GridData<T>* grid_data_prev_step,
+                               MpmSolverScratch<T>* scratch) const {
     if constexpr (!(std::is_same_v<T, double>)) {
       throw;  // only supports double
     }
     transfer.P2G(mpm_state.particles, mpm_state.sparse_grid,
-                 grid_data_free_motion, &(scratch->transfer_scratch));
+                 grid_data_prev_step, &(scratch->transfer_scratch));
+  }
+
+  int ComputeGridDataFreeMotionAndFinaldPdFs(
+      const NewtonParams& params, const MpmState<T>& mpm_state,
+      const mpm::GridData<T>& grid_data_prev_step,
+      const MpmTransfer<T>& transfer, const MpmModel<T>& model, double dt,
+      mpm::GridData<T>* grid_data_free_motion,
+      std::vector<Eigen::Matrix<T, 9, 9>>* final_dPdFs,
+      MpmSolverScratch<T>* scratch) const {
+    if constexpr (!(std::is_same_v<T, double>)) {
+      throw;  // only supports double
+    }
     if (params.apply_ground) {
       UpdateCollisionNodesWithGround(mpm_state.sparse_grid,
                                      &(scratch->collision_nodes));
     }
+    (*grid_data_free_motion) = grid_data_prev_step;
     int count = 0;
     DeformationState<T> deformation_state(
         mpm_state.particles, mpm_state.sparse_grid, *grid_data_free_motion);
     scratch->v_prev = grid_data_free_motion->velocities();
 
     for (; count < params.max_newton_iter; ++count) {
-      deformation_state.Update(transfer, dt, &(scratch->transfer_scratch));
+      deformation_state.Update(transfer, dt, scratch);
       // find minus_gradient
       model.ComputeMinusDEnergyDV(transfer, scratch->v_prev, deformation_state,
                                   dt, &(scratch->minus_dEdv),
@@ -62,18 +64,19 @@ class MpmSolver {
                                &(scratch->minus_dEdv));
       }
       double gradient_norm = scratch->minus_dEdv.norm();
-      if ((gradient_norm < params.newton_gradient_epsilon) && (count > 0))
+      if ((gradient_norm < params.newton_gradient_epsilon) && (count > 0)) {
+        (*final_dPdFs) = deformation_state.dPdFs();
         break;
+      }
 
       // find dG_ = hessian^-1 * minus_gradient, using CG
-
       if (params.matrix_free) {
         ConjugateGradient cg;
         if (params.linear_constitutive_model) {
           // if model is linear, cg only needs to be this much accurate for
           // newton to converge in one step
           cg.SetRelativeTolerance(0.5 * params.newton_gradient_epsilon /
-                                  (gradient_norm+1e-6));
+                                  std::max(gradient_norm, 1e-6));
         }
         HessianWrapper hessian_wrapper(transfer, model, deformation_state, dt);
         cg.Solve(hessian_wrapper, scratch->minus_dEdv, &(scratch->dG));
@@ -98,8 +101,83 @@ class MpmSolver {
     }
     std::cout << "Newton converged after " << count << " iterations.\n"
               << "num active nodes: "
-              << grid_data_free_motion->num_active_nodes() <<
-        std::endl;
+              << grid_data_free_motion->num_active_nodes() << std::endl;
+    if (params.apply_ground) {
+      grid_data_free_motion->ProjectionGround(scratch->collision_nodes,
+                                              params.sticky_ground);
+    }
+    return count;
+  }
+
+  int SolveGridVelocities(const NewtonParams& params,
+                          const MpmState<T>& mpm_state,
+                          const MpmTransfer<T>& transfer,
+                          const MpmModel<T>& model, double dt,
+                          mpm::GridData<T>* grid_data_free_motion,
+                          MpmSolverScratch<T>* scratch) const {
+    if constexpr (!(std::is_same_v<T, double>)) {
+      throw;  // only supports double
+    }
+    transfer.P2G(mpm_state.particles, mpm_state.sparse_grid,
+                 grid_data_free_motion, &(scratch->transfer_scratch));
+    if (params.apply_ground) {
+      UpdateCollisionNodesWithGround(mpm_state.sparse_grid,
+                                     &(scratch->collision_nodes));
+    }
+    int count = 0;
+    DeformationState<T> deformation_state(
+        mpm_state.particles, mpm_state.sparse_grid, *grid_data_free_motion);
+    scratch->v_prev = grid_data_free_motion->velocities();
+
+    for (; count < params.max_newton_iter; ++count) {
+      deformation_state.Update(transfer, dt, scratch);
+      // find minus_gradient
+      model.ComputeMinusDEnergyDV(transfer, scratch->v_prev, deformation_state,
+                                  dt, &(scratch->minus_dEdv),
+                                  &(scratch->transfer_scratch));
+
+      if (params.apply_ground) {
+        ProjectCollisionGround(scratch->collision_nodes, params.sticky_ground,
+                               &(scratch->minus_dEdv));
+      }
+      double gradient_norm = scratch->minus_dEdv.norm();
+      if ((gradient_norm < params.newton_gradient_epsilon) && (count > 0))
+        break;
+
+      // find dG_ = hessian^-1 * minus_gradient, using CG
+
+      if (params.matrix_free) {
+        ConjugateGradient cg;
+        if (params.linear_constitutive_model) {
+          // if model is linear, cg only needs to be this much accurate for
+          // newton to converge in one step
+          cg.SetRelativeTolerance(0.5 * params.newton_gradient_epsilon /
+                                  std::max(gradient_norm, 1e-6));
+        }
+        HessianWrapper hessian_wrapper(transfer, model, deformation_state, dt);
+        cg.Solve(hessian_wrapper, scratch->minus_dEdv, &(scratch->dG));
+
+      } else {
+        // not matrix free, use eigen dense matrix
+        Eigen::ConjugateGradient<MatrixX<T>, Eigen::Lower | Eigen::Upper>
+            cg_dense;
+        if (params.linear_constitutive_model) {
+          // if model is linear, cg only needs to be this much accurate for
+          // newton to converge in one step
+          cg_dense.setTolerance(0.5 * params.newton_gradient_epsilon /
+                                gradient_norm);
+        }
+        model.ComputeD2EnergyDV2(transfer, deformation_state, dt,
+                                 &(scratch->d2Edv2));
+        cg_dense.compute(scratch->d2Edv2);
+        scratch->dG = cg_dense.solve(scratch->minus_dEdv);
+      }
+
+      grid_data_free_motion->AddDG(scratch->dG);
+    }
+    std::cout << "Newton converged after " << count << " iterations.\n"
+              << "num active nodes: "
+              << grid_data_free_motion->num_active_nodes() << std::endl;
     if (params.apply_ground) {
       grid_data_free_motion->ProjectionGround(scratch->collision_nodes,
                                               params.sticky_ground);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <unordered_set>
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
@@ -116,7 +117,23 @@ class GridData {
 
   void SetVelocities(const VectorX<T>& velocities) {
     for (size_t i = 0; i < num_active_nodes(); ++i) {
-      velocities_[i] = velocities.segment(3*i, 3);
+      velocities_[i] = velocities.segment(3 * i, 3);
+    }
+  }
+
+  void SetVelocityAt(const Vector3<T>& v, size_t node) {
+    velocities_[node] = v;
+  }
+
+  void ExtractVelocitiesFromIndices(const std::unordered_set<int>& indices,
+                                    VectorX<T>* result) const {
+    result->resize(indices.size() * 3);
+    int count = 0;
+    for (int i = 0; i < static_cast<int>(num_active_nodes()); ++i) {
+      if (indices.count(i)) {
+        result->segment(3 * count, 3) = GetVelocityAt(i);
+        ++count;
+      }
     }
   }
 

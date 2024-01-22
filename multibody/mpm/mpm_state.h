@@ -1,9 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <unordered_set>
 #include <vector>
+#include <iostream>
 
+#include "drake/geometry/query_results/mpm_particle_contact_pair.h"
 #include "drake/math/rigid_transform.h"
+#include "drake/multibody/contact_solvers/sap/partial_permutation.h"
 #include "drake/multibody/mpm/internal/analytic_level_set.h"
 #include "drake/multibody/mpm/internal/poisson_disk.h"
 #include "drake/multibody/mpm/particles.h"
@@ -21,11 +25,10 @@ struct MpmState {
       const internal::AnalyticLevelSet& level_set,
       const math::RigidTransform<double>& pose,
       const mpm::constitutive_model::ElastoPlasticModel<T>& elastoplastic_model,
-      double common_density) {
+      double common_density, int min_num_particles_per_cell) {
     const std::array<Vector3<double>, 2> bounding_box =
         level_set.bounding_box();
     // TODO(zeshunzong): pass is input
-    int min_num_particles_per_cell = 1;
     double sample_r =
         sparse_grid.h() / (std::cbrt(min_num_particles_per_cell) + 1);
 
@@ -59,6 +62,9 @@ struct MpmState {
                             elastoplastic_model.Clone(), mass_p,
                             reference_volume_p);
     }
+    // particles.AddParticle(Vector3<T>(0, 0, 0), Vector3<T>(0, 0, 0),
+    //                       elastoplastic_model.Clone(), mass_p,
+    //                       reference_volume_p);
     return num_particles;  // return the number of particles added
   }
 
@@ -86,6 +92,58 @@ struct MpmSolverScratch {
   ParticlesData<T> particles_data;
 
   std::vector<size_t> collision_nodes;
+};
+
+template <typename T>
+struct MpmGridNodesPermutation {
+  std::unordered_set<int> nodes_in_contact;
+  std::unordered_set<int> nodes_not_in_contact;
+
+  contact_solvers::internal::PartialPermutation permutation;
+  // first nodes in contact, then nodes not in contact
+
+  MpmGridNodesPermutation() {}
+
+  void Compute(const std::vector<geometry::internal::MpmParticleContactPair<T>>&
+                   contact_pairs,
+               const mpm::MpmState<T>& state) {
+    // TODO(zeshunzong): redundancy can be optimized
+    // first find all nodes that are in contact
+    nodes_in_contact.clear();
+    nodes_not_in_contact.clear();
+    for (const auto& pair : contact_pairs) {
+      const Vector3<int>& base_node =
+          state.particles.GetBaseNodeAt(pair.particle_in_contact_index);
+      for (int i = -1; i <= 1; ++i) {
+        for (int j = -1; j <= 1; ++j) {
+          for (int k = -1; k <= 1; ++k) {
+            nodes_in_contact.insert(
+                state.sparse_grid.To1DIndex(base_node + Vector3<int>(i, j, k)));
+          }
+        }
+      }
+    }
+
+    std::vector<int> new_ordering;
+    for (int i = 0; i < static_cast<int>(state.sparse_grid.num_active_nodes());
+         ++i) {
+      if (nodes_in_contact.count(i)) {
+        // i is in contact
+        new_ordering.push_back(i);
+      }
+    }
+    for (int i = 0; i < static_cast<int>(state.sparse_grid.num_active_nodes());
+         ++i) {
+      if (!nodes_in_contact.count(i)) {
+        // i is NOT in contact
+        new_ordering.push_back(i);
+        nodes_not_in_contact.insert(i);
+      }
+    }
+    std::cout << "size of nodes in contact: " << nodes_in_contact.size() << std::endl;
+    std::cout << "size of nodes not in contact: " << nodes_not_in_contact.size() << std::endl;
+    permutation = contact_solvers::internal::PartialPermutation(new_ordering);
+  }
 };
 
 }  // namespace mpm

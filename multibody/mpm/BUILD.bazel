@@ -119,6 +119,8 @@ drake_cc_library(
         ":particles",
         "//multibody/mpm/internal:poisson_disk",
         "//multibody/mpm/internal:analytic_level_set",
+        "//multibody/contact_solvers/sap:partial_permutation",
+        "//geometry/query_results:mpm_particle_contact_pair",
     ],
 )
 

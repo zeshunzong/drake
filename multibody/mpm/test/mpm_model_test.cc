@@ -82,7 +82,8 @@ GTEST_TEST(MpmModelTest, TestEnergyAndItsDerivatives) {
   }
   grid_data.SetVelocities(grid_velocities_input);
 
-  deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
+  MpmSolverScratch<AutoDiffXd> solver_scratch;
+  deformation_state.Update(mpm_transfer, dt, &solver_scratch);
   // now we are ready to compute energy and its derivatives
 
   // first test elastic energy and its derivatives
@@ -183,7 +184,8 @@ GTEST_TEST(MpmModelTest, TestHessianTimesZ) {
     grid_velocities_input.push_back(V.col(i));
   }
   grid_data.SetVelocities(grid_velocities_input);
-  deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
+  MpmSolverScratch<double> solver_scratch;
+  deformation_state.Update(mpm_transfer, dt, &solver_scratch);
 
   Eigen::VectorXd z(3 * sparse_grid.num_active_nodes());
   Eigen::VectorXd hessian_times_z(3 * sparse_grid.num_active_nodes());
@@ -258,7 +260,8 @@ GTEST_TEST(MpmModelTest, TestHessianSymmetricBlockSparse) {
     grid_velocities_input.push_back(V.col(i));
   }
   grid_data.SetVelocities(grid_velocities_input);
-  deformation_state.Update(mpm_transfer, dt, &transfer_scratch);
+  MpmSolverScratch<double> solver_scratch;
+  deformation_state.Update(mpm_transfer, dt, &solver_scratch);
 
   Eigen::VectorXd z(3 * sparse_grid.num_active_nodes());
   Eigen::VectorXd hessian_times_z(3 * sparse_grid.num_active_nodes());

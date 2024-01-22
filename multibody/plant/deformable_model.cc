@@ -321,10 +321,10 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     // append particles
     int num_particles = mpm_state.AddParticlesViaPoissonDiskSampling(
         *(mpm_model_->InitialObjectParams().level_set),
-        
         *(mpm_model_->InitialObjectParams().pose),
         *(mpm_model_->InitialObjectParams().constitutive_model),
-        mpm_model_->InitialObjectParams().density);
+        mpm_model_->InitialObjectParams().density,
+        mpm_model_->min_num_particles_per_cell());
 
     // TODO(zeshunzong): add to initialize event?
     mpm::MpmTransfer<T> initial_tranfer{};
@@ -333,7 +333,6 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     mpm_model_->SetMpmStateIndex(
         this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state)));
     std::cout << "add " << num_particles << "particles " << std::endl;
-    getchar();
   }
 
   // ---------------- newly added for MPM ---------------

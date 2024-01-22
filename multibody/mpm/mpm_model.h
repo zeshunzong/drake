@@ -50,6 +50,15 @@ namespace mpm {
  * TODO(zeshunzong): write an explicit scheme
  */
 
+struct NewtonParams {
+  int max_newton_iter = 500;
+  double newton_gradient_epsilon = 1e-5;
+  bool matrix_free = true;
+  bool linear_constitutive_model = true;
+  bool apply_ground = false;
+  bool sticky_ground = true;
+};
+
 template <typename T>
 class DeformationState {
   /**
@@ -75,14 +84,13 @@ class DeformationState {
    * @pre sparse_grid is compatible with current particles
    */
   void Update(const MpmTransfer<T>& transfer, double dt,
-              TransferScratch<T>* scratch) {
-    ParticlesData<T> particles_data{};  // TODO(zeshunzong): attribute?
+              MpmSolverScratch<T>* scratch) {
     // TODO(zeshunzong): some other data is computed but not used in
     // particles_data
-    transfer.G2P(sparse_grid_, grid_data_, particles_, &particles_data,
-                 scratch);
-    particles_.ComputeFsPsdPdFs(particles_data.particle_grad_v_next, dt, &Fs_,
-                                &Ps_, &dPdFs_);
+    transfer.G2P(sparse_grid_, grid_data_, particles_,
+                 &(scratch->particles_data), &(scratch->transfer_scratch));
+    particles_.ComputeFsPsdPdFs(scratch->particles_data.particle_grad_v_next,
+                                dt, &Fs_, &Ps_, &dPdFs_);
   }
 
   const std::vector<Matrix3<T>>& Fs() const { return Fs_; }
@@ -274,9 +282,15 @@ class MpmModel {
     }
   }
 
-  int max_newton_iter() const { return max_newton_iter_; }
-  double newton_epsilon() const { return newton_epsilon_; }
-  bool matrix_free_cg() const { return matrix_free_cg_; }
+  const NewtonParams& newton_params() const { return newton_params_; }
+
+  int min_num_particles_per_cell() const { return min_num_particles_per_cell_; }
+
+  void SetMinNumParticlesPerCell(int x) { min_num_particles_per_cell_ = x; }
+
+  double friction_mu() const { return friction_mu_;}
+
+  void SetFrictionMu(double mu) { friction_mu_ = mu; }
 
  private:
   // Kinetic energy = 0.5 * m * (v - v_prev)ᵀ(v - v_prev).
@@ -294,17 +308,19 @@ class MpmModel {
       const DeformationState<T>& deformation_state, double dt,
       Eigen::VectorX<T>* result) const;
 
-  Vector3<T> gravity_{0.0, 0.0, -9.81};
+  // Vector3<T> gravity_{2.0, 0.0, -2.0};
+  Vector3<T> gravity_{0.0, 0.0, -8.0};
 
   // consider having a list of those?
   std::unique_ptr<MpmInitialObjectParameters<T>> initial_object_params_;
   // the state index where we store mpm_state inside context
   systems::AbstractStateIndex mpm_state_index_;
 
-  bool apply_ground_ = false;
-  int max_newton_iter_ = 1e5;
-  double newton_epsilon_ = 1e-6;
-  bool matrix_free_cg_ = false;
+  int min_num_particles_per_cell_ = 1;
+
+  NewtonParams newton_params_;
+
+  double friction_mu_ = 0.1;
 };
 
 }  // namespace mpm
