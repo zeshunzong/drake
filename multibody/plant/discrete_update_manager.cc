@@ -35,7 +35,8 @@ void DiscreteUpdateManager<T>::CalcDiscreteValues(
   DRAKE_DEMAND(updates != nullptr);
   // Perform discrete updates for deformable bodies if they exist.
   if constexpr (std::is_same_v<T, double>) {
-    if (deformable_driver_ != nullptr) {
+    if (deformable_driver_ != nullptr &&
+        deformable_driver_->num_deformable_bodies() > 0) {
       deformable_driver_->CalcDiscreteStates(context, updates);
     }
   }
@@ -779,9 +780,11 @@ void DiscreteUpdateManager<T>::CalcContactKinematics(
   AppendContactKinematics(context, contact_pairs.hydro_contact_data(),
                           DiscreteContactType::kHydroelastic, result);
   if constexpr (std::is_same_v<T, double>) {
-    if (deformable_driver_ != nullptr) {
+    if (deformable_driver_ != nullptr &&
+        deformable_driver_->num_deformable_bodies() > 0) {
       deformable_driver_->AppendContactKinematics(context, result);
-    } else if (deformable_driver_ != nullptr && deformable_driver_->ExistsMpmBody()) {
+    } else if (deformable_driver_ != nullptr &&
+               deformable_driver_->ExistsMpmBody()) {
       // note: no fem allowed
       deformable_driver_->AppendContactKinematicsMpm(context, result);
     }
@@ -963,10 +966,12 @@ void DiscreteUpdateManager<T>::CalcDiscreteContactPairs(
     AppendDiscreteContactPairsForHydroelasticContact(context, result);
   }
   if constexpr (std::is_same_v<T, double>) {
-    if (deformable_driver_ != nullptr && deformable_driver_->num_deformable_bodies()>0) {
-      deformable_driver_->AppendDiscreteContactPairs(context, contact_pairs);
-    } else if (deformable_driver_ != nullptr && deformable_driver_->ExistsMpmBody()) {
-      deformable_driver_->AppendDiscreteContactPairsMpm(context, contact_pairs);
+    if (deformable_driver_ != nullptr &&
+        deformable_driver_->num_deformable_bodies() > 0) {
+      deformable_driver_->AppendDiscreteContactPairs(context, result);
+    } else if (deformable_driver_ != nullptr &&
+               deformable_driver_->ExistsMpmBody()) {
+      deformable_driver_->AppendDiscreteContactPairsMpm(context, result);
     }
   }
 }

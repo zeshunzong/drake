@@ -67,7 +67,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   bool ExistsMpmModel() const { return (mpm_model_ != nullptr); }
 
-  bool MpmUseSchur() const { return true;}
+  bool MpmUseSchur() const { return false;}
 
   const mpm::MpmModel<T>& mpm_model() const {
     if (mpm_model_ == nullptr) {
@@ -75,6 +75,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     }
     return *mpm_model_;
   }
+
+  double mpm_d_ = 1;
+  double mpm_k_ = 1e10;
+
 
   // ---------------- newly added for MPM ---------------
 

@@ -58,13 +58,13 @@ struct MpmState {
     double mass_p = common_density * reference_volume_p;
     // we assume all particles start with zero velocity
     for (int p = 0; p < num_particles; ++p) {
-      particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
-                            elastoplastic_model.Clone(), mass_p,
-                            reference_volume_p);
+      // particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
+      //                       elastoplastic_model.Clone(), mass_p,
+      //                       reference_volume_p);
     }
-    // particles.AddParticle(Vector3<T>(0, 0, 0), Vector3<T>(0, 0, 0),
-    //                       elastoplastic_model.Clone(), mass_p,
-    //                       reference_volume_p);
+    particles.AddParticle(Vector3<T>(0, 0, -0.2), Vector3<T>(0, 0, 0),
+                          elastoplastic_model.Clone(), mass_p,
+                          reference_volume_p);
     return num_particles;  // return the number of particles added
   }
 
@@ -140,8 +140,6 @@ struct MpmGridNodesPermutation {
         nodes_not_in_contact.insert(i);
       }
     }
-    std::cout << "size of nodes in contact: " << nodes_in_contact.size() << std::endl;
-    std::cout << "size of nodes not in contact: " << nodes_not_in_contact.size() << std::endl;
     permutation = contact_solvers::internal::PartialPermutation(new_ordering);
   }
 };

@@ -172,11 +172,16 @@ class DiscreteUpdateManager : public ScalarConvertibleComponent<T> {
   void CalcAbstractValues(const systems::Context<T>& context,
                           systems::State<T>* update) const {
     DRAKE_DEMAND(update != nullptr);
-    DoCalcAbstractValues(context, update);
+    // DoCalcAbstractValues(context, update);
+    if constexpr (std::is_same_v<T, double>) {
+      if (deformable_driver_ != nullptr) {
+        deformable_driver_->CalcAbstractStates(context, update);
+      }
+    }
   }
-  virtual void DoCalcAbstractValues(
-      const systems::Context<T>& context,
-      systems::State<T>* update) const = 0;
+  // virtual void DoCalcAbstractValues(
+  //     const systems::Context<T>& context,
+  //     systems::State<T>* update) const = 0;
   // -----------------------------------newly added for mpm ------------------------
 
   /* Evaluates the contact results used in CalcDiscreteValues() to advance the

@@ -29,6 +29,10 @@ DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 
+DEFINE_double(friction, 0.0, "mpm friction");
+DEFINE_double(ppc, 8, "mpm ppc");
+DEFINE_double(shift, 0.98, "shift");
+
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
 using drake::geometry::GeometryInstance;
@@ -61,7 +65,7 @@ int do_main() {
   MultibodyPlantConfig plant_config;
   plant_config.time_step = FLAGS_time_step;
   /* Deformable simulation only works with SAP solver. */
-  plant_config.discrete_contact_solver = "sap";
+  plant_config.discrete_contact_approximation = "lagged";
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
@@ -95,7 +99,7 @@ int do_main() {
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedModel<double>>(10e7, 0.4);
-  Vector3<double> translation = {0.0, 0.0, 0.995*radius};
+  Vector3<double> translation = {0.0, 0.0, FLAGS_shift * radius};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
   double h = 0.2;
@@ -105,9 +109,12 @@ int do_main() {
                                           1000.0, h);
 
   owned_deformable_model->SetMpmGravity(
-      Vector3<double>(std::sqrt(2.0)/2.0, 0.0, -std::sqrt(2.0)/2.0));
-  owned_deformable_model->SetMpmFriction(0.0);
-  owned_deformable_model->SetMpmMinParticlesPerCell(60);
+      Vector3<double>(std::sqrt(2.0) / 2.0, 0.0, -std::sqrt(2.0) / 2.0));
+  owned_deformable_model->SetMpmGravity(
+      Vector3<double>(std::sqrt(0.0) / 2.0, 0.0, -std::sqrt(0.0) / 2.0));
+  owned_deformable_model->SetMpmFriction(FLAGS_friction);
+  owned_deformable_model->SetMpmMinParticlesPerCell(
+      static_cast<int>(FLAGS_ppc));
 
   /* Registration of all deformable geometries ostensibly requires a resolution
    hint parameter that dictates how the shape is tessellated. In the case of a
