@@ -496,12 +496,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         mpm_contact_pairs = EvalMpmContactPairs(context);
     geometry::GeometryId dummy_id = geometry::GeometryId::get_new_id();
     // TODO(zeshunzong): don't know how to use
-
+    std::cout << "num of mpm contact pairs: " << mpm_contact_pairs.size() << std::endl;
     for (const auto& mpm_contact_pair : mpm_contact_pairs) {
-      const T d = deformable_model_->mpm_d_;  // damping
-      const T k = deformable_model_->mpm_k_;
-      const T fn0 = -k * mpm_contact_pair.penetration_distance;
-      // TODO(zeshunzong): set the two values in model
+      const T d = deformable_model_->mpm_damping();  // damping
+      const T k = deformable_model_->mpm_stiffness();
+      const T fn0 = k * std::abs(mpm_contact_pair.penetration_distance);
       const T tau = NAN;
       result->AppendDeformableData(DiscreteContactPair<T>{
           dummy_id, mpm_contact_pair.non_mpm_id,
@@ -531,9 +530,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     if (mpm_contact_pairs.size() == 0) {
       return;
     }
-
-
-   
 
     for (auto& contact_pair : mpm_contact_pairs) {
       Vector3<T> vn = Vector3<T>::Zero();
@@ -576,7 +572,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             contact_solvers::internal::MatrixBlock<T>(std::move(J_mpm)));
       }
 
-      vn += R_WC.matrix() * state.particles.GetVelocityAt(contact_pair.particle_in_contact_index);
+      vn += R_CW.matrix() * state.particles.GetVelocityAt(
+                                contact_pair.particle_in_contact_index);
 
       /* Non-MPM (rigid) part of Jacobian */
       const BodyIndex index_B =
@@ -601,8 +598,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             tree_index_rigid,
             contact_solvers::internal::MatrixBlock<T>(std::move(J_rigid)));
 
-        const Eigen::VectorBlock<const VectorX<T>> v =manager_->
-            plant().GetVelocities(context);
+        const Eigen::VectorBlock<const VectorX<T>> v =
+            manager_->plant().GetVelocities(context);
         vn -= J_rigid * v;
       }
 
@@ -620,7 +617,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           contact_pair.particle_in_contact_position - p_WB;
 
       const Vector3<T> p_ApC_W{NAN, NAN, NAN};
-      std::cout << "vn is " << vn(2) << std::endl;
+
       // TODO(zeshunzong): temporarily unused
       contact_solvers::internal::ContactConfiguration<T> configuration{
           .objectA = objectA,
@@ -628,10 +625,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           .objectB = objectB,
           .p_BqC_W = p_BC_W,
           .phi = contact_pair.penetration_distance,
-          .vn = vn(2),
-          .fe = std::abs(contact_pair.penetration_distance) * deformable_model_->mpm_k_,
+          .vn = -vn(2),
+          .fe = std::abs(contact_pair.penetration_distance) *
+                deformable_model_->mpm_stiffness(),
           .R_WC = R_WC};
-
+      std::cout << "vn is " << configuration.vn << std::endl;
       // TODO(zeshunzong): we are not distinguishing between fem and mpm rn
       result->AppendDeformableData(ContactPairKinematics<T>(
           std::move(jacobian_blocks), std::move(configuration)));

@@ -62,7 +62,7 @@ struct MpmState {
       //                       elastoplastic_model.Clone(), mass_p,
       //                       reference_volume_p);
     }
-    particles.AddParticle(Vector3<T>(0, 0, -0.2), Vector3<T>(0, 0, 0),
+    particles.AddParticle(Vector3<T>(0, 0, 0.0), Vector3<T>(0, 0, 0.0),
                           elastoplastic_model.Clone(), mass_p,
                           reference_volume_p);
     return num_particles;  // return the number of particles added

@@ -32,6 +32,7 @@ DEFINE_double(beta, 0.01,
 DEFINE_double(friction, 0.0, "mpm friction");
 DEFINE_double(ppc, 8, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
+DEFINE_double(damping, 10.0, "larger, more damping");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -110,9 +111,10 @@ int do_main() {
 
   owned_deformable_model->SetMpmGravity(
       Vector3<double>(std::sqrt(2.0) / 2.0, 0.0, -std::sqrt(2.0) / 2.0));
-  owned_deformable_model->SetMpmGravity(
-      Vector3<double>(std::sqrt(0.0) / 2.0, 0.0, -std::sqrt(0.0) / 2.0));
+//   owned_deformable_model->SetMpmGravity(
+//       Vector3<double>(std::sqrt(0.0) / 2.0, 0.0, -std::sqrt(0.0) / 2.0));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
+  owned_deformable_model->SetMpmDamping(FLAGS_damping);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
 

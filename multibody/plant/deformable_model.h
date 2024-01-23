@@ -67,7 +67,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   bool ExistsMpmModel() const { return (mpm_model_ != nullptr); }
 
-  bool MpmUseSchur() const { return false;}
+  bool MpmUseSchur() const { return false; }
 
   const mpm::MpmModel<T>& mpm_model() const {
     if (mpm_model_ == nullptr) {
@@ -76,9 +76,9 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     return *mpm_model_;
   }
 
-  double mpm_d_ = 1;
-  double mpm_k_ = 1e10;
-
+  void SetMpmDamping(double d) { mpm_damping_ = d; }
+  double mpm_damping() const { return mpm_damping_; }
+  double mpm_stiffness() const { return mpm_stiffness_; }
 
   // ---------------- newly added for MPM ---------------
 
@@ -273,18 +273,13 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     return plant_->get_output_port(vertex_positions_port_index_);
   }
 
-  void SetMpmGravity(const Vector3<T>& g) {
-    mpm_model_->SetGravity(g);
-  }
+  void SetMpmGravity(const Vector3<T>& g) { mpm_model_->SetGravity(g); }
 
-  void SetMpmFriction(double mu) {
-    mpm_model_->SetFrictionMu(mu);
-  }
+  void SetMpmFriction(double mu) { mpm_model_->SetFrictionMu(mu); }
 
   void SetMpmMinParticlesPerCell(int m) {
     mpm_model_->SetMinNumParticlesPerCell(m);
   }
-
 
  private:
   PhysicalModelPointerVariant<T> DoToPhysicalModelPointerVariant() const final {
@@ -353,6 +348,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   // mpm attributes
   std::unique_ptr<mpm::MpmModel<T>> mpm_model_;
 
+  double mpm_damping_ = 100.0;
+  double mpm_stiffness_ = 1e10;
 };
 
 }  // namespace multibody
