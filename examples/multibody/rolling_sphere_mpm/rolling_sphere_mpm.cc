@@ -111,8 +111,8 @@ int do_main() {
 
   owned_deformable_model->SetMpmGravity(
       Vector3<double>(std::sqrt(2.0) / 2.0, 0.0, -std::sqrt(2.0) / 2.0));
-//   owned_deformable_model->SetMpmGravity(
-//       Vector3<double>(std::sqrt(0.0) / 2.0, 0.0, -std::sqrt(0.0) / 2.0));
+  //   owned_deformable_model->SetMpmGravity(
+  //       Vector3<double>(std::sqrt(0.0) / 2.0, 0.0, -std::sqrt(0.0) / 2.0));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
   owned_deformable_model->SetMpmMinParticlesPerCell(

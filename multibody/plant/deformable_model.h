@@ -80,6 +80,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   double mpm_damping() const { return mpm_damping_; }
   double mpm_stiffness() const { return mpm_stiffness_; }
 
+  void ApplyMpmGround() {
+    mpm_model_->ApplyMpmGround();
+  }
+
   // ---------------- newly added for MPM ---------------
 
   /** Returns the number of deformable bodies registered with this

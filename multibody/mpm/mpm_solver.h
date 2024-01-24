@@ -121,6 +121,7 @@ class MpmSolver {
     transfer.P2G(mpm_state.particles, mpm_state.sparse_grid,
                  grid_data_free_motion, &(scratch->transfer_scratch));
     if (params.apply_ground) {
+      std::cout << "applying ground" << std::endl;
       UpdateCollisionNodesWithGround(mpm_state.sparse_grid,
                                      &(scratch->collision_nodes));
     }
@@ -136,10 +137,10 @@ class MpmSolver {
                                   dt, &(scratch->minus_dEdv),
                                   &(scratch->transfer_scratch));
 
-      if (params.apply_ground) {
-        ProjectCollisionGround(scratch->collision_nodes, params.sticky_ground,
-                               &(scratch->minus_dEdv));
-      }
+      // if (params.apply_ground) {
+      //   ProjectCollisionGround(scratch->collision_nodes, params.sticky_ground,
+      //                          &(scratch->minus_dEdv));
+      // }
       double gradient_norm = scratch->minus_dEdv.norm();
       if ((gradient_norm < params.newton_gradient_epsilon) && (count > 0))
         break;

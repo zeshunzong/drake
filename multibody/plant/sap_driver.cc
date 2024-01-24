@@ -302,7 +302,6 @@ std::vector<RotationMatrix<T>> SapDriver<T>::AddContactConstraints(
       }
     }
   }
-  std::cout << "AddContactConstraints" << std::endl;
   return R_WC;
 }
 

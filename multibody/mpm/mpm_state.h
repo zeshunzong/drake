@@ -58,13 +58,13 @@ struct MpmState {
     double mass_p = common_density * reference_volume_p;
     // we assume all particles start with zero velocity
     for (int p = 0; p < num_particles; ++p) {
-      // particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
-      //                       elastoplastic_model.Clone(), mass_p,
-      //                       reference_volume_p);
+      particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
+                            elastoplastic_model.Clone(), mass_p,
+                            reference_volume_p);
     }
-    particles.AddParticle(Vector3<T>(0, 0, 0.0), Vector3<T>(0, 0, 0.0),
-                          elastoplastic_model.Clone(), mass_p,
-                          reference_volume_p);
+    // particles.AddParticle(Vector3<T>(0, 0, 0.0), Vector3<T>(0, 0, 0.0),
+    //                       elastoplastic_model.Clone(), mass_p,
+    //                       reference_volume_p);
     return num_particles;  // return the number of particles added
   }
 

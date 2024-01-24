@@ -139,6 +139,10 @@ class MpmModel {
 
   MpmModel() {}
 
+  void ApplyMpmGround() {
+    newton_params_.apply_ground = true;
+  }
+
   void StoreInitialObjectParams(
       std::unique_ptr<internal::AnalyticLevelSet> level_set_in,
       std::unique_ptr<constitutive_model::ElastoPlasticModel<T>>
@@ -288,7 +292,7 @@ class MpmModel {
 
   void SetMinNumParticlesPerCell(int x) { min_num_particles_per_cell_ = x; }
 
-  double friction_mu() const { return friction_mu_;}
+  double friction_mu() const { return friction_mu_; }
 
   void SetFrictionMu(double mu) { friction_mu_ = mu; }
 

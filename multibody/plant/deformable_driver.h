@@ -629,7 +629,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           .fe = std::abs(contact_pair.penetration_distance) *
                 deformable_model_->mpm_stiffness(),
           .R_WC = R_WC};
-      std::cout << "vn is " << configuration.vn << std::endl;
       // TODO(zeshunzong): we are not distinguishing between fem and mpm rn
       result->AppendDeformableData(ContactPairKinematics<T>(
           std::move(jacobian_blocks), std::move(configuration)));
