@@ -21,6 +21,8 @@ class LinearCorotatedModel : public ElastoPlasticModel<T> {
     return std::make_unique<LinearCorotatedModel<T>>(*this);
   }
 
+  bool IsLinearModel() const final { return true; }
+
   void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final {
     DRAKE_ASSERT(FE != nullptr);
     *FE = F_trial;
@@ -53,9 +55,13 @@ class LinearCorotatedModel : public ElastoPlasticModel<T> {
     (*tau) = P * FE.transpose();
   }
 
-  void CalcFirstPiolaStressDerivative(
-      const Matrix3<T>& F0, const Matrix3<T>& FE,
-      Eigen::Matrix<T, 9, 9>* dPdF) const final {
+  void CalcFirstPiolaStressDerivative(const Matrix3<T>& F0,
+                                      const Matrix3<T>& FE,
+                                      Eigen::Matrix<T, 9, 9>* dPdF,
+                                      bool project_pd = false) const final {
+    if (project_pd) {
+      throw std::logic_error("This model is linear");
+    }
     StrainData data = ComputeStrainData(F0, FE);
 
     /* Add in μ * δₐᵢδⱼᵦ. */

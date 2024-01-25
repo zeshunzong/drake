@@ -8,6 +8,8 @@
 #include "drake/multibody/mpm/internal/analytic_level_set.h"
 #include "drake/multibody/mpm/mpm_transfer.h"
 #include "drake/systems/framework/context.h"
+#include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
+
 
 namespace drake {
 namespace multibody {
@@ -84,13 +86,13 @@ class DeformationState {
    * @pre sparse_grid is compatible with current particles
    */
   void Update(const MpmTransfer<T>& transfer, double dt,
-              MpmSolverScratch<T>* scratch) {
+              MpmSolverScratch<T>* scratch, bool project_pd = false) {
     // TODO(zeshunzong): some other data is computed but not used in
     // particles_data
     transfer.G2P(sparse_grid_, grid_data_, particles_,
                  &(scratch->particles_data), &(scratch->transfer_scratch));
     particles_.ComputeFsPsdPdFs(scratch->particles_data.particle_grad_v_next,
-                                dt, &Fs_, &Ps_, &dPdFs_);
+                                dt, &Fs_, &Ps_, &dPdFs_, project_pd);
   }
 
   const std::vector<Matrix3<T>>& Fs() const { return Fs_; }
@@ -139,9 +141,7 @@ class MpmModel {
 
   MpmModel() {}
 
-  void ApplyMpmGround() {
-    newton_params_.apply_ground = true;
-  }
+  void ApplyMpmGround() { newton_params_.apply_ground = true; }
 
   void StoreInitialObjectParams(
       std::unique_ptr<internal::AnalyticLevelSet> level_set_in,
@@ -152,6 +152,13 @@ class MpmModel {
     initial_object_params_ = std::make_unique<MpmInitialObjectParameters<T>>(
         std::move(level_set_in), std::move(constitutive_model_in),
         std::move(pose_in), density_in, h_in);
+
+    if (initial_object_params_->constitutive_model->IsLinearModel()) {
+      newton_params_.linear_constitutive_model = true;
+    }
+    else {
+      newton_params_.linear_constitutive_model = false;
+    }
   }
 
   const MpmInitialObjectParameters<T>& InitialObjectParams() const {

@@ -89,6 +89,8 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
     Vector3<T> deviatoric_tau;
   };
 
+  bool IsLinearModel() const final { return false; }
+
   void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final;
 
   // @note The input FE should be *elastic* deformation gradient.
@@ -110,7 +112,8 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
   // @note The calculation ignores the effect of plasticity.
   void CalcFirstPiolaStressDerivative(const Matrix3<T>& F0,
                                       const Matrix3<T>& FE,
-                                      Eigen::Matrix<T, 9, 9>* dPdF) const final;
+                                      Eigen::Matrix<T, 9, 9>* dPdF,
+                                      bool project_pd = false) const final;
 
   // Returns f(dev(τ)) = sqrt(3/2)‖ dev(τ) ‖ - τ_c, where dev(τ) is the
   // deviatoric component of Kirchhoff stress in the principal frame, and τ_c is

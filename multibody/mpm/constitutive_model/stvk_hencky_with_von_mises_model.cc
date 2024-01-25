@@ -76,10 +76,11 @@ void StvkHenckyWithVonMisesModel<T>::CalcKirchhoffStress(
 
 template <typename T>
 void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStressDerivative(
-    const Matrix3<T>& F0, const Matrix3<T>& FE,
-    Eigen::Matrix<T, 9, 9>* dPdF) const {
+    const Matrix3<T>& F0, const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF,
+    bool project_pd) const {
   unused(F0);
-  const PsiSigmaDerivatives psi_derivatives = CalcPsiSigmaDerivative(FE, false);
+  const PsiSigmaDerivatives psi_derivatives =
+      CalcPsiSigmaDerivative(FE, project_pd);
   const StrainStressData ssd = ComputeStrainStressData(FE);
   for (int ij = 0; ij < 9; ++ij) {
     int j = ij / 3;
@@ -92,70 +93,137 @@ void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStressDerivative(
       // dPdF(i,j,r,s,) = Σₖₗₘₙ MₖₗₘₙUᵢₖVⱼₗUᵣₘVₛₙ.
       // 27 out of the 81 summands are non-zero, the corresponding k,l,m,n are
       // listed before each summand.
-      // clang-format off
-      (*dPdF)(ij, rs) = (*dPdF)(rs, ij) =
-          // k,l,m,n = 0, 0, 0, 0
-           psi_derivatives.psi_00 * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
+      if (!project_pd) {
+        // clang-format off
+        (*dPdF)(ij, rs) = (*dPdF)(rs, ij) =
+            // k,l,m,n = 0, 0, 0, 0
+            psi_derivatives.psi_00 * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
 
-          // k,l,m,n = 0, 0, 1, 1
-         + psi_derivatives.psi_01 * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
+            // k,l,m,n = 0, 0, 1, 1
+          + psi_derivatives.psi_01 * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
 
-          // k,l,m,n = 0, 0, 2, 2
-         + psi_derivatives.psi_02 * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
+            // k,l,m,n = 0, 0, 2, 2
+          + psi_derivatives.psi_02 * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
 
-          // k,l,m,n = 1, 1, 0, 0
-         + psi_derivatives.psi_01 * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
+            // k,l,m,n = 1, 1, 0, 0
+          + psi_derivatives.psi_01 * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
 
-          // k,l,m,n = 1, 1, 1, 1
-         + psi_derivatives.psi_11 * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
+            // k,l,m,n = 1, 1, 1, 1
+          + psi_derivatives.psi_11 * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
 
-          // k,l,m,n = 1, 1, 2, 2
-         + psi_derivatives.psi_12 * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
+            // k,l,m,n = 1, 1, 2, 2
+          + psi_derivatives.psi_12 * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
 
-          // k,l,m,n = 2, 2, 0, 0
-         + psi_derivatives.psi_02 * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
+            // k,l,m,n = 2, 2, 0, 0
+          + psi_derivatives.psi_02 * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
 
-          // k,l,m,n = 2, 2, 1, 1
-         + psi_derivatives.psi_12 * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
+            // k,l,m,n = 2, 2, 1, 1
+          + psi_derivatives.psi_12 * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
 
-          // k,l,m,n = 2, 2, 2, 2
-         + psi_derivatives.psi_22 * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
+            // k,l,m,n = 2, 2, 2, 2
+          + psi_derivatives.psi_22 * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
 
-          // k,l,m,n = 0, 1, 0, 1. B01(0,0)=M_0101
-         + B01(psi_derivatives, 0, 0) * ssd.U(i, 0) * ssd.V(j, 1) * ssd.U(r, 0) * ssd.V(s, 1) // NOLINT
+            // k,l,m,n = 0, 1, 0, 1. B01(0,0)=M_0101
+          + B01(psi_derivatives, 0, 0) * ssd.U(i, 0) * ssd.V(j, 1) * ssd.U(r, 0) * ssd.V(s, 1) // NOLINT
 
-          // k,l,m,n = 0, 1, 1, 0. B01(0,1)=M_0110
-         + B01(psi_derivatives, 0, 1) * ssd.U(i, 0) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 0) // NOLINT
+            // k,l,m,n = 0, 1, 1, 0. B01(0,1)=M_0110
+          + B01(psi_derivatives, 0, 1) * ssd.U(i, 0) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 0) // NOLINT
 
-          // k,l,m,n = 1, 0, 0, 1. B01(1,0)=M_1001=M_0110
-         + B01(psi_derivatives, 1, 0) * ssd.U(i, 1) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 1) // NOLINT
+            // k,l,m,n = 1, 0, 0, 1. B01(1,0)=M_1001=M_0110
+          + B01(psi_derivatives, 1, 0) * ssd.U(i, 1) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 1) // NOLINT
 
-          // k,l,m,n = 1, 0, 1, 0. B01(1,1)=M_1010=M_0101
-         + B01(psi_derivatives, 1, 1) * ssd.U(i, 1) * ssd.V(j, 0) * ssd.U(r, 1) * ssd.V(s, 0) // NOLINT
+            // k,l,m,n = 1, 0, 1, 0. B01(1,1)=M_1010=M_0101
+          + B01(psi_derivatives, 1, 1) * ssd.U(i, 1) * ssd.V(j, 0) * ssd.U(r, 1) * ssd.V(s, 0) // NOLINT
 
-          // k,l,m,n = 1, 2, 1, 2. B12(0,0)=M_1212
-         + B12(psi_derivatives, 0, 0) * ssd.U(i, 1) * ssd.V(j, 2) * ssd.U(r, 1) * ssd.V(s, 2) // NOLINT
+            // k,l,m,n = 1, 2, 1, 2. B12(0,0)=M_1212
+          + B12(psi_derivatives, 0, 0) * ssd.U(i, 1) * ssd.V(j, 2) * ssd.U(r, 1) * ssd.V(s, 2) // NOLINT
 
-          // k,l,m,n = 1, 2, 2, 1. B12(0,1)=M_1221
-         + B12(psi_derivatives, 0, 1) * ssd.U(i, 1) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 1) // NOLINT
+            // k,l,m,n = 1, 2, 2, 1. B12(0,1)=M_1221
+          + B12(psi_derivatives, 0, 1) * ssd.U(i, 1) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 1) // NOLINT
 
-          // k,l,m,n = 2, 1, 1, 2. B12(1,0)=M_2112=M_1221
-         + B12(psi_derivatives, 1, 0) * ssd.U(i, 2) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 2) // NOLINT
+            // k,l,m,n = 2, 1, 1, 2. B12(1,0)=M_2112=M_1221
+          + B12(psi_derivatives, 1, 0) * ssd.U(i, 2) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 2) // NOLINT
 
-          // k,l,m,n = 2, 1, 2, 1. B12(1,1)=M_2121=M_1212
-         + B12(psi_derivatives, 1, 1) * ssd.U(i, 2) * ssd.V(j, 1) * ssd.U(r, 2) * ssd.V(s, 1) // NOLINT
+            // k,l,m,n = 2, 1, 2, 1. B12(1,1)=M_2121=M_1212
+          + B12(psi_derivatives, 1, 1) * ssd.U(i, 2) * ssd.V(j, 1) * ssd.U(r, 2) * ssd.V(s, 1) // NOLINT
 
-          // k,l,m,n = 0, 2, 0, 2. B02(1,1)=M_0202
-         + B02(psi_derivatives, 1, 1) * ssd.U(i, 0) * ssd.V(j, 2) * ssd.U(r, 0) * ssd.V(s, 2) // NOLINT
+            // k,l,m,n = 0, 2, 0, 2. B02(1,1)=M_0202
+          + B02(psi_derivatives, 1, 1) * ssd.U(i, 0) * ssd.V(j, 2) * ssd.U(r, 0) * ssd.V(s, 2) // NOLINT
 
-          // k,l,m,n = 0, 2, 2, 0. B02(1,0)=M_0220
-         + B02(psi_derivatives, 1, 0) * ssd.U(i, 0) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 0) // NOLINT
+            // k,l,m,n = 0, 2, 2, 0. B02(1,0)=M_0220
+          + B02(psi_derivatives, 1, 0) * ssd.U(i, 0) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 0) // NOLINT
 
-          // k,l,m,n = 2, 0, 0, 2. B02(0,1)=M_2002=M_0220
-         + B02(psi_derivatives, 0, 1) * ssd.U(i, 2) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 2) // NOLINT
+            // k,l,m,n = 2, 0, 0, 2. B02(0,1)=M_2002=M_0220
+          + B02(psi_derivatives, 0, 1) * ssd.U(i, 2) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 2) // NOLINT
 
-          // k,l,m,n = 2, 0, 2, 0. B02(0,0)=M_2020=M_0202
-         + B02(psi_derivatives, 0, 0) * ssd.U(i, 2) * ssd.V(j, 0) * ssd.U(r, 2) * ssd.V(s, 0);// NOLINT
+            // k,l,m,n = 2, 0, 2, 0. B02(0,0)=M_2020=M_0202
+          + B02(psi_derivatives, 0, 0) * ssd.U(i, 2) * ssd.V(j, 0) * ssd.U(r, 2) * ssd.V(s, 0);// NOLINT
+      }
+      else {
+        (*dPdF)(ij, rs) = (*dPdF)(rs, ij) =
+            // k,l,m,n = 0, 0, 0, 0
+            psi_derivatives.aij_projected(0,0) * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
+
+            // k,l,m,n = 0, 0, 1, 1
+          + psi_derivatives.aij_projected(0,1) * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
+
+            // k,l,m,n = 0, 0, 2, 2
+          + psi_derivatives.aij_projected(0,2) * ssd.U(i, 0) * ssd.V(j, 0) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
+
+            // k,l,m,n = 1, 1, 0, 0
+          + psi_derivatives.aij_projected(0,1) * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
+
+            // k,l,m,n = 1, 1, 1, 1
+          + psi_derivatives.aij_projected(1,1) * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
+
+            // k,l,m,n = 1, 1, 2, 2
+          + psi_derivatives.aij_projected(1,2) * ssd.U(i, 1) * ssd.V(j, 1) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
+
+            // k,l,m,n = 2, 2, 0, 0
+          + psi_derivatives.aij_projected(0,2) * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 0) * ssd.V(s, 0) // NOLINT
+
+            // k,l,m,n = 2, 2, 1, 1
+          + psi_derivatives.aij_projected(1,2) * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 1) * ssd.V(s, 1) // NOLINT
+
+            // k,l,m,n = 2, 2, 2, 2
+          + psi_derivatives.aij_projected(2,2) * ssd.U(i, 2) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 2) // NOLINT
+
+            // k,l,m,n = 0, 1, 0, 1. B01(0,0)=M_0101
+          + psi_derivatives.b01_projected(0,0) * ssd.U(i, 0) * ssd.V(j, 1) * ssd.U(r, 0) * ssd.V(s, 1) // NOLINT
+
+            // k,l,m,n = 0, 1, 1, 0. B01(0,1)=M_0110
+          + psi_derivatives.b01_projected(0,1) * ssd.U(i, 0) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 0) // NOLINT
+
+            // k,l,m,n = 1, 0, 0, 1. B01(1,0)=M_1001=M_0110
+          + psi_derivatives.b01_projected(1,0) * ssd.U(i, 1) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 1) // NOLINT
+
+            // k,l,m,n = 1, 0, 1, 0. B01(1,1)=M_1010=M_0101
+          + psi_derivatives.b01_projected(1,1) * ssd.U(i, 1) * ssd.V(j, 0) * ssd.U(r, 1) * ssd.V(s, 0) // NOLINT
+
+            // k,l,m,n = 1, 2, 1, 2. B12(0,0)=M_1212
+          + psi_derivatives.b12_projected(0,0) * ssd.U(i, 1) * ssd.V(j, 2) * ssd.U(r, 1) * ssd.V(s, 2) // NOLINT
+
+            // k,l,m,n = 1, 2, 2, 1. B12(0,1)=M_1221
+          + psi_derivatives.b12_projected(0,1) * ssd.U(i, 1) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 1) // NOLINT
+
+            // k,l,m,n = 2, 1, 1, 2. B12(1,0)=M_2112=M_1221
+          + psi_derivatives.b12_projected(1,0) * ssd.U(i, 2) * ssd.V(j, 1) * ssd.U(r, 1) * ssd.V(s, 2) // NOLINT
+
+            // k,l,m,n = 2, 1, 2, 1. B12(1,1)=M_2121=M_1212
+          + psi_derivatives.b12_projected(1,1) * ssd.U(i, 2) * ssd.V(j, 1) * ssd.U(r, 2) * ssd.V(s, 1) // NOLINT
+
+            // k,l,m,n = 0, 2, 0, 2. B02(1,1)=M_0202
+          + psi_derivatives.b02_projected(1,1) * ssd.U(i, 0) * ssd.V(j, 2) * ssd.U(r, 0) * ssd.V(s, 2) // NOLINT
+
+            // k,l,m,n = 0, 2, 2, 0. B02(1,0)=M_0220
+          + psi_derivatives.b02_projected(1,0) * ssd.U(i, 0) * ssd.V(j, 2) * ssd.U(r, 2) * ssd.V(s, 0) // NOLINT
+
+            // k,l,m,n = 2, 0, 0, 2. B02(0,1)=M_2002=M_0220
+          + psi_derivatives.b02_projected(0,1) * ssd.U(i, 2) * ssd.V(j, 0) * ssd.U(r, 0) * ssd.V(s, 2) // NOLINT
+
+            // k,l,m,n = 2, 0, 2, 0. B02(0,0)=M_2020=M_0202
+          + psi_derivatives.b02_projected(0,0) * ssd.U(i, 2) * ssd.V(j, 0) * ssd.U(r, 2) * ssd.V(s, 0);// NOLINT
+      }
     }
   }
 }

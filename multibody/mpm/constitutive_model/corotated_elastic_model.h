@@ -23,6 +23,8 @@ class CorotatedElasticModel : public ElastoPlasticModel<T> {
     return std::make_unique<CorotatedElasticModel<T>>(*this);
   }
 
+  bool IsLinearModel() const final { return false; }
+
   void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final;
 
   T CalcStrainEnergyDensity(const Matrix3<T>& F0,
@@ -36,7 +38,8 @@ class CorotatedElasticModel : public ElastoPlasticModel<T> {
 
   void CalcFirstPiolaStressDerivative(const Matrix3<T>& F0,
                                       const Matrix3<T>& FE,
-                                      Eigen::Matrix<T, 9, 9>* dPdF) const final;
+                                      Eigen::Matrix<T, 9, 9>* dPdF,
+                                      bool project_pd = false) const final;
 };
 
 }  // namespace constitutive_model

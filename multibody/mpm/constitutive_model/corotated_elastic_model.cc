@@ -56,8 +56,11 @@ void CorotatedElasticModel<T>::CalcKirchhoffStress(const Matrix3<T>& F0,
 
 template <typename T>
 void CorotatedElasticModel<T>::CalcFirstPiolaStressDerivative(
-    const Matrix3<T>& F0, const Matrix3<T>& FE,
-    Eigen::Matrix<T, 9, 9>* dPdF) const {
+    const Matrix3<T>& F0, const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF,
+    bool project_pd) const {
+  if (project_pd) {
+    throw std::logic_error("not implemented ");
+  }
   unused(F0);
   Matrix3<T> R, S, JFinvT;
   fem::internal::PolarDecompose<T>(FE, &R, &S);

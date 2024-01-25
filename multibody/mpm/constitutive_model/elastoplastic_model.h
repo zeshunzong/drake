@@ -36,6 +36,8 @@ class ElastoPlasticModel {
     mu_ = (youngs_modulus_ / (2 * (1 + poissons_ratio_)));
   }
 
+  virtual bool IsLinearModel() const = 0;
+
   // Computes the *elastic* deformation gradient FE from the *trial* deformation
   // gradient F_trial, and writes FE to F_trial. For elastic model, FE =
   // F_trial. For elastoplastic model, FE = ReturnMap(F_trial) when yield_stress
@@ -100,7 +102,7 @@ class ElastoPlasticModel {
   // @note the returned dPdF is symmetric.
   virtual void CalcFirstPiolaStressDerivative(
       const Matrix3<T>& F0, const Matrix3<T>& FE,
-      Eigen::Matrix<T, 9, 9>* dPdF) const = 0;
+      Eigen::Matrix<T, 9, 9>* dPdF, bool project_pd = false) const = 0;
 
  protected:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(ElastoPlasticModel);

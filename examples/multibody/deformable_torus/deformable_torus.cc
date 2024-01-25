@@ -13,6 +13,7 @@
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
 #include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
+#include "drake/multibody/mpm/constitutive_model/stvk_hencky_with_von_mises_model.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -78,7 +79,7 @@ int do_main() {
   MultibodyPlantConfig plant_config;
   plant_config.time_step = FLAGS_time_step;
   /* Deformable simulation only works with SAP. */
-  plant_config.discrete_contact_approximation = "sap";
+  plant_config.discrete_contact_approximation = "lagged";
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
@@ -113,7 +114,7 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(1e5, 0.2);
+                                   StvkHenckyWithVonMisesModel<double>>(1e5, 0.2, 10.0);
   Vector3<double> translation = {0.0, 0.0, 0.5};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
