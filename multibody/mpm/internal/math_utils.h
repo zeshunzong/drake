@@ -162,6 +162,64 @@ Vector3<int> ComputeBaseNodeFromPosition(const Vector3<T>& position, double h) {
                       static_cast<int>(round(position(2) / h))};
 }
 
+// project the matrix so that eigenvalues >= 0
+template <typename T>
+void MakePD(Matrix3<T>* symmetric_matrix) {
+  Eigen::SelfAdjointEigenSolver<Matrix3<T>> eigenSolver(*symmetric_matrix);
+  if (eigenSolver.eigenvalues()[0] >= 0.0) {
+    return;
+  }
+  Eigen::DiagonalMatrix<T, 3> D(eigenSolver.eigenvalues());
+  for (int i = 0; i < 3; ++i) {
+    if (D.diagonal()[i] < 0.0) {
+      D.diagonal()[i] = 0.0;
+    } else {
+      break;
+    }
+  }
+  (*symmetric_matrix) =
+      eigenSolver.eigenvectors() * D * eigenSolver.eigenvectors().transpose();
+}
+
+template <typename T>
+void MakePD2D(Matrix2<T>* symmetric_matrix) {
+  using std::abs;
+  using std::sqrt;
+  Matrix2<T>& symmetric_matrix_ref = *symmetric_matrix;
+
+  const T b = (symmetric_matrix_ref(0, 1) + symmetric_matrix_ref(1, 0)) / 2.0;
+  T b2 = b * b;
+  if (b2 == 0) {
+    for (int d = 0; d < 2; ++d) {
+      if (symmetric_matrix_ref(d, d) < 0) {
+        symmetric_matrix_ref(d, d) = 0;
+      }
+      // symmetric_matrix_ref(d, d) = std::max(0.0, symmetric_matrix_ref(d, d));
+    }
+    return;
+  }
+
+  const T a = symmetric_matrix_ref(0, 0);
+  const T d = symmetric_matrix_ref(1, 1);
+  const T D = a * d - b2;
+  const T T_div_2 = (a + d) / 2.0;
+  const T sqrtTT4D = sqrt(abs(T_div_2 * T_div_2 - D));
+  const T L2 = T_div_2 - sqrtTT4D;  // smallest eigenvalue
+  if (L2 < 0.0) {
+    const T L1 = T_div_2 + sqrtTT4D;  // largest eigenvalue
+    if (L1 <= 0.0) {
+      symmetric_matrix_ref.setZero();
+    } else {
+      const T L1md = L1 - d;
+      const T L1md2 = L1md * L1md;
+      const T denom = L1md2 + b2;
+      symmetric_matrix_ref(0, 0) = L1 * L1md2 / denom;
+      symmetric_matrix_ref(1, 1) = L1 * b2 / denom;
+      symmetric_matrix_ref(0, 1) = symmetric_matrix_ref(1, 0) = L1 * b * L1md / denom;
+    }
+  }
+}
+
 }  // namespace internal
 }  // namespace mpm
 }  // namespace multibody

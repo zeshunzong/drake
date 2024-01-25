@@ -144,6 +144,11 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
     T p02;  // (psi_0+psi_2)/(sigma0+sigma2), need to clamp denominator
     T m12;  // (psi_1-psi_2)/(sigma1-sigma2), usually can be computed robustly
     T p12;  // (psi_1+psi_2)/(sigma1+sigma2), need to clamp denominator
+
+    Matrix2<T> b01_projected;
+    Matrix2<T> b12_projected;
+    Matrix2<T> b02_projected;
+    Matrix3<T> aij_projected;
   };
 
   // Returns the (i,j)'s entry of the matrix B₀₁. This is one for the four block
@@ -179,7 +184,8 @@ class StvkHenckyWithVonMisesModel : public ElastoPlasticModel<T> {
            0.5;
   }
 
-  PsiSigmaDerivatives CalcPsiSigmaDerivative(const Matrix3<T>& FE) const;
+  PsiSigmaDerivatives CalcPsiSigmaDerivative(const Matrix3<T>& FE,
+                                             bool project_pd) const;
 
   // Applies ReturnMap(F_trial) onto the trial deformation gradient to get
   // *elastic* deformation gradient FE.

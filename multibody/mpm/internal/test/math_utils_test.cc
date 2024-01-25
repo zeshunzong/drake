@@ -145,6 +145,44 @@ GTEST_TEST(MathUtilsTest, ExpTest) {
               kTolerance);
 }
 
+GTEST_TEST(MathUtilsTest, ProjectPDTest) {
+  Eigen::Matrix3d V = Eigen::Matrix3d::Random(3, 3);
+  V = 0.5 * (V + V.transpose());  // make is symmetric
+
+  Eigen::EigenSolver<Eigen::Matrix3d> solver(V);
+  Eigen::VectorXd eigenvalues = solver.eigenvalues().real();
+  // we know that there is one negative eigenvalue in the original matrix
+  EXPECT_TRUE(eigenvalues(2) < 0);
+
+  // now project it
+  internal::MakePD<double>(&V);
+
+  Eigen::EigenSolver<Eigen::Matrix3d> solver_after(V);
+  Eigen::VectorXd eigenvalues_after = solver_after.eigenvalues().real();
+
+  EXPECT_TRUE(eigenvalues_after(0) >= 0);
+  EXPECT_TRUE(eigenvalues_after(1) >= 0);
+  EXPECT_TRUE(eigenvalues_after(2) >= 0);
+}
+
+GTEST_TEST(MathUtilsTest, ProjectPD2DTest) {
+  Eigen::Matrix2d V = Eigen::Matrix2d::Random(3, 3);
+  V = 0.5 * (V + V.transpose());  // make is symmetric
+
+  Eigen::EigenSolver<Eigen::Matrix2d> solver(V);
+  Eigen::VectorXd eigenvalues = solver.eigenvalues().real();
+  // we know that there is one negative eigenvalue in the original matrix
+  EXPECT_TRUE(eigenvalues(1) < 0);
+  // now project it
+  internal::MakePD2D<double>(&V);
+
+  Eigen::EigenSolver<Eigen::Matrix2d> solver_after(V);
+  Eigen::VectorXd eigenvalues_after = solver_after.eigenvalues().real();
+
+  EXPECT_TRUE(eigenvalues_after(0) >= 0);
+  EXPECT_TRUE(eigenvalues_after(1) >= 0);
+}
+
 }  // namespace
 }  // namespace mpm
 }  // namespace multibody

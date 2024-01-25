@@ -44,6 +44,7 @@ void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStress(const Matrix3<T>& F0,
                                                           const Matrix3<T>& FE,
                                                           Matrix3<T>* P) const {
   unused(F0);
+
   // Here FE is *elastic* deformation gradient
   // P = U (2 μ Σ^{-1} (log Σ) + λ tr(log Σ) Σ^{-1}) V^T
   const StrainStressData strain_stress_data = ComputeStrainStressData(FE);
@@ -78,7 +79,7 @@ void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStressDerivative(
     const Matrix3<T>& F0, const Matrix3<T>& FE,
     Eigen::Matrix<T, 9, 9>* dPdF) const {
   unused(F0);
-  const PsiSigmaDerivatives psi_derivatives = CalcPsiSigmaDerivative(FE);
+  const PsiSigmaDerivatives psi_derivatives = CalcPsiSigmaDerivative(FE, false);
   const StrainStressData ssd = ComputeStrainStressData(FE);
   for (int ij = 0; ij < 9; ++ij) {
     int j = ij / 3;
@@ -155,7 +156,6 @@ void StvkHenckyWithVonMisesModel<T>::CalcFirstPiolaStressDerivative(
 
           // k,l,m,n = 2, 0, 2, 0. B02(0,0)=M_2020=M_0202
          + B02(psi_derivatives, 0, 0) * ssd.U(i, 2) * ssd.V(j, 0) * ssd.U(r, 2) * ssd.V(s, 0);// NOLINT
-      // clang-format off
     }
   }
 }
@@ -193,7 +193,7 @@ StvkHenckyWithVonMisesModel<T>::ComputeStrainStressData(
 template <typename T>
 StvkHenckyWithVonMisesModel<T>::PsiSigmaDerivatives
 StvkHenckyWithVonMisesModel<T>::CalcPsiSigmaDerivative(
-    const Matrix3<T>& FE) const {
+    const Matrix3<T>& FE, bool project_pd) const {
   const StrainStressData ssd = ComputeStrainStressData(FE);
 
   // dpsi_dsigma_i
@@ -253,8 +253,31 @@ StvkHenckyWithVonMisesModel<T>::CalcPsiSigmaDerivative(
   const T p12 = (psi_1 + psi_2) /
           internal::ClampToEpsilon<T>(ssd.sigma(1) + ssd.sigma(2), kEpsilon);
 
+  Matrix3<T> aij_projected;
+  Matrix2<T> b01_projected, b02_projected, b12_projected;
+  if (project_pd) {
+    aij_projected(0, 0) = psi_00;
+    aij_projected(1, 1) = psi_11;
+    aij_projected(2, 2) = psi_22;
+    aij_projected(0, 1) = aij_projected(1, 0) = psi_01;
+    aij_projected(0, 2) = aij_projected(2, 0) = psi_02;
+    aij_projected(1, 2) = aij_projected(2, 1) = psi_12;
+    b01_projected(0, 0) = b01_projected(1, 1) = (m01 + p01) * 0.5;
+    b01_projected(0, 1) = b01_projected(1, 0) = (m01 - p01) * 0.5;
+    b12_projected(0, 0) = b12_projected(1, 1) = (m12 + p12) * 0.5;
+    b12_projected(0, 1) = b12_projected(1, 0) = (m12 - p12) * 0.5;
+    b02_projected(0, 0) = b02_projected(1, 1) = (m02 + p02) * 0.5;
+    b02_projected(0, 1) = b02_projected(1, 0) = (m02 - p02) * 0.5;
+
+    internal::MakePD2D<T>(&b01_projected);
+    internal::MakePD2D<T>(&b12_projected);
+    internal::MakePD2D<T>(&b02_projected);
+    internal::MakePD<T>(&aij_projected);
+  }
+
   return {psi_0,  psi_1, psi_2, psi_00, psi_11, psi_22, psi_01, psi_02,
-          psi_12, m01,   p01,   m02,    p02,    m12,    p12};
+          psi_12, m01,   p01,   m02,    p02,    m12,    p12,
+          b01_projected, b12_projected, b02_projected, aij_projected};
 }
 
 // The yield function is f(τ) = sqrt(3/2)‖ dev(τ) ‖ - τ_c.
