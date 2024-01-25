@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -11,6 +12,9 @@
 #include "drake/geometry/geometry_version.h"
 #include "drake/geometry/query_object.h"
 #include "drake/lcm/drake_lcm_interface.h"
+#include "drake/lcmt_point_cloud.hpp"
+#include "drake/perception/point_cloud.h"
+#include "drake/perception/point_cloud_to_lcm.h"
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/framework/event_status.h"
 #include "drake/systems/framework/input_port.h"
@@ -114,9 +118,10 @@ std::string MakeLcmChannelNameForRole(const std::string& channel,
    - Otherwise, the configured default color will be applied (see
      DrakeVisualizerParams).
 
- | Group name | Required | Property Name |  Property Type  | Property Description |
- | :--------: | :------: | :-----------: | :-------------: | :------------------- |
- |    phong   | no       | diffuse       |     Rgba        | The rgba value of the object surface. |
+ | Group name | Required | Property Name |  Property Type  | Property
+ Description | | :--------: | :------: | :-----------: | :-------------: |
+ :------------------- | |    phong   | no       | diffuse       |     Rgba | The
+ rgba value of the object surface. |
 
  <h4>Appearance of OBJ files</h4>
 
@@ -191,6 +196,12 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
   const systems::InputPort<T>& query_object_input_port() const {
     return this->get_input_port(query_object_input_port_);
   }
+
+  // -------------------------------newly added for MPM-------------------------
+  const systems::InputPort<T>& mpm_data_input_port() const {
+    return this->get_input_port(mpm_data_input_port_);
+  }
+  // -------------------------------newly added for MPM-------------------------
 
   /** @name Utility functions for instantiating and connecting a visualizer
 
@@ -285,6 +296,29 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
       const std::vector<internal::DeformableMeshData>& deformable_data,
       double time, lcm::DrakeLcmInterface* lcm);
 
+  // --------------- newly add for MPM, directly feed in particle positions for
+  // output
+  static void SendMPMGeometriesMessage(
+      const std::vector<Vector3<double>>& mpm_data,
+      const DrakeVisualizerParams& params, double time,
+      lcm::DrakeLcmInterface* lcm);
+
+  /* Helper function to translate PointCloud to lcm message*/
+  static lcmt_point_cloud ConvertPointCloudToMessage(
+      const perception::PointCloud& cloud, double time,
+      const std::string& frame_name = "world") {
+    const perception::PointCloudToLcm dut(frame_name);
+    auto context = dut.CreateDefaultContext();
+    context->SetTime(time);
+    dut.get_input_port().FixValue(context.get(),
+                                  Value<perception::PointCloud>(cloud));
+    const lcmt_point_cloud output =
+        dut.get_output_port().Eval<lcmt_point_cloud>(*context);
+    return output;
+  }
+
+  // --------------- newly add for MPM
+
   /* Identifies all of the frames with dynamic data and stores them (with
    additional data) in the given vector `frame_data`.
    @note `frame_data` is cleared before any data is added.
@@ -352,6 +386,8 @@ class DrakeVisualizer final : public systems::LeafSystem<T> {
 
   /* The index of this System's QueryObject-valued input port.  */
   int query_object_input_port_{};
+
+  int mpm_data_input_port_{};  // for mpm visualization
 
   /* The LCM interface: the owned (if such exists) and the active interface
    (whether owned or not). The active interface is mutable because we non-const

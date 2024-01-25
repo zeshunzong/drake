@@ -80,8 +80,34 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   double mpm_damping() const { return mpm_damping_; }
   double mpm_stiffness() const { return mpm_stiffness_; }
 
-  void ApplyMpmGround() {
-    mpm_model_->ApplyMpmGround();
+  void ApplyMpmGround() { mpm_model_->ApplyMpmGround(); }
+
+  // Returns the output port of the mpm particle positions for the mpm body
+  const systems::OutputPort<T>& mpm_particle_positions_port() const {
+    this->ThrowIfSystemResourcesNotDeclared(__func__);
+    if (mpm_model_ == nullptr) {
+      throw std::logic_error(
+          "vertex_positions_port(): No MPM Model registered");
+    }
+    return plant_->get_output_port(mpm_particle_positions_port_index_);
+  }
+
+  void CopyMpmPositions(const systems::Context<T>& context,
+                        AbstractValue* output) const {
+    auto& output_value =
+        output->get_mutable_value<std::vector<Vector3<double>>>();
+    if (ExistsMpmModel()) {
+      const mpm::MpmState<T>& state =
+          context.template get_abstract_state<mpm::MpmState<T>>(
+              mpm_model().mpm_state_index());
+      const std::vector<Vector3<double>>& particle_positions =
+          state.particles.positions();
+      output_value = particle_positions;
+    } else {
+      const std::vector<Vector3<double>>&
+          particle_positions{};  // empty, port will still be connected anyways
+      output_value = particle_positions;
+    }
   }
 
   // ---------------- newly added for MPM ---------------
@@ -354,6 +380,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   double mpm_damping_ = 100.0;
   double mpm_stiffness_ = 1e10;
+
+  systems::OutputPortIndex mpm_particle_positions_port_index_;
 };
 
 }  // namespace multibody

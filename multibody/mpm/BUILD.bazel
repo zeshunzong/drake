@@ -213,6 +213,9 @@ drake_cc_library(
     hdrs = [
         "particles_to_bgeo.h",
     ],
+    srcs = [
+        "particles_to_bgeo.cc",
+    ],
     deps = [
         "//common:essential",
         "@partio",
@@ -228,28 +231,6 @@ drake_cc_library(
         ":conjugate_gradient",
         ":mpm_model",
         ":mpm_state",
-    ],
-)
-
-drake_cc_library(
-    name = "mpm_driver",
-    hdrs = [
-        "mpm_driver.h",
-    ],
-    deps = [
-        ":matrix_replacement",
-        ":particles_to_bgeo",
-        "//multibody/mpm/internal:analytic_level_set",
-        "//multibody/mpm/internal:poisson_disk",
-    ],
-)
-
-drake_cc_googletest(
-    name = "mpm_driver_test",
-    deps = [
-        ":mpm_driver",
-        "//common/test_utilities:eigen_matrix_compare",
-        "//multibody/mpm/constitutive_model:linear_corotated_model",
     ],
 )
 

@@ -321,7 +321,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         output_filename, state.particles.positions(),
         state.particles.velocities(), state.particles.masses());
 
-    WriteAvgX(context, current_step);
+    // WriteAvgX(context, current_step);
     std::cout << "write " << output_filename << std::endl;
   }
 

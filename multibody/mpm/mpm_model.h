@@ -58,7 +58,7 @@ struct NewtonParams {
   bool matrix_free = true;
   bool linear_constitutive_model = true;
   bool apply_ground = false;
-  bool sticky_ground = true;
+  bool sticky_ground = false;
 };
 
 template <typename T>

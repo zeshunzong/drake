@@ -67,7 +67,7 @@ drake_py_binary(
     name = "meldis",
     srcs = ["meldis.py"],
     visibility = ["//tools:__pkg__"],
-    deps = [":visualization"],
+    deps = [":visualization",],
 )
 
 drake_py_binary(

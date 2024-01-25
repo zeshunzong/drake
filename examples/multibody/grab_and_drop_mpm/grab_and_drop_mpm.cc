@@ -109,15 +109,7 @@ class GripperPositionControl : public systems::LeafSystem<double> {
     const Vector2d desired_velocities(0, 0);
     Vector2d desired_positions;
     const double t = context.get_time();
-    // if ((t < 0.005) ) {
-    //   std::cout << "current position is " << measured_positions(0) << " " <<
-    //   measured_positions(1) << std::endl; getchar();
-    // }
 
-    // if ((t > fingers_closed_time_) && (t < fingers_closed_time_ + 0.1)) {
-    //   std::cout << "current position is " << measured_positions(0) << " " <<
-    //   measured_positions(1) << std::endl; getchar();
-    // }
     if (t < fingers_wait_time_) {
       desired_positions = initial_state_;
     } else if (t < fingers_closed_time_) {
@@ -140,10 +132,6 @@ class GripperPositionControl : public systems::LeafSystem<double> {
     }
     const Vector2d force = kp_ * (desired_positions - measured_positions) +
                            kd_ * (desired_velocities - measured_velocities);
-
-    if (int(t / 4e-4) % 100 == 0) {
-      std::cout << measured_positions(1) << std::endl;
-    }
 
     output->get_mutable_value() << force;
   }
@@ -190,16 +178,14 @@ int do_main() {
   /* Set up a ground. */
   Box ground{10, 10, 10};
   const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5.00});
-//   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
-//                                   "ground_collision", rigid_proximity_props);
+  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
+                                  "ground_collision", rigid_proximity_props);
   IllustrationProperties illustration_props;
   illustration_props.AddProperty("phong", "diffuse",
                                  Vector4d(0.7, 0.5, 0.4, 0.8));
   plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
                                "ground_visual", std::move(illustration_props));
 
-  // TODO(xuchenhan-tri): Consider using a schunk gripper from the manipulation
-  // station instead.
   /* Set up a simple gripper. */
   Parser parser(&plant);
   parser.AddModelsFromUrl(
@@ -208,9 +194,7 @@ int do_main() {
   /* Add collision geometries. */
   const RotationMatrix<double> Rot = RotationMatrix<double>::MakeFromOneVector(
       Eigen::Vector3d{0.0, 0.0, 1.0}, 1);
-  // const RotationMatrix<double> Rot2 =
-  // RotationMatrix<double>::MakeFromOneVector(
-  //   Eigen::Vector3d{0.0, 1.0, 0.0}, 1);
+
   const RigidTransformd X_BG(Rot, Eigen::Vector3d{0.0, -0.01, 1.0 - 0.9});
   const Body<double>& left_finger = plant.GetBodyByName("left_finger");
   const Body<double>& right_finger = plant.GetBodyByName("right_finger");
@@ -262,7 +246,7 @@ int do_main() {
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
-  owned_deformable_model->ApplyMpmGround();
+  // owned_deformable_model->ApplyMpmGround();
 
   const double scale = 0.65;
   // /* Minor diameter of the torus inferred from the vtk file. */
@@ -292,6 +276,15 @@ int do_main() {
   builder.Connect(
       deformable_model->vertex_positions_port(),
       scene_graph.get_source_configuration_port(plant.get_source_id().value()));
+
+  /* Add a visualizer that emits LCM messages for visualization. */
+  geometry::DrakeVisualizerParams params;
+  params.publish_period = 1.0 / 64;
+  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(
+      &builder, scene_graph, nullptr, params);
+  // connect mpm to output port
+  builder.Connect(deformable_model->mpm_particle_positions_port(),
+                  visualizer.mpm_data_input_port());
 
   /* Set the width between the fingers for open and closed states as well as the
    height to which the gripper lifts the deformable torus. */

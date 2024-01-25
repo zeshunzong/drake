@@ -149,8 +149,12 @@ int do_main() {
 
   /* Add a visualizer that emits LCM messages for visualization. */
   geometry::DrakeVisualizerParams params;
-  geometry::DrakeVisualizerd::AddToBuilder(&builder, scene_graph, nullptr,
-                                           params);
+  params.publish_period = 1.0 / 64;
+  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(
+      &builder, scene_graph, nullptr, params);
+  // connect mpm to output port
+  builder.Connect(deformable_model->mpm_particle_positions_port(),
+                  visualizer.mpm_data_input_port());
 
   auto diagram = builder.Build();
   std::unique_ptr<Context<double>> diagram_context =

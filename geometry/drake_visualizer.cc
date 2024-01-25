@@ -575,6 +575,12 @@ DrakeVisualizer<T>::DrakeVisualizer(lcm::DrakeLcmInterface* lcm,
       this->DeclareAbstractInputPort("query_object", Value<QueryObject<T>>())
           .get_index();
 
+  // -------------------------------newly added for MPM-------------------------
+  mpm_data_input_port_ = this->DeclareAbstractInputPort(
+                                 "mpm", Value<std::vector<Vector3<double>>>())
+                             .get_index();
+  // -------------------------------newly added for MPM-------------------------
+
   // These cache entries depend on *nothing*.
   frame_data_cache_index_ =
       this->DeclareCacheEntry("dynamic_frames",
@@ -618,6 +624,10 @@ EventStatus DrakeVisualizer<T>::SendGeometryMessage(
       query_object, params_, EvalDeformableMeshData(context),
       ExtractDoubleOrThrow(context.get_time()), lcm_);
 
+  const std::vector<Vector3<double>>& mpm_data = mpm_data_input_port().template Eval<std::vector<Vector3<double>>>(context);
+  SendMPMGeometriesMessage(
+      mpm_data, params_,
+      ExtractDoubleOrThrow(context.get_time()), lcm_);
   return EventStatus::Succeeded();
 }
 
@@ -778,6 +788,34 @@ void DrakeVisualizer<T>::SendDeformableGeometriesMessage(
   std::string channel =
       MakeLcmChannelNameForRole("DRAKE_VIEWER_DEFORMABLE", params);
   lcm::Publish(lcm, channel, message, time);
+}
+
+template <typename T>
+void DrakeVisualizer<T>::SendMPMGeometriesMessage(const std::vector<Vector3<double>>& mpm_data, const DrakeVisualizerParams& params, 
+  double time, lcm::DrakeLcmInterface* lcm) {
+  
+  const size_t kPoints = mpm_data.size();
+  if (kPoints==0){
+    std::cout << "no mpm to display" << std::endl; return;
+  }
+  perception::PointCloud cloud(
+  kPoints, perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
+  Eigen::Matrix3Xf m = Eigen::Matrix3Xf::Zero(3, kPoints);
+  // Eigen::Matrix3Xf m2 = Eigen::Matrix3Xf::Zero(3, kPoints); // for color
+  for (size_t ind = 0; ind < kPoints; ind++) {
+    m.col(ind) = mpm_data[ind].cast <float> ();
+  }
+  cloud.mutable_xyzs() = m;
+  
+  // cloud.mutable_rgbs() = (255.0 * (m2.array() + 0.0) / 2.0).cast<uint8_t>(); // if do not do this, color is black
+  lcmt_point_cloud message = ConvertPointCloudToMessage(cloud, time);
+  /* Note: the channel name must be "DRAKE_POINT_CLOUD.**" otherwise it would not be 
+  recognized by meldis. This is due to a special setting of handle in meldis. Here 
+  we just keep meldis unchanged, and set our channel name accordingly.*/
+  std::string channel = MakeLcmChannelNameForRole("DRAKE_POINT_CLOUD",
+                                                  params);
+  lcm::Publish(lcm, channel, message, time);
+  // std::cout << "time: " << time << std::endl;
 }
 
 template <typename T>
