@@ -2,6 +2,7 @@
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/fem/matrix_utilities.h"
 
 namespace drake {
 namespace multibody {
@@ -215,9 +216,103 @@ void MakePD2D(Matrix2<T>* symmetric_matrix) {
       const T denom = L1md2 + b2;
       symmetric_matrix_ref(0, 0) = L1 * L1md2 / denom;
       symmetric_matrix_ref(1, 1) = L1 * b2 / denom;
-      symmetric_matrix_ref(0, 1) = symmetric_matrix_ref(1, 0) = L1 * b * L1md / denom;
+      symmetric_matrix_ref(0, 1) = symmetric_matrix_ref(1, 0) =
+          L1 * b * L1md / denom;
     }
   }
+}
+
+// F = Q*S, where Q is rotation and S is symmetric
+// Solve for B = 0.5 * (R0^T F + F^T R0), keeping Q fixed
+template <typename T>
+void SolveForNewF(const Matrix3<T>& B, const Matrix3<T>& R,
+                  const Matrix3<T>* F) {
+  Matrix3<T> Q, S;
+  fem::internal::PolarDecompose<T>(*F, &Q, &S);
+  Eigen::Matrix<T, 6, 6> C;
+  Eigen::Vector<T, 6> rhs;
+  rhs(0) = B(0, 0);
+  C(0, 0) = Q(0, 0) * R(0, 0) + Q(1, 0) * R(1, 0) + Q(2, 0) * R(2, 0);  // S00
+  C(0, 1) = Q(0, 1) * R(0, 0) + Q(1, 1) * R(1, 0) + Q(2, 1) * R(2, 0);  // S01
+  C(0, 2) = Q(0, 2) * R(0, 0) + Q(1, 2) * R(1, 0) + Q(2, 2) * R(2, 0);  // S02
+  C(0, 3) = 0.0;
+  C(0, 4) = 0.0;
+  C(0, 5) = 0.0;
+
+  rhs(1) = B(0, 1);
+  C(1, 0) =
+      0.5 * (Q(0, 0) * R(0, 1) + Q(1, 0) * R(1, 1) + Q(2, 0) * R(2, 1));  // S00
+  C(1, 1) =
+      0.5 * (Q(0, 0) * R(0, 0) + Q(0, 1) * R(0, 1) + Q(2, 0) * R(2, 0) +
+             Q(1, 1) * R(1, 1) + Q(1, 0) * R(1, 0) + Q(2, 1) * R(2, 1));  // S01
+  C(1, 2) =
+      0.5 * (Q(0, 2) * R(0, 1) + Q(1, 2) * R(1, 1) + Q(2, 2) * R(2, 1));  // S02
+  C(1, 3) =
+      0.5 * (Q(0, 1) * R(0, 0) + Q(1, 1) * R(1, 0) + Q(2, 1) * R(2, 0));  // S11
+  C(1, 4) =
+      0.5 * (Q(0, 2) * R(0, 0) + Q(1, 2) * R(1, 0) + Q(2, 2) * R(2, 0));  // S12
+  C(1, 5) = 0.0;                                                          // S22
+
+  rhs(2) = B(0, 2);
+  C(2, 0) =
+      0.5 * (Q(0, 0) * R(0, 2) + Q(1, 0) * R(1, 2) + Q(2, 0) * R(2, 2));  // S00
+  C(2, 1) =
+      0.5 * (Q(0, 1) * R(0, 2) + Q(1, 1) * R(1, 2) + Q(2, 1) * R(2, 2));  // S01
+
+  C(2, 2) =
+      0.5 * (Q(0, 0) * R(0, 0) + Q(0, 2) * R(0, 2) + Q(1, 0) * R(1, 0) +
+             Q(1, 2) * R(1, 2) + Q(2, 0) * R(2, 0) + Q(2, 2) * R(2, 2));  // S02
+  C(2, 3) = 0.0;                                                          // S11
+  C(2, 4) =
+      0.5 * (Q(0, 1) * R(0, 0) + Q(1, 1) * R(1, 0) + Q(2, 1) * R(2, 0));  // S12
+  C(2, 5) =
+      0.5 * (Q(0, 2) * R(0, 0) + Q(1, 2) * R(1, 0) + Q(2, 2) * R(2, 0));  // S22
+
+  rhs(3) = B(1, 1);
+  C(3, 0) = 0.0;                                                        // S00
+  C(3, 1) = Q(0, 0) * R(0, 1) + Q(1, 0) * R(1, 1) + Q(2, 0) * R(2, 1);  // S01
+  C(3, 2) = 0.0;                                                        // S02
+  C(3, 3) = Q(0, 1) * R(0, 1) + Q(1, 1) * R(1, 1) + Q(2, 1) * R(2, 1);  // S11
+  C(3, 4) = Q(0, 2) * R(0, 1) + Q(1, 2) * R(1, 1) + Q(2, 2) * R(2, 1);  // S12
+  C(3, 5) = 0.0;                                                        // S22
+
+  rhs(4) = B(1, 2);
+  C(4, 0) = 0.0;  // S00
+  C(4, 1) =
+      0.5 * (Q(0, 0) * R(0, 2) + Q(1, 0) * R(1, 2) + Q(2, 0) * R(2, 2));  // S01
+  C(4, 2) =
+      0.5 * (Q(0, 0) * R(0, 1) + Q(1, 0) * R(1, 1) + Q(2, 0) * R(2, 1));  // S02
+  C(4, 3) =
+      0.5 * (Q(0, 1) * R(0, 2) + Q(1, 1) * R(1, 2) + Q(2, 1) * R(2, 2));  // S11
+  C(4, 4) =
+      0.5 * (Q(0, 1) * R(0, 1) + Q(0, 2) * R(0, 2) + Q(1, 1) * R(1, 1) +
+             Q(1, 2) * R(1, 2) + Q(2, 1) * R(2, 1) + Q(2, 2) * R(2, 2));  // S12
+  C(4, 5) =
+      0.5 * (Q(0, 2) * R(0, 1) + Q(1, 2) * R(1, 1) + Q(2, 2) * R(2, 1));  // S22
+
+  rhs(5) = B(2, 2);
+  C(5, 0) = 0.0;                                                        // S00
+  C(5, 1) = 0.0;                                                        // S01
+  C(5, 2) = Q(0, 0) * R(0, 2) + Q(1, 0) * R(1, 2) + Q(2, 0) * R(2, 2);  // S02
+  C(5, 3) = 0.0;                                                        // S11
+  C(5, 4) = Q(0, 1) * R(0, 2) + Q(1, 1) * R(1, 2) + Q(2, 1) * R(2, 2);  // S12
+  C(5, 5) = Q(0, 2) * R(0, 2) + Q(1, 2) * R(1, 2) + Q(2, 2) * R(2, 2);  // S22
+
+  Eigen::ColPivHouseholderQR<Eigen::Matrix<T, 6, 6>> decomp(C);
+  Eigen::Vector<T, 6> y = decomp.solve(rhs);
+
+  S(0,0) = y(0);
+  S(0,1) = y(1);
+  S(0,2) = y(2);
+  S(1,0) = S(0,1);
+  S(1,1) = y(3);
+  S(1,2) = y(4);
+  S(2,0) = S(0,2);
+  S(2,1) = S(1,2);
+  S(2,2) = y(5);
+
+  (*F) = Q * S;
+
 }
 
 }  // namespace internal

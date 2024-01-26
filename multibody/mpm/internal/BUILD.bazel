@@ -23,6 +23,7 @@ drake_cc_library(
     deps = [
         "//common:autodiff",
         "//common:essential",
+        "//multibody/fem:matrix_utilities",
     ],
 )
 
