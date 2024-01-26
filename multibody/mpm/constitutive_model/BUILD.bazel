@@ -96,4 +96,14 @@ drake_cc_googletest(
     ],
 )
 
+drake_cc_library(
+    name = "linear_corotated_with_plasticity",
+    hdrs = [
+        "linear_corotated_with_plasticity.h",
+    ],
+    deps = [
+        ":elastoplastic_model",
+    ],
+)
+
 add_lint_tests()

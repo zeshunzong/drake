@@ -31,9 +31,11 @@ T StvkHenckyWithVonMisesModel<T>::CalcStrainEnergyDensity(
 }
 
 template <typename T>
-void StvkHenckyWithVonMisesModel<T>::CalcFEFromFtrial(const Matrix3<T>& F_trial,
+void StvkHenckyWithVonMisesModel<T>::CalcFEFromFtrial(const Matrix3<T>& F0,
+                                                      const Matrix3<T>& F_trial,
                                                       Matrix3<T>* FE) const {
   DRAKE_ASSERT(FE != nullptr);
+  unused(F0);
   const StrainStressData strain_stress_data_trial =
       ComputeStrainStressData(F_trial);
   ApplyReturnMapping(strain_stress_data_trial, F_trial, FE);

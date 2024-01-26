@@ -55,7 +55,7 @@ GTEST_TEST(StvkWithVonMisesModelTest, SanityCheck) {
   const Matrix3<double> FE_exact = F_trial;
 
   Matrix3<double> FE;
-  hencky_model.CalcFEFromFtrial(F_trial, &FE);
+  hencky_model.CalcFEFromFtrial(unused_F0_double, F_trial, &FE);
   // Apply return mapping to F_trial, it should be that FE = FE_exact = F_trial
   EXPECT_TRUE(CompareMatrices(FE, FE_exact));
 
@@ -96,7 +96,7 @@ GTEST_TEST(StvkWithVonMisesModelTest, TestReturnMapping) {
 
   // apply returnMap to get FE
   Matrix3<double> FE;
-  hencky_model.CalcFEFromFtrial(F_trial, &FE);
+  hencky_model.CalcFEFromFtrial(unused_F0_double, F_trial, &FE);
 
   const StvkHenckyWithVonMisesModel<double>::StrainStressData ssd_after =
       hencky_model.ComputeStrainStressData(FE);
@@ -161,7 +161,7 @@ GTEST_TEST(StvkWithVonMisesModelTest, TestPsiTauP) {
   const Matrix3<double> P_exact = U * P_principal.asDiagonal() * V.transpose();
 
   Matrix3<double> FE;
-  hencky_model.CalcFEFromFtrial(F_trial, &FE);
+  hencky_model.CalcFEFromFtrial(unused_F0_double, F_trial, &FE);
   Matrix3<double> piola_stress_computed;
   hencky_model.CalcFirstPiolaStress(unused_F0_double, FE,
                                     &piola_stress_computed);

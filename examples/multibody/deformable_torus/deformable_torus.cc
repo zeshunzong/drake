@@ -14,6 +14,7 @@
 #include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
 #include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
 #include "drake/multibody/mpm/constitutive_model/stvk_hencky_with_von_mises_model.h"
+#include "drake/multibody/mpm/constitutive_model/linear_corotated_with_plasticity.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -23,7 +24,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -111,10 +112,14 @@ int do_main() {
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
               Vector3<double>(0.15,0.15,0.15));
+//   std::unique_ptr<
+//       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
+//       model = std::make_unique<drake::multibody::mpm::constitutive_model::
+//                                    StvkHenckyWithVonMisesModel<double>>(1e5, 0.2, 10.0);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   StvkHenckyWithVonMisesModel<double>>(1e5, 0.2, 10.0);
+                                   LinearCorotatedWithPlasticity<double>>(1e5, 0.2, 1000.0);
   Vector3<double> translation = {0.0, 0.0, 0.5};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);

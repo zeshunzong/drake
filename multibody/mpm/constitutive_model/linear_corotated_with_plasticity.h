@@ -10,24 +10,38 @@ namespace constitutive_model {
 
 // TODO(zeshunzong): write doc for this class
 template <typename T>
-class LinearCorotatedModel : public ElastoPlasticModel<T> {
+class LinearCorotatedWithPlasticity : public ElastoPlasticModel<T> {
  public:
-  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(LinearCorotatedModel)
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(LinearCorotatedWithPlasticity)
 
-  LinearCorotatedModel(const T& youngs_modulus, const T& poissons_ratio)
-      : ElastoPlasticModel<T>(youngs_modulus, poissons_ratio) {}
+  LinearCorotatedWithPlasticity(const T& E, const T& nu, const T& yield_stress)
+      : ElastoPlasticModel<T>(E, nu), yield_stress_(yield_stress) {
+    DRAKE_ASSERT(yield_stress > 0);
+  }
 
   std::unique_ptr<ElastoPlasticModel<T>> Clone() const final {
-    return std::make_unique<LinearCorotatedModel<T>>(*this);
+    return std::make_unique<LinearCorotatedWithPlasticity<T>>(*this);
   }
 
   bool IsLinearModel() const final { return true; }
 
   void CalcFEFromFtrial(const Matrix3<T>& F0, const Matrix3<T>& F_trial,
                         Matrix3<T>* FE) const final {
-    DRAKE_ASSERT(FE != nullptr);
+    Matrix3<T> R0;
+    Matrix3<T> unused;
+    fem::internal::PolarDecompose<T>(F0, &R0, &unused);
+    Matrix3<T> S = 0.5 * (R0.transpose() * F_trial + F_trial.transpose() * R0);
+    Eigen::JacobiSVD<Matrix3<T>> svd(S,
+                                     Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Vector3<T> sigma = svd.singularValues();
+    internal::ProjectToSkewedCylinder<T>(yield_stress_ / (2.0 * this->mu()),
+                                      &sigma);
+
+    Matrix3<T> new_S =
+        svd.matrixU() * sigma.asDiagonal() * svd.matrixV().transpose();
+
     *FE = F_trial;
-    unused(F0);
+    internal::SolveForNewF<T>(new_S, R0, FE);    
   }
 
   struct StrainData {
@@ -95,6 +109,8 @@ class LinearCorotatedModel : public ElastoPlasticModel<T> {
     T trace_strain = strain.trace();
     return {R0, strain, trace_strain};
   }
+
+  T yield_stress_{};
 };
 
 }  // namespace constitutive_model

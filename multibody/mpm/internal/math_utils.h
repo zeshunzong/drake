@@ -223,10 +223,10 @@ void MakePD2D(Matrix2<T>* symmetric_matrix) {
 }
 
 // F = Q*S, where Q is rotation and S is symmetric
-// Solve for B = 0.5 * (R0^T F + F^T R0), keeping Q fixed
+// Solve for B = 0.5 * (R^T F + F^T R), keeping Q fixed
+// @pre B is symmetric
 template <typename T>
-void SolveForNewF(const Matrix3<T>& B, const Matrix3<T>& R,
-                  const Matrix3<T>* F) {
+void SolveForNewF(const Matrix3<T>& B, const Matrix3<T>& R, Matrix3<T>* F) {
   Matrix3<T> Q, S;
   fem::internal::PolarDecompose<T>(*F, &Q, &S);
   Eigen::Matrix<T, 6, 6> C;
@@ -300,19 +300,35 @@ void SolveForNewF(const Matrix3<T>& B, const Matrix3<T>& R,
 
   Eigen::ColPivHouseholderQR<Eigen::Matrix<T, 6, 6>> decomp(C);
   Eigen::Vector<T, 6> y = decomp.solve(rhs);
+  DRAKE_ASSERT(&y != nullptr);
+  S(0, 0) = y(0);
+  S(0, 1) = y(1);
+  S(0, 2) = y(2);
+  S(1, 0) = S(0, 1);
+  S(1, 1) = y(3);
+  S(1, 2) = y(4);
+  S(2, 0) = S(0, 2);
+  S(2, 1) = S(1, 2);
+  S(2, 2) = y(5);
 
-  S(0,0) = y(0);
-  S(0,1) = y(1);
-  S(0,2) = y(2);
-  S(1,0) = S(0,1);
-  S(1,1) = y(3);
-  S(1,2) = y(4);
-  S(2,0) = S(0,2);
-  S(2,1) = S(1,2);
-  S(2,2) = y(5);
+  (*F) = (Q * S);
+}
 
-  (*F) = Q * S;
+// the infinite cylinder is defined as axis along vector (1,1,1), and given
+// radius
+template <typename T>
+void ProjectToSkewedCylinder(double radius, Vector3<T>* point) {
+  // the disc parallel to the cylinder that passes the point will center at
+  T c = ((*point)(0) + (*point)(1) + (*point)(2)) / 3.0;
+  Vector3<T> center(c, c, c);
 
+  Vector3<T> c2p = *point - center;
+  T distance = c2p.norm();
+  if (distance <= radius) {
+    return;
+  } else {
+    (*point) = center + c2p * radius / distance;
+  }
 }
 
 }  // namespace internal

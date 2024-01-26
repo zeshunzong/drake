@@ -75,7 +75,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
 
   // Compute FE_1 = returnMap(F_trial1)
   Matrix3<double> FE_1;
-  model1.CalcFEFromFtrial(F_trial1, &FE_1);
+  model1.CalcFEFromFtrial(unused_F0_double, F_trial1, &FE_1);
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed1;
@@ -113,7 +113,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
 
   // Compute FE_2 = returnMap(F_trial2)
   Matrix3<double> FE_2;
-  model2.CalcFEFromFtrial(F_trial2, &FE_2);
+  model2.CalcFEFromFtrial(unused_F0_double, F_trial2, &FE_2);
 
   // Compute Kirchhoff stress from FE
   Matrix3<double> tau_computed2;
@@ -138,7 +138,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
       math::RotationMatrix<double>(math::RollPitchYaw<double>(1.0, 2.0, 3.0))
           .matrix();
   Matrix3<double> FE_rot;
-  model2.CalcFEFromFtrial(F_trial_rot, &FE_rot);
+  model2.CalcFEFromFtrial(unused_F0_double, F_trial_rot, &FE_rot);
   Matrix3<double> tau_computed_zero;
   model2.CalcKirchhoffStress(unused_F0_double, FE_rot, &tau_computed_zero);
   EXPECT_TRUE(
@@ -149,7 +149,7 @@ GTEST_TEST(CorotatedElasticModelTest, TestReturnMapAndStress) {
       math::RotationMatrix<double>(math::RollPitchYaw<double>(0.1, -2.4, 13.3))
           .matrix();
   Matrix3<double> FE_rot2;
-  model1.CalcFEFromFtrial(F_trial_rot2, &FE_rot2);
+  model1.CalcFEFromFtrial(unused_F0_double, F_trial_rot2, &FE_rot2);
   Matrix3<double> tau_computed_zero2;
   model1.CalcKirchhoffStress(unused_F0_double, FE_rot2, &tau_computed_zero2);
   EXPECT_TRUE(

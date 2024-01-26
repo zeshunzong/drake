@@ -183,6 +183,50 @@ GTEST_TEST(MathUtilsTest, ProjectPD2DTest) {
   EXPECT_TRUE(eigenvalues_after(1) >= 0);
 }
 
+GTEST_TEST(MathUtilsTest, SolveFTest) {
+  Eigen::Matrix3d B = Eigen::Matrix3d::Random(3, 3);
+  Eigen::Matrix3d B1 = (B.transpose() + B);  // make the input symmetric
+  Eigen::Matrix3d R = Eigen::Matrix3d::Random(3, 3);
+  Eigen::Matrix3d F_in_out = Eigen::Matrix3d::Random(3, 3);
+
+  internal::SolveForNewF(B1, R, &F_in_out);
+  Eigen::Matrix3d Q0, S0;
+  fem::internal::PolarDecompose<double>(F_in_out, &Q0, &S0);
+
+  EXPECT_TRUE(CompareMatrices(
+      B1, 0.5 * (R.transpose() * F_in_out + F_in_out.transpose() * R),
+      kTolerance));
+
+  Eigen::Matrix3d Q1, S1;
+  fem::internal::PolarDecompose<double>(F_in_out, &Q1, &S1);
+
+  EXPECT_TRUE(CompareMatrices(Q0, Q1, kTolerance));
+}
+
+GTEST_TEST(MathUtilsTest, ProjectToSkewedCylinderTest) {
+  double radius = 1.34;
+  Eigen::Vector3d point(1, 0, 0);
+  internal::ProjectToSkewedCylinder(radius, &point);
+
+  EXPECT_EQ(point, Eigen::Vector3d(1, 0, 0));
+
+  Eigen::Vector3d point2(3, 4, 5);
+  internal::ProjectToSkewedCylinder(radius, &point2);
+
+  // vec_diff: point on cylinder -> original point
+  Eigen::Vector3d vec_diff = point2 - Eigen::Vector3d(3, 4, 5);
+  // this should be perpendicular to axis
+  EXPECT_NEAR(vec_diff.dot(Eigen::Vector3d(1, 1, 1)), 0, kTolerance);
+
+  // compute point-to-axis distance
+  // A: the point
+  // B and C: two points on axis, take 000, 111
+  Eigen::Vector3d BA = point2;
+  Eigen::Vector3d BC(1, 1, 1);
+
+  EXPECT_NEAR(radius, (BA.cross(BC)).norm() / BC.norm(), kTolerance);
+}
+
 }  // namespace
 }  // namespace mpm
 }  // namespace multibody

@@ -357,13 +357,15 @@ class Particles {
    *         PK_stress = ComputeStress(elastic_F)
    */
   void UpdateElasticDeformationGradientsAndStresses() {
+    Matrix3<T> FE;
     for (size_t p = 0; p < num_particles(); ++p) {
       elastoplastic_models_[p]->CalcFEFromFtrial(
-          trial_deformation_gradients_[p],
-          &(elastic_deformation_gradients_[p]));
+          elastic_deformation_gradients_[p], trial_deformation_gradients_[p],
+          &FE);
       elastoplastic_models_[p]->CalcFirstPiolaStress(
-          elastic_deformation_gradients_[p], elastic_deformation_gradients_[p],
+          elastic_deformation_gradients_[p], FE,
           &(PK_stresses_[p]));
+      elastic_deformation_gradients_[p] = FE;
     }
   }
 

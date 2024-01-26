@@ -25,7 +25,8 @@ class CorotatedElasticModel : public ElastoPlasticModel<T> {
 
   bool IsLinearModel() const final { return false; }
 
-  void CalcFEFromFtrial(const Matrix3<T>& F_trial, Matrix3<T>* FE) const final;
+  void CalcFEFromFtrial(const Matrix3<T>& F0, const Matrix3<T>& F_trial,
+                        Matrix3<T>* FE) const final;
 
   T CalcStrainEnergyDensity(const Matrix3<T>& F0,
                             const Matrix3<T>& FE) const final;

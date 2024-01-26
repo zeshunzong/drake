@@ -45,7 +45,7 @@ class ElastoPlasticModel {
   // @param[in, out] F_trial On input, provides the *trial* deformation
   // gradient; on ouput, returns the *elastic* deformation gradient.
   // @pre F_trial != null_ptr
-  virtual void CalcFEFromFtrial(const Matrix3<T>& F_trial,
+  virtual void CalcFEFromFtrial(const Matrix3<T>& F0, const Matrix3<T>& F_trial,
                                 Matrix3<T>* FE) const = 0;
 
   // Returns ψ(FE) where ψ is the energy density function. FE is the *elastic*
@@ -101,8 +101,8 @@ class ElastoPlasticModel {
   // @pre dPdF != nullptr
   // @note the returned dPdF is symmetric.
   virtual void CalcFirstPiolaStressDerivative(
-      const Matrix3<T>& F0, const Matrix3<T>& FE,
-      Eigen::Matrix<T, 9, 9>* dPdF, bool project_pd = false) const = 0;
+      const Matrix3<T>& F0, const Matrix3<T>& FE, Eigen::Matrix<T, 9, 9>* dPdF,
+      bool project_pd = false) const = 0;
 
  protected:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(ElastoPlasticModel);
