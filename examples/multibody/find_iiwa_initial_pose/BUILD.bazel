@@ -5,9 +5,9 @@ load(
 load("//tools/lint:lint.bzl", "add_lint_tests")
 
 drake_cc_binary(
-    name = "try",
+    name = "find_iiwa_initial_pose",
     srcs = [
-        "try.cc",
+        "find_iiwa_initial_pose.cc",
     ],
     add_test_rule = 1,
     data = [

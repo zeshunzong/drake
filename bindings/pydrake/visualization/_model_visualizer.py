@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import time
 from webbrowser import open as _webbrowser_open
+import pydrake.systems.lcm as mut
 
 import numpy as np
 
@@ -323,6 +324,7 @@ class ModelVisualizer:
             config=VisualizationConfig(
                 publish_contacts=self._publish_contacts,
                 enable_alpha_sliders=True),
+                # lcm_buses = mut.LcmBuses.kLcmUrlMemqNull,
             plant=self._builder.plant(),
             scene_graph=self._builder.scene_graph(),
             builder=self._builder.builder(),

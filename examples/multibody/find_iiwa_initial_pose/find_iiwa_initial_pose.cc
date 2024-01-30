@@ -37,6 +37,17 @@ DEFINE_double(ppc, 1, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
+DEFINE_double(iiwa_link_0_x, 0.0, "iiwa base x coord");
+DEFINE_double(iiwa_link_0_y, 0.0, "iiwa base y coord");
+DEFINE_double(iiwa_link_0_z, 0.0, "iiwa base z coord");
+DEFINE_double(iiwa_joint_1, 0.0, "iiwa joint 1");
+DEFINE_double(iiwa_joint_2, 0.0, "iiwa joint 2");
+DEFINE_double(iiwa_joint_3, 0.0, "iiwa joint 3");
+DEFINE_double(iiwa_joint_4, 0.0, "iiwa joint 4");
+DEFINE_double(iiwa_joint_5, 0.0, "iiwa joint 5");
+DEFINE_double(iiwa_joint_6, 0.0, "iiwa joint 6");
+DEFINE_double(iiwa_joint_7, 0.0, "iiwa joint 7");
+
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
 using drake::geometry::GeometryInstance;
@@ -74,100 +85,11 @@ RigidTransformd FromXyzRpy(const Vector3<double>& rpy,
   return RigidTransformd(math::RollPitchYaw<double>(rpy), p);
 }
 
-RigidTransformd FromXyzRpyDegree(const Vector3<double>& rpy_deg,
-                                 const Vector3<double>& p) {
-  return RigidTransformd(
-      math::RollPitchYaw<double>(rpy_deg * 3.1415926 / 180.0), p);
-}
-
-class HandPoseController : public drake::systems::LeafSystem<double> {
- public:
-  HandPoseController(const multibody::MultibodyPlant<double>& plant)
-      : plant_(plant) {
-    this->DeclareVectorOutputPort(
-        "AllegroDesiredState", drake::systems::BasicVector<double>(size_),
-        &HandPoseController::CalcDesiredState, {this->time_ticket()});
-  }
-
-  void CalcDesiredState(const Context<double>& context,
-                        drake::systems::BasicVector<double>* output) const {
-    if (context.get_time() > grip_start_) {
-      if (context.get_time() < grip_release_) {
-        // start grabbing
-        double t = (context.get_time() - grip_start_) / grip_time_;
-        Eigen::VectorXd positions = std::max(1.0 - t, 0.0) * GetHomePosition() +
-                                    std::min(t, 1.0) * GetGripPosition();
-        Eigen::VectorXd q_and_v(32);
-        q_and_v << positions, GetHomeVelocity();
-        output->set_value(q_and_v);
-      } else {
-        // start releasing
-        double t = (context.get_time() - grip_release_) / grip_time_;
-        Eigen::VectorXd positions = std::max(1.0 - t, 0.0) * GetGripPosition() +
-                                    std::min(t, 1.0) * GetHomePosition();
-        Eigen::VectorXd q_and_v(32);
-        q_and_v << positions, GetHomeVelocity();
-        output->set_value(q_and_v);
-      }
-    } else {
-      output->set_value(Eigen::VectorXd::Zero(32));
-    }
-  }
-
-  Eigen::VectorXd GetHomePosition() const {
-    Eigen::VectorXd pos(16);
-    pos.setZero();
-    pos(0) = 1.4;
-    pos(1) = 0.25;
-    return pos;
-  }
-
-  Eigen::VectorXd GetHomeVelocity() const { return Eigen::VectorXd::Zero(16); }
-
-  Eigen::VectorXd GetGripPosition() const {
-    Eigen::VectorXd vec(16);
-    vec << 1.4, 0.25, 0.26, 1.22, -0.11, 0.54, 0.88, 0.93, 0.0, 0.54, 0.88,
-        0.93, 0.12, 0.54, 0.88, 0.93;
-    return (vec);
-  }
-
-  std::vector<std::string> GetPreferredJointOrdering() {
-    std::vector<std::string> joint_name_mapping;
-
-    // Thumb finger
-    joint_name_mapping.push_back("joint_12");
-    joint_name_mapping.push_back("joint_13");
-    joint_name_mapping.push_back("joint_14");
-    joint_name_mapping.push_back("joint_15");
-
-    // Index finger
-    joint_name_mapping.push_back("joint_0");
-    joint_name_mapping.push_back("joint_1");
-    joint_name_mapping.push_back("joint_2");
-    joint_name_mapping.push_back("joint_3");
-
-    // Middle finger
-    joint_name_mapping.push_back("joint_4");
-    joint_name_mapping.push_back("joint_5");
-    joint_name_mapping.push_back("joint_6");
-    joint_name_mapping.push_back("joint_7");
-
-    // Ring finger
-    joint_name_mapping.push_back("joint_8");
-    joint_name_mapping.push_back("joint_9");
-    joint_name_mapping.push_back("joint_10");
-    joint_name_mapping.push_back("joint_11");
-
-    return joint_name_mapping;
-  }
-
- private:
-  const multibody::MultibodyPlant<double>& plant_;
-  int size_ = 16 * 2;  // 4 fingers with 4 joints
-  double grip_time_ = 0.3;
-  double grip_start_ = 0.1;
-  double grip_release_ = 0.6;
-};
+// RigidTransformd FromXyzRpyDegree(const Vector3<double>& rpy_deg,
+//                                  const Vector3<double>& p) {
+//   return RigidTransformd(
+//       math::RollPitchYaw<double>(rpy_deg * 3.1415926 / 180.0), p);
+// }
 
 class IiwaController : public drake::systems::LeafSystem<double> {
  public:
@@ -207,18 +129,9 @@ class IiwaController : public drake::systems::LeafSystem<double> {
               systems::DiscreteValues<double>* next_states) const {
     const VectorX<double>& current_state_values =
         context.get_discrete_state().value();
-    unused(next_states);
-    unused(current_state_values);
-
     // fake update:
     VectorX<double> dX = current_state_values;
     dX.setZero();
-    // dX(0) = -0.004; // r
-    // dX(1) = -0.004; // p
-    // dX(2) = -0.004;  // y
-    // dX(3) = -0.004; // x
-    // dX(4) = -0.004; // y
-    dX(5) = 0.00;  // vertical
     auto new_value = current_state_values + dX;
     next_states->set_value(new_value);
   }
@@ -253,14 +166,8 @@ int do_main() {
   auto iiwa = instances[0];
   Parser(&iiwa_controller_plant).AddModels(filename);
 
-  std::string hand_filename = FindResourceOrThrow(
-      "drake/manipulation/models/"
-      "allegro_hand_description/sdf/allegro_hand_description_right.sdf");
-  std::vector<drake::multibody::ModelInstanceIndex> instances2 =
-      parser.AddModels(hand_filename);
-  auto allegro = instances2[0];
-
-  RigidTransformd iiwa_position(Eigen::Vector3d(1, 0, 0));
+  RigidTransformd iiwa_position(Eigen::Vector3d(
+      FLAGS_iiwa_link_0_x, FLAGS_iiwa_link_0_y, FLAGS_iiwa_link_0_z));
 
   plant.WeldFrames(plant.world_frame(),
                    plant.GetBodyByName("iiwa_link_0").body_frame(),
@@ -269,11 +176,6 @@ int do_main() {
       iiwa_controller_plant.world_frame(),
       iiwa_controller_plant.GetBodyByName("iiwa_link_0").body_frame(),
       iiwa_position);
-
-  plant.WeldFrames(plant.GetBodyByName("iiwa_link_7").body_frame(),
-                   plant.GetBodyByName("hand_root").body_frame(),
-                   FromXyzRpyDegree(Eigen::Vector3d(0, -45, 0),
-                                    Eigen::Vector3d(0, 0, 0)));
 
   // mpm stuff
   auto owned_deformable_model =
@@ -310,49 +212,9 @@ int do_main() {
   iiwa_controller_plant.Finalize();
 
   Eigen::VectorXd iiwa_initial_joint_values(7);
-  iiwa_initial_joint_values << 0, 0.7, 0, -1.6,
-      0, 0.8, 0;
-  // Eigen::VectorXd iiwa_velocity_limits(7);
-  // iiwa_velocity_limits << 1.4, 1.4, 1.7, 1.3, 2.2, 2.3, 2.3;
-  
-
-  // hand controller
-  auto hand_pose_controller = builder.template AddSystem<HandPoseController>(
-      plant);  // put gripper timing here
-  std::vector<std::string> preferred_joint_ordering =
-      hand_pose_controller->GetPreferredJointOrdering();
-
-  int nu_allegro = plant.num_actuated_dofs(allegro);
-  int nq_allegro = plant.num_positions(allegro);
-  int nv_allegro = plant.num_velocities(allegro);
-  unused(nv_allegro);
-
-  Eigen::MatrixXd state_selector =
-      Eigen::MatrixXd::Zero(2 * nu_allegro, 2 * nu_allegro);
-  int u = 0;
-  std::vector<std::string> actuated_joints;
-  for (int a = 0; a < plant.num_actuators(); ++a) {
-    auto& actuator =
-        plant.get_joint_actuator(drake::multibody::JointActuatorIndex(a));
-
-    for (int i = 0; i < static_cast<int>(preferred_joint_ordering.size());
-         ++i) {
-      if (actuator.joint().name() == preferred_joint_ordering[i]) {
-        actuated_joints.push_back(actuator.joint().name());
-        state_selector(u, i) = 1;
-        state_selector(nu_allegro + u, nq_allegro + i) = 1;
-        ++u;
-        break;
-      }
-    }
-  }
-  auto actuated_states_selector =
-      builder.template AddSystem<drake::systems::MatrixGain<double>>(
-          state_selector);
-  builder.Connect(hand_pose_controller->get_output_port(),
-                  actuated_states_selector->get_input_port());
-  builder.Connect(actuated_states_selector->get_output_port(),
-                  plant.get_desired_state_input_port(allegro));
+  iiwa_initial_joint_values << FLAGS_iiwa_joint_1, FLAGS_iiwa_joint_2,
+      FLAGS_iiwa_joint_3, FLAGS_iiwa_joint_4, FLAGS_iiwa_joint_5,
+      FLAGS_iiwa_joint_6, FLAGS_iiwa_joint_7;
 
   // iiwa controller
   // first find the initial pose for the current joint values
@@ -362,6 +224,8 @@ int do_main() {
       plant.GetBodyByName("iiwa_link_7")
           .body_frame()
           .CalcPoseInWorld(*(temp_context.get()));
+  fmt::print("iiwa_controller_initial_pose translation = {}\n",
+               fmt_eigen(iiwa_controller_initial_pose.translation().transpose()));
 
   auto iiwa_controller = builder.template AddSystem<IiwaController>(
       plant, iiwa_controller_initial_pose);
