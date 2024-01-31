@@ -1,7 +1,7 @@
 #pragma once
 
-#include <vector>
 #include <unordered_set>
+#include <vector>
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
@@ -49,7 +49,8 @@ class GridData {
    * Increments velocity to each grid node component.
    */
   void AddDG(const Eigen::VectorX<T>& dG) {
-    DRAKE_ASSERT(dG.size() == num_active_nodes() * 3);
+    DRAKE_ASSERT(static_cast<int>(dG.size()) ==
+                 static_cast<int>(num_active_nodes() * 3));
     for (size_t i = 0; i < num_active_nodes(); ++i) {
       velocities_[i] += dG.segment(3 * i, 3);
     }

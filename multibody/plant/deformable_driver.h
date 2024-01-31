@@ -383,7 +383,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           // if particle is inside rigid body, i.e. in contact
           // note: normal direction
           result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
-              p, p2geometry.id_G, p2geometry.distance, -p2geometry.grad_W,
+              p, p2geometry.id_G, p2geometry.distance, -p2geometry.grad_W.normalized(),
               state.particles.GetPositionAt(p)));
         }
       }

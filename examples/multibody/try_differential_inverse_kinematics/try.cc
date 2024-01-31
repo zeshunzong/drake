@@ -32,8 +32,8 @@ DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
-DEFINE_double(friction, 0.0, "mpm friction");
-DEFINE_double(ppc, 1, "mpm ppc");
+DEFINE_double(friction, 0.5, "mpm friction");
+DEFINE_double(ppc, 4, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
@@ -91,20 +91,21 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
 
   void CalcDesiredState(const Context<double>& context,
                         drake::systems::BasicVector<double>* output) const {
+                            double alpha = 0.75;
     if (context.get_time() > grip_start_) {
       if (context.get_time() < grip_release_) {
         // start grabbing
         double t = (context.get_time() - grip_start_) / grip_time_;
-        Eigen::VectorXd positions = std::max(1.0 - t, 0.0) * GetHomePosition() +
-                                    std::min(t, 1.0) * GetGripPosition();
+        Eigen::VectorXd positions = std::max(1.0 - t*alpha, 0.0) * GetHomePosition() +
+                                    std::min(t*alpha, 1.0) * GetGripPosition();
         Eigen::VectorXd q_and_v(32);
         q_and_v << positions, GetHomeVelocity();
         output->set_value(q_and_v);
       } else {
         // start releasing
         double t = (context.get_time() - grip_release_) / grip_time_;
-        Eigen::VectorXd positions = std::max(1.0 - t, 0.0) * GetGripPosition() +
-                                    std::min(t, 1.0) * GetHomePosition();
+        Eigen::VectorXd positions = std::max(1.0 - t*alpha, 0.0) * GetGripPosition() +
+                                    std::min(t*alpha, 1.0) * GetHomePosition();
         Eigen::VectorXd q_and_v(32);
         q_and_v << positions, GetHomeVelocity();
         output->set_value(q_and_v);
@@ -213,12 +214,16 @@ class IiwaController : public drake::systems::LeafSystem<double> {
     // fake update:
     VectorX<double> dX = current_state_values;
     dX.setZero();
+
+    if (context.get_time() > 0.4) {
+        dX(5) = 0.004;  // vertical
+    }
     // dX(0) = -0.004; // r
     // dX(1) = -0.004; // p
     // dX(2) = -0.004;  // y
     // dX(3) = -0.004; // x
-    // dX(4) = -0.004; // y
-    dX(5) = 0.00;  // vertical
+    // dX(4) = 0.004;  // y
+    // dX(5) = 0.00;  // vertical
     auto new_value = current_state_values + dX;
     next_states->set_value(new_value);
   }
@@ -260,7 +265,7 @@ int do_main() {
       parser.AddModels(hand_filename);
   auto allegro = instances2[0];
 
-  RigidTransformd iiwa_position(Eigen::Vector3d(1, 0, 0));
+  RigidTransformd iiwa_position(Eigen::Vector3d(0, 1, 0));
 
   plant.WeldFrames(plant.world_frame(),
                    plant.GetBodyByName("iiwa_link_0").body_frame(),
@@ -270,10 +275,10 @@ int do_main() {
       iiwa_controller_plant.GetBodyByName("iiwa_link_0").body_frame(),
       iiwa_position);
 
-  plant.WeldFrames(plant.GetBodyByName("iiwa_link_7").body_frame(),
-                   plant.GetBodyByName("hand_root").body_frame(),
-                   FromXyzRpyDegree(Eigen::Vector3d(0, -45, 0),
-                                    Eigen::Vector3d(0, 0, 0)));
+  plant.WeldFrames(
+      plant.GetBodyByName("iiwa_link_7").body_frame(),
+      plant.GetBodyByName("hand_root").body_frame(),
+      FromXyzRpyDegree(Eigen::Vector3d(0, -45, 0), Eigen::Vector3d(0, 0, 0)));
 
   // mpm stuff
   auto owned_deformable_model =
@@ -283,21 +288,26 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.1, 0.1, 0.1));
+              Vector3<double>(0.05, 0.1, 0.12));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedModel<double>>(1e5, 0.2);
-  Vector3<double> translation = {10.0, 0.0, 0.5};
+  Vector3<double> translation = {0.57, 1.0, 0.12};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 1.0;
+  double h = 0.04;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
+  owned_deformable_model->ApplyMpmGround();
+  owned_deformable_model->SetMpmMinParticlesPerCell(
+      static_cast<int>(FLAGS_ppc));
+  owned_deformable_model->SetMpmFriction(FLAGS_friction);
+  owned_deformable_model->SetMpmDamping(FLAGS_damping);
   plant.AddPhysicalModel(std::move(owned_deformable_model));
 
-  double Kp = 1000.0;
+  double Kp = 1000000.0;
   double Kd = 2 * std::sqrt(Kp);
 
   drake::multibody::PdControllerGains gain(Kp, Kd);
@@ -310,11 +320,9 @@ int do_main() {
   iiwa_controller_plant.Finalize();
 
   Eigen::VectorXd iiwa_initial_joint_values(7);
-  iiwa_initial_joint_values << 0, 0.7, 0, -1.6,
-      0, 0.8, 0;
+  iiwa_initial_joint_values << 0, 0.7, 0, -1.6, 0, 0.8, 0;
   // Eigen::VectorXd iiwa_velocity_limits(7);
   // iiwa_velocity_limits << 1.4, 1.4, 1.7, 1.3, 2.2, 2.3, 2.3;
-  
 
   // hand controller
   auto hand_pose_controller = builder.template AddSystem<HandPoseController>(
