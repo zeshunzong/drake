@@ -4,6 +4,9 @@
 
 #include "drake/common/find_resource.h"
 #include "drake/geometry/drake_visualizer.h"
+#include "drake/geometry/meshcat.h"
+#include "drake/geometry/meshcat_visualizer.h"
+#include "drake/geometry/meshcat_visualizer_params.h"
 #include "drake/geometry/proximity_properties.h"
 #include "drake/geometry/scene_graph.h"
 #include "drake/manipulation/kuka_iiwa/iiwa_constants.h"
@@ -110,7 +113,7 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
     } else {
       output->set_value(open_state_);
     }
-  }  
+  }
 
  private:
   const multibody::MultibodyPlant<double>& plant_;
@@ -195,7 +198,8 @@ int do_main() {
   Parser(&iiwa_controller_plant).AddModels(filename);
 
   std::string hand_filename = FindResourceOrThrow(
-      "drake/manipulation/models/wsg_50_description/sdf/schunk_wsg_50_simon.sdf");
+      "drake/manipulation/models/wsg_50_description/sdf/"
+      "schunk_wsg_50_simon.sdf");
   auto wsg = parser.AddModels(hand_filename)[0];
 
   RigidTransformd iiwa_position(Eigen::Vector3d(0, 1, 0));
@@ -207,16 +211,16 @@ int do_main() {
       iiwa_controller_plant.world_frame(),
       iiwa_controller_plant.GetBodyByName("iiwa_link_0").body_frame(),
       iiwa_position);
-  plant.WeldFrames(plant.GetBodyByName("iiwa_link_7").body_frame(),
-                   plant.GetBodyByName("body").body_frame(),
-                   FromXyzRpyDegree(Eigen::Vector3d(90, 0, 0),
-                                    Eigen::Vector3d(0, 0, 0.07)));
+  plant.WeldFrames(
+      plant.GetBodyByName("iiwa_link_7").body_frame(),
+      plant.GetBodyByName("body").body_frame(),
+      FromXyzRpyDegree(Eigen::Vector3d(90, 0, 0), Eigen::Vector3d(0, 0, 0.07)));
 
   // mpm stuff
   auto owned_deformable_model =
       std::make_unique<DeformableModel<double>>(&plant);
-  const DeformableModel<double>* deformable_model =
-      owned_deformable_model.get();
+  // const DeformableModel<double>* deformable_model =
+  //     owned_deformable_model.get(); // for drake viz originally
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
@@ -337,13 +341,19 @@ int do_main() {
   builder.Connect(mux->get_output_port(),
                   plant.get_desired_state_input_port(iiwa));
 
-  geometry::DrakeVisualizerParams visualize_params;
-  visualize_params.publish_period = 1.0 / 50;
-  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(
-      &builder, scene_graph, nullptr, visualize_params);
-  // connect mpm to output port
-  builder.Connect(deformable_model->mpm_particle_positions_port(),
-                  visualizer.mpm_data_input_port());
+  auto meshcat = std::make_shared<drake::geometry::Meshcat>();
+  auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
+  drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
+      &builder, scene_graph, meshcat, meshcat_params);
+
+  // drake viz
+  // geometry::DrakeVisualizerParams visualize_params;
+  // visualize_params.publish_period = 1.0 / 50;
+  // auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(
+  //     &builder, scene_graph, nullptr, visualize_params);
+  // // connect mpm to output port
+  // builder.Connect(deformable_model->mpm_particle_positions_port(),
+  //                 visualizer.mpm_data_input_port());
 
   auto diagram = builder.Build();
   std::unique_ptr<Context<double>> diagram_context =
@@ -358,7 +368,7 @@ int do_main() {
   //       diff_ik->GetMyMutableContextFromRoot(&mutable_context);
 
   plant.SetPositions(&plant_context, iiwa, iiwa_initial_joint_values);
-  
+
   plant.SetPositions(&plant_context, wsg, Eigen::Vector2d(-0.07, 0.07));
 
   simulator.Initialize();
