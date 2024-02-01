@@ -19,6 +19,7 @@
 #include "drake/multibody/plant/force_density_field.h"
 #include "drake/multibody/plant/physical_model.h"
 #include "drake/multibody/tree/rigid_body.h"
+#include "drake/perception/point_cloud.h"
 
 namespace drake {
 namespace multibody {
@@ -82,7 +83,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   void ApplyMpmGround() { mpm_model_->ApplyMpmGround(); }
 
-  // Returns the output port of the mpm particle positions for the mpm body
+  // Returns the output port of the mpm particle positions for drake viz
   const systems::OutputPort<T>& mpm_particle_positions_port() const {
     this->ThrowIfSystemResourcesNotDeclared(__func__);
     if (mpm_model_ == nullptr) {
@@ -90,6 +91,16 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
           "vertex_positions_port(): No MPM Model registered");
     }
     return plant_->get_output_port(mpm_particle_positions_port_index_);
+  }
+
+  // Returns the output port of the mpm particle positions for meshcat
+  const systems::OutputPort<T>& mpm_point_cloud_port() const {
+    this->ThrowIfSystemResourcesNotDeclared(__func__);
+    if (mpm_model_ == nullptr) {
+      throw std::logic_error(
+          "vertex_positions_port(): No MPM Model registered");
+    }
+    return plant_->get_output_port(mpm_point_cloud_index_);
   }
 
   void CopyMpmPositions(const systems::Context<T>& context,
@@ -107,6 +118,38 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       const std::vector<Vector3<double>>&
           particle_positions{};  // empty, port will still be connected anyways
       output_value = particle_positions;
+    }
+  }
+
+  void MpmParticles2PointCloud(const systems::Context<T>& context,
+                               AbstractValue* output) const {
+    if (ExistsMpmModel()) {
+      auto& cloud = output->get_mutable_value<perception::PointCloud>();
+
+      const mpm::MpmState<T>& state =
+          context.template get_abstract_state<mpm::MpmState<T>>(
+              mpm_model().mpm_state_index());
+      const std::vector<Vector3<double>>& particle_positions =
+          state.particles.positions();
+
+      // TODO(zeshunzong): set default value and get rid of the if
+      if (cloud.size() == static_cast<int>(state.particles.num_particles())) {
+        for (size_t p = 0; p < state.particles.num_particles(); ++p) {
+          cloud.mutable_xyzs().col(p) = particle_positions[p].cast<float>();
+        }
+        // TODO(zeshunzong): may also change stress / color map here
+      } else {
+        perception::PointCloud new_cloud(
+            state.particles.num_particles(),
+            perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
+        for (size_t p = 0; p < state.particles.num_particles(); ++p) {
+          new_cloud.mutable_xyzs().col(p) = particle_positions[p].cast<float>();
+        }
+        cloud = new_cloud;
+      }
+
+    } else {
+      throw;
     }
   }
 
@@ -382,6 +425,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   double mpm_stiffness_ = 1e10;
 
   systems::OutputPortIndex mpm_particle_positions_port_index_;
+  systems::OutputPortIndex mpm_point_cloud_index_;
 };
 
 }  // namespace multibody

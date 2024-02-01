@@ -159,6 +159,7 @@ drake_cc_library(
         "//multibody/mpm:particles_to_bgeo",
         "//multibody/mpm:mpm_solver",
         "//geometry/query_results:mpm_particle_contact_pair",
+        "//perception:point_cloud",
     ],
 )
 

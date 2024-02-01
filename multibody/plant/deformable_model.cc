@@ -364,7 +364,7 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
     mpm_model_->SetMpmStateIndex(
         this->DeclareAbstractState(plant, Value<mpm::MpmState<T>>(mpm_state)));
     std::cout << "add " << num_particles << " particles " << std::endl;
-    // output port for mpm visualization
+    // output port for mpm visualization (drake viz)
     mpm_particle_positions_port_index_ =
         this->DeclareAbstractOutputPort(
                 plant, "mpm",
@@ -375,7 +375,20 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
                        AbstractValue* output) {
                   this->CopyMpmPositions(context, output);
                 },
-                {systems::System<double>::xd_ticket()})
+                {systems::SystemBase::all_sources_ticket()})
+            .get_index();
+    // output port for mpm visualization (meshcat viz)
+    mpm_point_cloud_index_ =
+        this->DeclareAbstractOutputPort(
+                plant, "mpm-point-cloud",
+                []() {
+                  return AbstractValue::Make<perception::PointCloud>();
+                },
+                [this](const systems::Context<T>& context,
+                       AbstractValue* output) {
+                  this->MpmParticles2PointCloud(context, output);
+                },
+                {systems::SystemBase::all_sources_ticket()})
             .get_index();
   }
 

@@ -5,6 +5,7 @@
 #include "drake/common/find_resource.h"
 #include "drake/geometry/drake_visualizer.h"
 #include "drake/geometry/meshcat.h"
+#include "drake/geometry/meshcat_point_cloud_visualizer.h"
 #include "drake/geometry/meshcat_visualizer.h"
 #include "drake/geometry/meshcat_visualizer_params.h"
 #include "drake/geometry/proximity_properties.h"
@@ -26,8 +27,8 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
-DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
+DEFINE_double(simulation_time, 0.5, "Desired duration of the simulation [s].");
+DEFINE_double(realtime_rate, 0.05, "Desired real time rate.");
 DEFINE_double(time_step, 2e-2,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
@@ -219,8 +220,8 @@ int do_main() {
   // mpm stuff
   auto owned_deformable_model =
       std::make_unique<DeformableModel<double>>(&plant);
-  // const DeformableModel<double>* deformable_model =
-  //     owned_deformable_model.get(); // for drake viz originally
+  const DeformableModel<double>* deformable_model =
+      owned_deformable_model.get();  // for drake viz originally
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
@@ -229,10 +230,10 @@ int do_main() {
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedModel<double>>(1e5, 0.2);
-  Vector3<double> translation = {0.57, 1.0, 0.042};
+  Vector3<double> translation = {0.57, 1.0-0.2, 0.042+0.2};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.02;
+  double h = 0.02+0.00;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
@@ -341,14 +342,22 @@ int do_main() {
   builder.Connect(mux->get_output_port(),
                   plant.get_desired_state_input_port(iiwa));
 
+  // meshcat viz
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
+  meshcat_params.publish_period = FLAGS_time_step;
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, scene_graph, meshcat, meshcat_params);
+  auto meshcat_pc_visualizer =
+      builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
+          meshcat, "cloud", meshcat_params.publish_period);
+  meshcat_pc_visualizer->set_point_size(0.01);       
+  builder.Connect(deformable_model->mpm_point_cloud_port(),
+                    meshcat_pc_visualizer->cloud_input_port());
 
   // drake viz
   // geometry::DrakeVisualizerParams visualize_params;
-  // visualize_params.publish_period = 1.0 / 50;
+  // visualize_params.publish_period = FLAGS_time_step;
   // auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(
   //     &builder, scene_graph, nullptr, visualize_params);
   // // connect mpm to output port
@@ -364,16 +373,20 @@ int do_main() {
 
   auto& mutable_context = simulator.get_mutable_context();
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
-  //   auto& diff_ik_context =
-  //       diff_ik->GetMyMutableContextFromRoot(&mutable_context);
 
   plant.SetPositions(&plant_context, iiwa, iiwa_initial_joint_values);
-
   plant.SetPositions(&plant_context, wsg, Eigen::Vector2d(-0.07, 0.07));
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
+
+  meshcat->StartRecording();
   simulator.AdvanceTo(FLAGS_simulation_time);
+  meshcat->StopRecording();
+
+  meshcat->PublishRecording();
+
+  // std::cout << "Download at: " << meshcat->web_url() << "/download" << std::endl;
 
   return 0;
 }

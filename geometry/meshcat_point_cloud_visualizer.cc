@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <iostream>
 
 #include <fmt/format.h>
 
@@ -59,7 +60,24 @@ systems::EventStatus MeshcatPointCloudVisualizer<T>::UpdateMeshcat(
     const systems::Context<T>& context) const {
   const auto& cloud =
       cloud_input_port().template Eval<perception::PointCloud>(context);
-  meshcat_->SetObject(path_, cloud, point_size_, default_rgba_);
+  
+  std::string current_path;
+  int current_frame = 0;
+  if constexpr (std::is_same_v<T, double>) {
+    
+    current_frame = std::round(context.get_time() / publish_period_);
+    current_path = "cloud/" + std::to_string(current_frame);
+  } else {
+    current_path = "cloud/0";
+  }
+   
+  // meshcat_->SetObject(path_, cloud, point_size_, default_rgba_);
+  meshcat_->SetObject(current_path, cloud, point_size_, default_rgba_);
+
+  if (current_frame >= 1) {
+    std::string prev_path = "cloud/" + std::to_string(current_frame-1);
+    meshcat_->SetProperty(prev_path, "visible", false);
+  }
 
   const math::RigidTransformd X_ParentCloud =
       pose_input_port().HasValue(context)
@@ -67,7 +85,8 @@ systems::EventStatus MeshcatPointCloudVisualizer<T>::UpdateMeshcat(
                 pose_input_port().template Eval<math::RigidTransform<T>>(
                     context))
           : math::RigidTransformd::Identity();
-  meshcat_->SetTransform(path_, X_ParentCloud);
+  // meshcat_->SetTransform(path_, X_ParentCloud);
+  meshcat_->SetTransform(current_path, X_ParentCloud);
 
   return systems::EventStatus::Succeeded();
 }
