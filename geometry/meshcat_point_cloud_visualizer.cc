@@ -63,20 +63,22 @@ systems::EventStatus MeshcatPointCloudVisualizer<T>::UpdateMeshcat(
   
   std::string current_path;
   int current_frame = 0;
+  double time = 0;
   if constexpr (std::is_same_v<T, double>) {
-    
     current_frame = std::round(context.get_time() / publish_period_);
-    current_path = "cloud/" + std::to_string(current_frame);
+    current_path = path_ + "/" + std::to_string(current_frame);
+    time = context.get_time();
   } else {
-    current_path = "cloud/0";
+    current_path = path_;
   }
    
   // meshcat_->SetObject(path_, cloud, point_size_, default_rgba_);
   meshcat_->SetObject(current_path, cloud, point_size_, default_rgba_);
-
+  meshcat_->SetProperty(current_path, "visible", false, 0);
+  meshcat_->SetProperty(current_path, "visible", true, time);
   if (current_frame >= 1) {
-    std::string prev_path = "cloud/" + std::to_string(current_frame-1);
-    meshcat_->SetProperty(prev_path, "visible", false);
+    std::string prev_path = path_ + "/" + std::to_string(current_frame-1);
+    meshcat_->SetProperty(prev_path, "visible", false, time);
   }
 
   const math::RigidTransformd X_ParentCloud =

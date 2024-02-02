@@ -1,6 +1,7 @@
 #include <memory>
 
 #include <gflags/gflags.h>
+#include <fstream>
 
 #include "drake/common/find_resource.h"
 #include "drake/geometry/drake_visualizer.h"
@@ -37,7 +38,7 @@ DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(friction, 0.5, "mpm friction");
-DEFINE_double(ppc, 4, "mpm ppc");
+DEFINE_double(ppc, 6, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
@@ -225,11 +226,11 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.042, 0.06, 0.042));
+              Vector3<double>(0.042, 0.06, 0.042+0.04));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(1e5, 0.2);
+                                   LinearCorotatedModel<double>>(1e6, 0.2);
   Vector3<double> translation = {0.57, 1.0-0.2, 0.042+0.2};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
@@ -345,7 +346,7 @@ int do_main() {
   // meshcat viz
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
-  meshcat_params.publish_period = FLAGS_time_step;
+  meshcat_params.publish_period = FLAGS_time_step * 2;
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, scene_graph, meshcat, meshcat_params);
   auto meshcat_pc_visualizer =
@@ -380,13 +381,16 @@ int do_main() {
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
-  meshcat->StartRecording();
+  sleep(5);
+  meshcat->StartRecording(24);
   simulator.AdvanceTo(FLAGS_simulation_time);
   meshcat->StopRecording();
 
   meshcat->PublishRecording();
 
-  // std::cout << "Download at: " << meshcat->web_url() << "/download" << std::endl;
+  // std::ofstream htmlFile("try_new_gripper_output.html");
+  // htmlFile << meshcat->StaticHtml();
+  // htmlFile.close();
 
   return 0;
 }
