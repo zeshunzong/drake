@@ -1,7 +1,7 @@
+#include <fstream>
 #include <memory>
 
 #include <gflags/gflags.h>
-#include <fstream>
 
 #include "drake/common/find_resource.h"
 #include "drake/geometry/drake_visualizer.h"
@@ -226,15 +226,15 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.042, 0.06, 0.042+0.04));
+              Vector3<double>(0.042, 0.06, 0.042 + 0.04));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedModel<double>>(1e6, 0.2);
-  Vector3<double> translation = {0.57, 1.0-0.2, 0.042+0.2};
+  Vector3<double> translation = {0.57, 1.0 - 0.2, 0.042 + 0.2};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.02+0.00;
+  double h = 0.02 + 0.00;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
@@ -352,9 +352,9 @@ int do_main() {
   auto meshcat_pc_visualizer =
       builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
           meshcat, "cloud", meshcat_params.publish_period);
-  meshcat_pc_visualizer->set_point_size(0.01);       
+  meshcat_pc_visualizer->set_point_size(0.01);
   builder.Connect(deformable_model->mpm_point_cloud_port(),
-                    meshcat_pc_visualizer->cloud_input_port());
+                  meshcat_pc_visualizer->cloud_input_port());
 
   // drake viz
   // geometry::DrakeVisualizerParams visualize_params;
@@ -381,12 +381,19 @@ int do_main() {
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
-  sleep(5);
-  meshcat->StartRecording(24);
-  simulator.AdvanceTo(FLAGS_simulation_time);
-  meshcat->StopRecording();
+  sleep(4);
 
-  meshcat->PublishRecording();
+  bool recording = false;
+
+  if (recording) {
+    meshcat->StartRecording(24);
+    simulator.AdvanceTo(FLAGS_simulation_time);
+    meshcat->StopRecording();
+    meshcat->PublishRecording();
+
+  } else {
+    simulator.AdvanceTo(FLAGS_simulation_time);
+  }
 
   // std::ofstream htmlFile("try_new_gripper_output.html");
   // htmlFile << meshcat->StaticHtml();

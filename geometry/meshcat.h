@@ -941,6 +941,8 @@ class Meshcat {
   std::string GetPackedProperty(std::string_view path,
                                 std::string property) const;
 
+  bool IsRecording() const { return recording_; }
+
 #ifndef DRAKE_DOXYGEN_CXX
   /* (Internal use for unit testing only) Injects a websocket message as if it
   came from a web browser. Note that this skips the entire network stack, so the
