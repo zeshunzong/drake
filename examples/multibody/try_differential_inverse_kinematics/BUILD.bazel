@@ -72,4 +72,39 @@ drake_cc_binary(
     ],
 )
 
+drake_cc_binary(
+    name = "dual_arm",
+    srcs = [
+        "dual_arm.cc",
+    ],
+    add_test_rule = 1,
+    data = [
+        "//manipulation/models/iiwa_description:models",
+        "//manipulation/models/allegro_hand_description:models",
+        "//manipulation/models/wsg_50_description:models",
+    ],
+    test_rule_args = [
+        "-simulation_time=0.1",
+        "-realtime_rate=0.0",
+    ],
+    deps = [
+        "//geometry:drake_visualizer",
+        "//geometry:scene_graph",
+        "//multibody/parsing",
+        "//multibody/plant",
+        "//systems/analysis:simulator",
+        "//systems/framework:diagram",
+        "@gflags",
+        "//multibody/mpm/constitutive_model:linear_corotated_model",
+        "//multibody/mpm/constitutive_model:corotated_elastic_model",
+        "//manipulation/kuka_iiwa:iiwa_constants",
+        "//multibody/inverse_kinematics:differential_inverse_kinematics",
+        "//multibody/inverse_kinematics:differential_inverse_kinematics_integrator",
+        "//systems/primitives:multiplexer",
+        "//systems/primitives:constant_vector_source",
+        "//systems/primitives:matrix_gain",
+        "//geometry",
+    ],
+)
+
 add_lint_tests(enable_clang_format_lint = False)

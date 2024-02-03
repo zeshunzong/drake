@@ -29,16 +29,16 @@
 #include "drake/systems/primitives/multiplexer.h"
 
 DEFINE_double(simulation_time, 0.5, "Desired duration of the simulation [s].");
-DEFINE_double(realtime_rate, 0.05, "Desired real time rate.");
-DEFINE_double(time_step, 2e-2,
+DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
+DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
-DEFINE_double(friction, 0.5, "mpm friction");
-DEFINE_double(ppc, 6, "mpm ppc");
+DEFINE_double(friction, 1.5, "mpm friction");
+DEFINE_double(ppc, 1, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
@@ -90,48 +90,49 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
   HandPoseController(const multibody::MultibodyPlant<double>& plant)
       : plant_(plant) {
     open_state_ = Eigen::VectorXd::Zero(4);
-    open_state_(0) = -0.07;
-    open_state_(1) = 0.07;
+    open_state_(0) = -0.08;
+    open_state_(1) = 0.08;
     closed_state_ = Eigen::VectorXd::Zero(4);
-    closed_state_(0) = -0.03;
-    closed_state_(1) = 0.03;
+    closed_state_(0) = -0.037;
+    closed_state_(1) = 0.037;
     this->DeclareVectorOutputPort(
         "WsgDesiredState", drake::systems::BasicVector<double>(size_),
         &HandPoseController::CalcDesiredState, {this->time_ticket()});
   }
   void CalcDesiredState(const Context<double>& context,
                         drake::systems::BasicVector<double>* output) const {
-    if ((context.get_time() > close_start_) &&
+    if ((context.get_time() >= close_start_) &&
         (context.get_time() < open_start_)) {
-      double t = (context.get_time() - close_start_) / closing_lap_;
+      double t = (context.get_time() - close_start_) / (close_end_ - close_start_);
       Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * open_state_ +
                                 std::min(t, 1.0) * closed_state_;
       output->set_value(q_and_v);
     } else if (context.get_time() > open_start_) {
-      double t = (context.get_time() - open_start_) / closing_lap_;
+      double t = (context.get_time() - open_start_) /(close_end_ - close_start_);
       Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * closed_state_ +
                                 std::min(t, 1.0) * open_state_;
       output->set_value(q_and_v);
     } else {
       output->set_value(open_state_);
     }
+    // output->set_value(open_state_);
   }
 
  private:
   const multibody::MultibodyPlant<double>& plant_;
   int size_ = 4;  // 4 fingers with 4 joints
-  double closing_lap_ = 0.3;
-  double close_start_ = 0.1;
-  double open_start_ = 0.65;
+  double close_start_ = 0.05;
+  double close_end_ = 0.35;
+  double open_start_ = 1.0;
   Eigen::VectorXd open_state_;
   Eigen::VectorXd closed_state_;
 };
 
 class IiwaController : public drake::systems::LeafSystem<double> {
  public:
-  IiwaController(const multibody::MultibodyPlant<double>& plant,
+  IiwaController(const multibody::MultibodyPlant<double>& plant, bool is_left,
                  const RigidTransformd& init_pose)
-      : plant_(plant) {
+      : plant_(plant), is_left_(is_left) {
     robot_state_index_ =
         this->DeclareVectorInputPort("robot_state", 14).get_index();
 
@@ -165,9 +166,19 @@ class IiwaController : public drake::systems::LeafSystem<double> {
     // fake update:
     VectorX<double> dX = current_state_values;
     dX.setZero();
-    if (context.get_time() > 0.4) {
-      dX(5) = 0.004;  // vertical
+    if ((context.get_time() >= lift_start_) &&
+        (context.get_time() <= lift_ends_)) {
+      dX(5) = 0.004;
     }
+    if ((context.get_time() >= split_start_) &&
+        (context.get_time() <= split_end_)) {
+      if (is_left_) {
+        dX(4) = 0.004;  // split
+      } else {
+        dX(4) = -0.004;  // split
+      }
+    }
+
     auto new_value = current_state_values + dX;
     next_states->set_value(new_value);
   }
@@ -175,6 +186,11 @@ class IiwaController : public drake::systems::LeafSystem<double> {
  private:
   const multibody::MultibodyPlant<double>& plant_;
   int robot_state_index_{};
+  bool is_left_;
+  double lift_start_ = 0.4;
+  double lift_ends_ = 0.7;
+  double split_start_ = 0.8;
+  double split_end_ = 1.1;
 };
 
 int do_main() {
@@ -185,39 +201,55 @@ int do_main() {
   plant_config.discrete_contact_approximation = "lagged";
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
-
-  MultibodyPlant<double> iiwa_controller_plant =
-      MultibodyPlant<double>(plant_config.time_step);
+  plant.set_sap_near_rigid_threshold(1e-3); // not sure
 
   plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
-  multibody::Parser parser(&plant);
-  const std::string filename = FindResourceOrThrow(
+  multibody::Parser left_parser(&plant, "left");
+  multibody::Parser right_parser(&plant, "right");
+  const std::string iiwa_filename = FindResourceOrThrow(
       "drake/manipulation/models/"
       "iiwa_description/iiwa7/iiwa7_no_collision.sdf");
-  std::vector<drake::multibody::ModelInstanceIndex> instances =
-      parser.AddModels(filename);
-  auto iiwa = instances[0];
-  Parser(&iiwa_controller_plant).AddModels(filename);
+  auto left_iiwa = left_parser.AddModels(iiwa_filename)[0];
+  auto right_iiwa = right_parser.AddModels(iiwa_filename)[0];
+
+  MultibodyPlant<double> left_iiwa_controller_plant =
+      MultibodyPlant<double>(plant_config.time_step);
+  Parser(&left_iiwa_controller_plant).AddModels(iiwa_filename);
+  MultibodyPlant<double> right_iiwa_controller_plant =
+      MultibodyPlant<double>(plant_config.time_step);
+  Parser(&right_iiwa_controller_plant).AddModels(iiwa_filename);
 
   std::string hand_filename = FindResourceOrThrow(
       "drake/manipulation/models/wsg_50_description/sdf/"
       "schunk_wsg_50_simon.sdf");
-  auto wsg = parser.AddModels(hand_filename)[0];
+  auto left_wsg = left_parser.AddModels(hand_filename)[0];
+  auto right_wsg = right_parser.AddModels(hand_filename)[0];
 
-  RigidTransformd iiwa_position(Eigen::Vector3d(0, 1, 0));
-
+  RigidTransformd left_iiwa_position(Eigen::Vector3d(0, 0.3, 0));
+  RigidTransformd right_iiwa_position =
+      FromXyzRpyDegree(Eigen::Vector3d(0, 0, 180), Eigen::Vector3d(1.15, 0, 0));
   plant.WeldFrames(plant.world_frame(),
-                   plant.GetBodyByName("iiwa_link_0").body_frame(),
-                   iiwa_position);
-  iiwa_controller_plant.WeldFrames(
-      iiwa_controller_plant.world_frame(),
-      iiwa_controller_plant.GetBodyByName("iiwa_link_0").body_frame(),
-      iiwa_position);
+                   plant.GetBodyByName("iiwa_link_0", left_iiwa).body_frame(),
+                   left_iiwa_position);
+  plant.WeldFrames(plant.world_frame(),
+                   plant.GetBodyByName("iiwa_link_0", right_iiwa).body_frame(),
+                   right_iiwa_position);
+  left_iiwa_controller_plant.WeldFrames(
+      left_iiwa_controller_plant.world_frame(),
+      left_iiwa_controller_plant.GetBodyByName("iiwa_link_0").body_frame(),
+      left_iiwa_position);
+  right_iiwa_controller_plant.WeldFrames(
+      right_iiwa_controller_plant.world_frame(),
+      right_iiwa_controller_plant.GetBodyByName("iiwa_link_0").body_frame(),
+      right_iiwa_position);
   plant.WeldFrames(
-      plant.GetBodyByName("iiwa_link_7").body_frame(),
-      plant.GetBodyByName("body").body_frame(),
+      plant.GetBodyByName("iiwa_link_7", left_iiwa).body_frame(),
+      plant.GetBodyByName("body", left_wsg).body_frame(),
       FromXyzRpyDegree(Eigen::Vector3d(90, 0, 0), Eigen::Vector3d(0, 0, 0.07)));
-
+  plant.WeldFrames(
+      plant.GetBodyByName("iiwa_link_7", right_iiwa).body_frame(),
+      plant.GetBodyByName("body", right_wsg).body_frame(),
+      FromXyzRpyDegree(Eigen::Vector3d(90, 0, 0), Eigen::Vector3d(0, 0, 0.07)));
   // mpm stuff
   auto owned_deformable_model =
       std::make_unique<DeformableModel<double>>(&plant);
@@ -226,23 +258,24 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.042, 0.06, 0.042 + 0.04));
+              Vector3<double>(0.04, 0.2-0.1, 0.042));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedModel<double>>(1e6, 0.2);
-  Vector3<double> translation = {0.57, 1.0 - 0.2, 0.042 + 0.2};
+  Vector3<double> translation = {0.57, 0.15-0.09, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.02 + 0.00;
+  double h = 0.02;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
-                                          1000.0, h);
+                                          800.0, h);
   owned_deformable_model->ApplyMpmGround();
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
+  // owned_deformable_model->SetMpmStiffness(1e8);
   plant.AddPhysicalModel(std::move(owned_deformable_model));
 
   double Kp = 10000.0;
@@ -255,96 +288,116 @@ int do_main() {
   }
 
   plant.Finalize();
-  iiwa_controller_plant.Finalize();
+  left_iiwa_controller_plant.Finalize();
+  right_iiwa_controller_plant.Finalize();
 
   Eigen::VectorXd iiwa_initial_joint_values(7);
   iiwa_initial_joint_values << 0, 0.9, 0, -1.5, 0, 0.75, 0;
 
   // hand controller
-  auto hand_pose_controller = builder.template AddSystem<HandPoseController>(
-      plant);  // put gripper timing here
-  std::vector<std::string> preferred_joint_ordering;
-  preferred_joint_ordering.push_back("left_finger_sliding_joint");
-  preferred_joint_ordering.push_back("right_finger_sliding_joint");
-  int nu_wsg = plant.num_actuated_dofs(wsg);
-  int nq_wsg = plant.num_positions(wsg);
-  int nv_wsg = plant.num_velocities(wsg);
-  unused(nv_wsg);
+  auto left_hand_pose_controller =
+      builder.template AddSystem<HandPoseController>(
+          plant);  // put gripper timing here
 
-  Eigen::MatrixXd state_selector =
-      Eigen::MatrixXd::Zero(2 * nu_wsg, 2 * nu_wsg);
-  int u = 0;
-  std::vector<std::string> actuated_joints;
-  for (int a = 0; a < plant.num_actuators(); ++a) {
-    auto& actuator =
-        plant.get_joint_actuator(drake::multibody::JointActuatorIndex(a));
-    for (int i = 0; i < static_cast<int>(preferred_joint_ordering.size());
-         ++i) {
-      if (actuator.joint().name() == preferred_joint_ordering[i]) {
-        actuated_joints.push_back(actuator.joint().name());
-        state_selector(u, i) = 1;
-        state_selector(nu_wsg + u, nq_wsg + i) = 1;
-        ++u;
-        break;
-      }
-    }
-  }
-  fmt::print("state selector = {}\n", fmt_eigen(state_selector));
+  auto left_actuated_states_selector =
+      builder.template AddSystem<drake::systems::MatrixGain<double>>(4);
 
-  auto actuated_states_selector =
-      builder.template AddSystem<drake::systems::MatrixGain<double>>(
-          state_selector);
-  builder.Connect(hand_pose_controller->get_output_port(),
-                  actuated_states_selector->get_input_port());
-  builder.Connect(actuated_states_selector->get_output_port(),
-                  plant.get_desired_state_input_port(wsg));
+  auto right_hand_pose_controller =
+      builder.template AddSystem<HandPoseController>(
+          plant);  // put gripper timing here
+
+  auto right_actuated_states_selector =
+      builder.template AddSystem<drake::systems::MatrixGain<double>>(4);
+
+  builder.Connect(left_hand_pose_controller->get_output_port(),
+                  left_actuated_states_selector->get_input_port());
+  builder.Connect(left_actuated_states_selector->get_output_port(),
+                  plant.get_desired_state_input_port(left_wsg));
+
+  builder.Connect(right_hand_pose_controller->get_output_port(),
+                  right_actuated_states_selector->get_input_port());
+  builder.Connect(right_actuated_states_selector->get_output_port(),
+                  plant.get_desired_state_input_port(right_wsg));
 
   // iiwa controller
   // first find the initial pose for the current joint values
-  std::unique_ptr<Context<double>> temp_context = plant.CreateDefaultContext();
-  plant.SetPositions(temp_context.get(), iiwa, iiwa_initial_joint_values);
-  RigidTransformd iiwa_controller_initial_pose =
-      plant.GetBodyByName("iiwa_link_7")
+  std::unique_ptr<Context<double>> left_temp_context =
+      plant.CreateDefaultContext();
+  std::unique_ptr<Context<double>> right_temp_context =
+      plant.CreateDefaultContext();
+  plant.SetPositions(left_temp_context.get(), left_iiwa,
+                     iiwa_initial_joint_values);
+  plant.SetPositions(right_temp_context.get(), right_iiwa,
+                     iiwa_initial_joint_values);
+  RigidTransformd left_iiwa_controller_initial_pose =
+      plant.GetBodyByName("iiwa_link_7", left_iiwa)
           .body_frame()
-          .CalcPoseInWorld(*(temp_context.get()));
+          .CalcPoseInWorld(*(left_temp_context.get()));
+  RigidTransformd right_iiwa_controller_initial_pose =
+      plant.GetBodyByName("iiwa_link_7", right_iiwa)
+          .body_frame()
+          .CalcPoseInWorld(*(right_temp_context.get()));
 
-  auto iiwa_controller = builder.template AddSystem<IiwaController>(
-      plant, iiwa_controller_initial_pose);
-  int nq_iiwa = plant.num_positions(iiwa);
-  int nv_iiwa = plant.num_velocities(iiwa);
-  int nu_iiwa = plant.num_actuated_dofs(iiwa);
+  auto left_iiwa_controller = builder.template AddSystem<IiwaController>(
+      plant, true, left_iiwa_controller_initial_pose);
+  auto right_iiwa_controller = builder.template AddSystem<IiwaController>(
+      plant, false, right_iiwa_controller_initial_pose);
+  int nq_iiwa = plant.num_positions(left_iiwa);
+  int nv_iiwa = plant.num_velocities(left_iiwa);
+  int nu_iiwa = plant.num_actuated_dofs(left_iiwa);
   unused(nu_iiwa);
 
   DifferentialInverseKinematicsParameters params(nq_iiwa, nv_iiwa);
   params.set_nominal_joint_position(iiwa_initial_joint_values);
 
-  auto diff_ik =
+  auto left_diff_ik =
       builder.template AddSystem<DifferentialInverseKinematicsIntegrator>(
-          iiwa_controller_plant,
-          iiwa_controller_plant.GetFrameByName("iiwa_link_7"),
+          left_iiwa_controller_plant,
+          left_iiwa_controller_plant.GetFrameByName("iiwa_link_7"),
           plant_config.time_step, params);
-
+  auto right_diff_ik =
+      builder.template AddSystem<DifferentialInverseKinematicsIntegrator>(
+          right_iiwa_controller_plant,
+          right_iiwa_controller_plant.GetFrameByName("iiwa_link_7"),
+          plant_config.time_step, params);
   std::vector<int> input_sizes;
   input_sizes.push_back(nq_iiwa);
   input_sizes.push_back(nv_iiwa);
-  auto mux = builder.template AddSystem<drake::systems::Multiplexer<double>>(
-      input_sizes);
+  auto left_mux =
+      builder.template AddSystem<drake::systems::Multiplexer<double>>(
+          input_sizes);
+  auto right_mux =
+      builder.template AddSystem<drake::systems::Multiplexer<double>>(
+          input_sizes);
 
   auto zero_vs =
       builder.template AddSystem<drake::systems::ConstantVectorSource>(
           Eigen::VectorXd::Zero(nv_iiwa));
-  builder.Connect(plant.get_state_output_port(iiwa),
-                  iiwa_controller->robot_state_input_port());
-  builder.Connect(iiwa_controller->get_output_port(),
-                  diff_ik->GetInputPort("X_WE_desired"));
-  builder.Connect(plant.get_state_output_port(iiwa),
-                  diff_ik->GetInputPort("robot_state"));
-  builder.Connect(diff_ik->GetOutputPort("joint_positions"),
-                  mux->get_input_port(0));
-  builder.Connect(zero_vs->get_output_port(), mux->get_input_port(1));
-  builder.Connect(mux->get_output_port(),
-                  plant.get_desired_state_input_port(iiwa));
+  builder.Connect(plant.get_state_output_port(left_iiwa),
+                  left_iiwa_controller->robot_state_input_port());
+  builder.Connect(plant.get_state_output_port(right_iiwa),
+                  right_iiwa_controller->robot_state_input_port());
 
+  builder.Connect(left_iiwa_controller->get_output_port(),
+                  left_diff_ik->GetInputPort("X_WE_desired"));
+  builder.Connect(right_iiwa_controller->get_output_port(),
+                  right_diff_ik->GetInputPort("X_WE_desired"));
+  builder.Connect(plant.get_state_output_port(left_iiwa),
+                  left_diff_ik->GetInputPort("robot_state"));
+  builder.Connect(plant.get_state_output_port(right_iiwa),
+                  right_diff_ik->GetInputPort("robot_state"));
+
+  builder.Connect(left_diff_ik->GetOutputPort("joint_positions"),
+                  left_mux->get_input_port(0));
+  builder.Connect(right_diff_ik->GetOutputPort("joint_positions"),
+                  right_mux->get_input_port(0));
+  builder.Connect(zero_vs->get_output_port(), left_mux->get_input_port(1));
+  builder.Connect(zero_vs->get_output_port(), right_mux->get_input_port(1));
+
+  builder.Connect(left_mux->get_output_port(),
+                  plant.get_desired_state_input_port(left_iiwa));
+  builder.Connect(right_mux->get_output_port(),
+                  plant.get_desired_state_input_port(right_iiwa));
   // meshcat viz
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
@@ -377,13 +430,15 @@ int do_main() {
   auto& mutable_context = simulator.get_mutable_context();
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
 
-  plant.SetPositions(&plant_context, iiwa, iiwa_initial_joint_values);
-  plant.SetPositions(&plant_context, wsg, Eigen::Vector2d(-0.07, 0.07));
+  plant.SetPositions(&plant_context, left_iiwa, iiwa_initial_joint_values);
+  plant.SetPositions(&plant_context, right_iiwa, iiwa_initial_joint_values);
+  plant.SetPositions(&plant_context, left_wsg, Eigen::Vector2d(-0.08, 0.08));
+  plant.SetPositions(&plant_context, right_wsg, Eigen::Vector2d(-0.08, 0.08));
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
-  sleep(4);
+  sleep(6);
 
   bool recording = false;
 

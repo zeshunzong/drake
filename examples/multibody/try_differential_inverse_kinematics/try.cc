@@ -354,6 +354,7 @@ int do_main() {
       }
     }
   }
+  
   auto actuated_states_selector =
       builder.template AddSystem<drake::systems::MatrixGain<double>>(
           state_selector);

@@ -78,6 +78,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   }
 
   void SetMpmDamping(double d) { mpm_damping_ = d; }
+  void SetMpmStiffness(double s) { mpm_stiffness_ = s; }
   double mpm_damping() const { return mpm_damping_; }
   double mpm_stiffness() const { return mpm_stiffness_; }
 
