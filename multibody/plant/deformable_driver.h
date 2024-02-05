@@ -383,7 +383,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           // if particle is inside rigid body, i.e. in contact
           // note: normal direction
           result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
-              p, p2geometry.id_G, p2geometry.distance, -p2geometry.grad_W.normalized(),
+              p, p2geometry.id_G, p2geometry.distance,
+              -p2geometry.grad_W.normalized(),
               state.particles.GetPositionAt(p)));
         }
       }
@@ -496,7 +497,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         mpm_contact_pairs = EvalMpmContactPairs(context);
     geometry::GeometryId dummy_id = geometry::GeometryId::get_new_id();
     // TODO(zeshunzong): don't know how to use
-    std::cout << "num of mpm contact pairs: " << mpm_contact_pairs.size() << std::endl;
+    std::cout << "num of mpm contact pairs: " << mpm_contact_pairs.size()
+              << std::endl;
     for (const auto& mpm_contact_pair : mpm_contact_pairs) {
       const T d = deformable_model_->mpm_damping();  // damping
       const T k = deformable_model_->mpm_stiffness();
@@ -600,7 +602,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
         const Eigen::VectorBlock<const VectorX<T>> v =
             manager_->plant().GetVelocities(context);
-        vn -= J_rigid * v;
+        vn -= J_rigid *
+              v.segment(
+                  tree_topology.tree_velocities_start_in_v(tree_index_rigid),
+                  tree_topology.num_tree_velocities(tree_index_rigid));
       }
 
       // configuration part

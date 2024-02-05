@@ -258,12 +258,12 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.04, 0.2-0.1, 0.042));
+              Vector3<double>(0.04, 0.2, 0.042));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedModel<double>>(1e6, 0.2);
-  Vector3<double> translation = {0.57, 0.15-0.09, 0.042};
+  Vector3<double> translation = {0.57, 0.15, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
   double h = 0.02;
@@ -443,7 +443,7 @@ int do_main() {
   bool recording = false;
 
   if (recording) {
-    meshcat->StartRecording(24);
+    meshcat->StartRecording();
     simulator.AdvanceTo(FLAGS_simulation_time);
     meshcat->StopRecording();
     meshcat->PublishRecording();
