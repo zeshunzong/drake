@@ -300,7 +300,6 @@ void SolveForNewF(const Matrix3<T>& B, const Matrix3<T>& R, Matrix3<T>* F) {
 
   Eigen::ColPivHouseholderQR<Eigen::Matrix<T, 6, 6>> decomp(C);
   Eigen::Vector<T, 6> y = decomp.solve(rhs);
-  DRAKE_ASSERT(&y != nullptr);
   S(0, 0) = y(0);
   S(0, 1) = y(1);
   S(0, 2) = y(2);
@@ -382,7 +381,6 @@ void SolveForNewF2(const Matrix3<T>& B, const Matrix3<T>& R, Matrix3<T>* F) {
 
   Eigen::ColPivHouseholderQR<Eigen::Matrix<T, 6, 6>> decomp(C);
   Eigen::Vector<T, 6> y = decomp.solve(rhs);
-  DRAKE_ASSERT(&y != nullptr);
   S(0, 0) = y(0);
   S(0, 1) = y(1);
   S(0, 2) = y(2);

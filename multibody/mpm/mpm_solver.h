@@ -88,6 +88,9 @@ class MpmSolver {
         Eigen::ConjugateGradient<MatrixX<T>, Eigen::Lower | Eigen::Upper>
             cg_dense;
         if (params.linear_constitutive_model) {
+          if (count > 2) {
+            throw std::logic_error("linear solver newton does not converge");
+          }
           // if model is linear, cg only needs to be this much accurate for
           // newton to converge in one step
           cg_dense.setTolerance(0.5 * params.newton_gradient_epsilon /

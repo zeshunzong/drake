@@ -363,8 +363,7 @@ class Particles {
           elastic_deformation_gradients_[p], trial_deformation_gradients_[p],
           &FE);
       elastoplastic_models_[p]->CalcFirstPiolaStress(
-          elastic_deformation_gradients_[p], FE,
-          &(PK_stresses_[p]));
+          elastic_deformation_gradients_[p], FE, &(PK_stresses_[p]));
       elastic_deformation_gradients_[p] = FE;
     }
   }
@@ -459,6 +458,11 @@ class Particles {
   const T& GetWeightAt(size_t p, size_t neighbor_node) const {
     DRAKE_ASSERT(p < num_particles());
     return weights_[p].GetWeightAt(neighbor_node);
+  }
+
+  void ScaleYoungsModulus(size_t p, T scale) {
+    elastoplastic_models_[p]->set_E(elastoplastic_models_[p]->youngs_modulus() *
+                                    scale);
   }
 
  private:

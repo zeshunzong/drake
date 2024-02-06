@@ -11,10 +11,10 @@
 #include "drake/geometry/scene_graph.h"
 #include "drake/math/rigid_transform.h"
 #include "drake/multibody/fem/deformable_body_config.h"
-#include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
 #include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
-#include "drake/multibody/mpm/constitutive_model/stvk_hencky_with_von_mises_model.h"
+#include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
 #include "drake/multibody/mpm/constitutive_model/linear_corotated_with_plasticity.h"
+#include "drake/multibody/mpm/constitutive_model/stvk_hencky_with_von_mises_model.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -26,7 +26,7 @@
 
 DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 1e-2,
+DEFINE_double(time_step, 1e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -90,18 +90,18 @@ int do_main() {
    2. A resolution hint. (Rigid bodies need to be tessellated so that collision
    queries can be performed against deformable geometries.) The value dictates
    how fine the mesh used to represent the rigid collision geometry is. */
-  ProximityProperties rigid_proximity_props;
-  /* Set the friction coefficient close to that of rubber against rubber. */
-  const CoulombFriction<double> surface_friction(1.15, 1.15);
-  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
-  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
-                                    geometry::internal::kRezHint, 0.01);
-  /* Set up a ground. */
-  Box ground{10, 10, 10};
-  const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
-  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
-                                  "ground_collision", rigid_proximity_props);
-
+    // ProximityProperties rigid_proximity_props;
+    // /* Set the friction coefficient close to that of rubber against rubber.
+    // */ const CoulombFriction<double> surface_friction(0.0, 0.0);
+    // AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
+    // rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
+    //                                   geometry::internal::kRezHint, 0.0001);
+    // /* Set up a ground. */
+    // Box ground{10, 10, 10};
+    // const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
+    // plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
+    //                                 "ground_collision",
+    //                                 rigid_proximity_props);
 
   /* Set up a deformable torus. */
   auto owned_deformable_model =
@@ -111,24 +111,27 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.35,0.15,0.15));
-//   std::unique_ptr<
-//       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-//       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-//                                    LinearCorotatedModel<double>>(1e5, 0.2);
+              Vector3<double>(0.04, 0.12, 0.04));
+  //   std::unique_ptr<
+  //       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
+  //       model = std::make_unique<drake::multibody::mpm::constitutive_model::
+  //                                    LinearCorotatedModel<double>>(1e5, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedWithPlasticity<double>>(1e5, 0.2, 1000.0);
-  Vector3<double> translation = {0.0, 0.0, 1.8};
+                                   LinearCorotatedWithPlasticity<double>>(
+          1e6, 0.2, 1e4);
+  Vector3<double> translation = {0.0, 0.0, 0.04 + 0.15};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.08;
-      owned_deformable_model->SetMpmDamping(10.0);
-  owned_deformable_model->SetMpmStiffness(1e6);
+  double h = 0.02;
+
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
+  owned_deformable_model->SetMpmDamping(0.001);
+  owned_deformable_model->SetMpmStiffness(1e6);
+  owned_deformable_model->ApplyMpmGround();
 
   /* Registration of all deformable geometries ostensibly requires a resolution
    hint parameter that dictates how the shape is tessellated. In the case of a
@@ -136,9 +139,10 @@ int do_main() {
    tessellated. */
   // TODO(xuchenhan-tri): Though unused, we still asserts the resolution hint is
   // positive. Remove the requirement of a resolution hint for meshed shapes.
-//   const double unused_resolution_hint = 1.0;
-//   owned_deformable_model->RegisterDeformableBody(
-//       std::move(torus_instance), deformable_config, unused_resolution_hint);
+  //   const double unused_resolution_hint = 1.0;
+  //   owned_deformable_model->RegisterDeformableBody(
+  //       std::move(torus_instance), deformable_config,
+  //       unused_resolution_hint);
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
   plant.AddPhysicalModel(std::move(owned_deformable_model));

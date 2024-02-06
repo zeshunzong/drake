@@ -65,7 +65,16 @@ struct MpmState {
     // particles.AddParticle(Vector3<T>(0, 0, 0.0), Vector3<T>(0, 0, 0.0),
     //                       elastoplastic_model.Clone(), mass_p,
     //                       reference_volume_p);
+    HackTear();
     return num_particles;  // return the number of particles added
+  }
+
+  void HackTear() {
+    for (size_t p = 0; p < particles.num_particles(); ++p) {
+      if ((particles.GetPositionAt(p)[1] < 0.155) && (particles.GetPositionAt(p)[1] > 0.125)) {
+        particles.ScaleYoungsModulus(p, 0.21);
+      }
+    }
   }
 
   Particles<T> particles{};

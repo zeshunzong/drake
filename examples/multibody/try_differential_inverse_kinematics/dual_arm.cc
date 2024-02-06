@@ -30,17 +30,17 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 3.5, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 1e-2,
+DEFINE_double(time_step, 10e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
-DEFINE_double(friction, 1.5, "mpm friction");
-DEFINE_double(ppc, 1, "mpm ppc");
+DEFINE_double(friction, 10.5, "mpm friction");
+DEFINE_double(ppc, 2, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 1.0, "larger, more damping");
 
@@ -95,31 +95,31 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
     open_state_(0) = -0.08;
     open_state_(1) = 0.08;
     closed_state_ = Eigen::VectorXd::Zero(4);
-    closed_state_(0) = -0.037;
-    closed_state_(1) = 0.037;
+    closed_state_(0) = -0.036;
+    closed_state_(1) = 0.036;
     this->DeclareVectorOutputPort(
         "WsgDesiredState", drake::systems::BasicVector<double>(size_),
         &HandPoseController::CalcDesiredState, {this->time_ticket()});
   }
   void CalcDesiredState(const Context<double>& context,
                         drake::systems::BasicVector<double>* output) const {
-    if ((context.get_time() >= close_start_) &&
-        (context.get_time() < open_start_)) {
-      double t =
-          (context.get_time() - close_start_) / (close_end_ - close_start_);
+    if (context.get_time() < 0.5) {
+      output->set_value(open_state_);
+    } else if (context.get_time() < 2.4) {
+      // gripper gripping from 0.5 to 0.8, then hold until 2.2
+      double t = (context.get_time() - 0.5) / (0.3);
       Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * open_state_ +
                                 std::min(t, 1.0) * closed_state_;
       output->set_value(q_and_v);
-    } else if (context.get_time() > open_start_) {
-      double t =
-          (context.get_time() - open_start_) / (close_end_ - close_start_);
+    } else if (context.get_time() < 2.7) {
+      // gripper opening from 2.4 to 2.7
+      double t = (context.get_time() - 2.4) / (0.3);
       Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * closed_state_ +
                                 std::min(t, 1.0) * open_state_;
       output->set_value(q_and_v);
     } else {
       output->set_value(open_state_);
     }
-    // output->set_value(open_state_);
   }
 
  private:
@@ -127,7 +127,7 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
   int size_ = 4;  // 4 fingers with 4 joints
   double close_start_ = 0.05;
   double close_end_ = 0.35;
-  double open_start_ = 0.6;
+  double open_start_ = 1.25;
   Eigen::VectorXd open_state_;
   Eigen::VectorXd closed_state_;
 };
@@ -170,18 +170,44 @@ class IiwaController : public drake::systems::LeafSystem<double> {
     // fake update:
     VectorX<double> dX = current_state_values;
     dX.setZero();
-    if ((context.get_time() >= lift_start_) &&
-        (context.get_time() <= lift_ends_)) {
-      dX(5) = 0.004;
-    }
-    if ((context.get_time() >= split_start_) &&
-        (context.get_time() <= split_end_)) {
+
+    if ((context.get_time() >= 0.0) && (context.get_time() <= 0.2)) {
+      dX(5) = 0.006;  // up
+    } else if (context.get_time() <= 0.3) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 0.5) {
+      dX(5) = -0.006;  // down
+    } else if (context.get_time() <= 0.8) {
+      dX.setZero();  // hold, grip is gripping from 0.5 to 0.8
+    } else if (context.get_time() <= 1.2) {
+      dX(5) = 0.003;  // up for 0.4s
+    } else if (context.get_time() <= 1.3) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 1.9) {
       if (is_left_) {
-        dX(4) = 0.004;  // split
+        dX(4) = 0.0025;  // split
       } else {
-        dX(4) = -0.004;  // split
+        dX(4) = -0.0025;  // split
       }
+    } else if (context.get_time() <= 2.0) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 2.2) {
+      dX(5) = -0.004;  // down for 0.2s
+    } else {
+      dX.setZero();  // hold
     }
+    // if ((context.get_time() >= lift_start_) &&
+    //     (context.get_time() <= lift_ends_)) {
+    //   dX(5) = 0.004;
+    // }
+    // if ((context.get_time() >= split_start_) &&
+    //     (context.get_time() <= split_end_)) {
+    //   if (is_left_) {
+    //     dX(4) = 0.004;  // split
+    //   } else {
+    //     dX(4) = -0.004;  // split
+    //   }
+    // }
 
     auto new_value = current_state_values + dX;
     next_states->set_value(new_value);
@@ -191,10 +217,11 @@ class IiwaController : public drake::systems::LeafSystem<double> {
   const multibody::MultibodyPlant<double>& plant_;
   int robot_state_index_{};
   bool is_left_;
-  double lift_start_ = 0.4;
-  double lift_ends_ = 0.7;
-  double split_start_ = 0.8;
-  double split_end_ = 1.1;
+  double preparation_time = 0.5;  // 0.2 up, 0.1 hold, 0.2 down
+  double lift_start_ = 0.3;
+  double lift_ends_ = 0.45;
+  double split_start_ = 0.5;
+  double split_end_ = 0.9;
 };
 
 int do_main() {
@@ -205,17 +232,22 @@ int do_main() {
   plant_config.discrete_contact_approximation = "lagged";
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
-  /* Set up a ground. */
-  ProximityProperties rigid_proximity_props;
-  /* Set the friction coefficient close to that of rubber against rubber. */
-  const CoulombFriction<double> surface_friction(0.0, 0.0);
-  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
-  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
-                                    geometry::internal::kRezHint, 0.01);
-  Box ground{10, 10, 10};
-  const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
-  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
-                                  "ground_collision", rigid_proximity_props);
+
+  bool use_mpm_ground = false;
+  if (!use_mpm_ground) {
+    /* Set up a ground. */
+    ProximityProperties rigid_proximity_props;
+    /* Set the friction coefficient close to that of rubber against rubber. */
+    const CoulombFriction<double> surface_friction(0.0, 0.0);
+    AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
+    rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
+                                      geometry::internal::kRezHint, 0.01);
+    Box ground{10, 10, 10};
+    const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
+    plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
+                                    "ground_collision", rigid_proximity_props);
+  }
+
   plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
   multibody::Parser left_parser(&plant, "left");
   multibody::Parser right_parser(&plant, "right");
@@ -238,7 +270,7 @@ int do_main() {
   auto left_wsg = left_parser.AddModels(hand_filename)[0];
   auto right_wsg = right_parser.AddModels(hand_filename)[0];
 
-  RigidTransformd left_iiwa_position(Eigen::Vector3d(0, 0.3, 0));
+  RigidTransformd left_iiwa_position(Eigen::Vector3d(0, 0.25, 0));
   RigidTransformd right_iiwa_position =
       FromXyzRpyDegree(Eigen::Vector3d(0, 0, 180), Eigen::Vector3d(1.15, 0, 0));
   plant.WeldFrames(plant.world_frame(),
@@ -271,28 +303,30 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.04+0.03, 0.2 - 0.1, 0.042+0.03));
+              Vector3<double>(0.048, 0.16, 0.042));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
-          1e5, 0.2, 1e3);
+          1e5, 0.2, 6e3);
 
-// std::unique_ptr<
-//       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-//       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-//                                    LinearCorotatedModel<double>>(
-//           1e5, 0.2);
+  // std::unique_ptr<
+  //       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
+  //       model = std::make_unique<drake::multibody::mpm::constitutive_model::
+  //                                    LinearCorotatedModel<double>>(
+  //           1e5, 0.2);
 
-
-  Vector3<double> translation = {0.57 + 0.95, 0.15, 0.042 + 0.2};
+  Vector3<double> translation = {0.573 + 0.0, 0.13, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.02;
+  double h = 0.015;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
-  owned_deformable_model->ApplyMpmGround();
+  if (use_mpm_ground) {
+    owned_deformable_model->ApplyMpmGround();
+  }
+
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
@@ -300,7 +334,7 @@ int do_main() {
   owned_deformable_model->SetMpmStiffness(1e6);
   plant.AddPhysicalModel(std::move(owned_deformable_model));
 
-  double Kp = 10000.0;
+  double Kp = 30000.0;
   double Kd = 2 * std::sqrt(Kp);
 
   drake::multibody::PdControllerGains gain(Kp, Kd);
@@ -429,7 +463,7 @@ int do_main() {
   auto meshcat_pc_visualizer =
       builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
           meshcat, "cloud", meshcat_params.publish_period);
-  meshcat_pc_visualizer->set_point_size(0.01);
+  meshcat_pc_visualizer->set_point_size(0.005);
   builder.Connect(deformable_model->mpm_point_cloud_port(),
                   meshcat_pc_visualizer->cloud_input_port());
 
@@ -474,9 +508,9 @@ int do_main() {
     simulator.AdvanceTo(FLAGS_simulation_time);
   }
 
-  //   std::ofstream htmlFile("output.html");
-  //   htmlFile << meshcat->StaticHtml();
-  //   htmlFile.close();
+    std::ofstream htmlFile("output.html");
+    htmlFile << meshcat->StaticHtml();
+    htmlFile.close();
 
   return 0;
 }
