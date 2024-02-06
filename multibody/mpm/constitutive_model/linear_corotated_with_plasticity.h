@@ -30,7 +30,8 @@ class LinearCorotatedWithPlasticity : public ElastoPlasticModel<T> {
     Matrix3<T> R0;
     Matrix3<T> unused;
     fem::internal::PolarDecompose<T>(F0, &R0, &unused);
-    Matrix3<T> S = 0.5 * (R0.transpose() * F_trial + F_trial.transpose() * R0);
+    // Matrix3<T> S = 0.5 * (R0.transpose() * F_trial + F_trial.transpose() * R0);
+    Matrix3<T> S = 0.5 * (F_trial * R0.transpose() + R0 * F_trial.transpose());
     Eigen::JacobiSVD<Matrix3<T>> svd(S,
                                      Eigen::ComputeFullU | Eigen::ComputeFullV);
     Vector3<T> sigma = svd.singularValues();
@@ -41,7 +42,7 @@ class LinearCorotatedWithPlasticity : public ElastoPlasticModel<T> {
         svd.matrixU() * sigma.asDiagonal() * svd.matrixV().transpose();
 
     *FE = F_trial;
-    internal::SolveForNewF<T>(new_S, R0, FE);    
+    internal::SolveForNewF2<T>(new_S, R0, FE);    
   }
 
   struct StrainData {

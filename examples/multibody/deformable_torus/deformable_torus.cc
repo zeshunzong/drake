@@ -24,7 +24,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -111,20 +111,21 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.15,0.15,0.15));
+              Vector3<double>(0.35,0.15,0.15));
 //   std::unique_ptr<
 //       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
 //       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-//                                    StvkHenckyWithVonMisesModel<double>>(1e5, 0.2, 10.0);
+//                                    LinearCorotatedModel<double>>(1e5, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(1e5, 0.2, 1000.0);
-  Vector3<double> translation = {0.0, 0.0, 0.5};
+  Vector3<double> translation = {0.0, 0.0, 1.8};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
   double h = 0.08;
-
+      owned_deformable_model->SetMpmDamping(10.0);
+  owned_deformable_model->SetMpmStiffness(1e6);
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);

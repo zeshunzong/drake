@@ -203,6 +203,26 @@ GTEST_TEST(MathUtilsTest, SolveFTest) {
   EXPECT_TRUE(CompareMatrices(Q0, Q1, kTolerance));
 }
 
+GTEST_TEST(MathUtilsTest, SolveFTest2) {
+  Eigen::Matrix3d B = Eigen::Matrix3d::Random(3, 3);
+  Eigen::Matrix3d B1 = (B.transpose() + B);  // make the input symmetric
+  Eigen::Matrix3d R = Eigen::Matrix3d::Random(3, 3);
+  Eigen::Matrix3d F_in_out = Eigen::Matrix3d::Random(3, 3);
+
+  internal::SolveForNewF2(B1, R, &F_in_out);
+  Eigen::Matrix3d Q0, S0;
+  fem::internal::PolarDecompose<double>(F_in_out, &Q0, &S0);
+
+  EXPECT_TRUE(CompareMatrices(
+      B1, 0.5 * (F_in_out * R.transpose() + R * F_in_out.transpose()),
+      kTolerance));
+
+  Eigen::Matrix3d Q1, S1;
+  fem::internal::PolarDecompose<double>(F_in_out, &Q1, &S1);
+
+  EXPECT_TRUE(CompareMatrices(Q0, Q1, kTolerance));
+}
+
 GTEST_TEST(MathUtilsTest, ProjectToSkewedCylinderTest) {
   double radius = 1.34;
   Eigen::Vector3d point(1, 0, 0);

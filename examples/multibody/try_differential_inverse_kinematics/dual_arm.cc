@@ -42,7 +42,7 @@ DEFINE_double(beta, 0.01,
 DEFINE_double(friction, 1.5, "mpm friction");
 DEFINE_double(ppc, 1, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
-DEFINE_double(damping, 10.0, "larger, more damping");
+DEFINE_double(damping, 1.0, "larger, more damping");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -205,8 +205,17 @@ int do_main() {
   plant_config.discrete_contact_approximation = "lagged";
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
-  plant.set_sap_near_rigid_threshold(1e-3);  // not sure
-
+  /* Set up a ground. */
+  ProximityProperties rigid_proximity_props;
+  /* Set the friction coefficient close to that of rubber against rubber. */
+  const CoulombFriction<double> surface_friction(0.0, 0.0);
+  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
+  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
+                                    geometry::internal::kRezHint, 0.01);
+  Box ground{10, 10, 10};
+  const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
+  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
+                                  "ground_collision", rigid_proximity_props);
   plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
   multibody::Parser left_parser(&plant, "left");
   multibody::Parser right_parser(&plant, "right");
@@ -262,19 +271,27 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.04, 0.2, 0.042));
+              Vector3<double>(0.04+0.03, 0.2 - 0.1, 0.042+0.03));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
-          1e6, 0.2, 2e5);
-  Vector3<double> translation = {0.57, 0.15, 0.042};
+          1e5, 0.2, 1e3);
+
+// std::unique_ptr<
+//       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
+//       model = std::make_unique<drake::multibody::mpm::constitutive_model::
+//                                    LinearCorotatedModel<double>>(
+//           1e5, 0.2);
+
+
+  Vector3<double> translation = {0.57 + 0.95, 0.15, 0.042 + 0.2};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
   double h = 0.02;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
-                                          800.0, h);
+                                          1000.0, h);
   owned_deformable_model->ApplyMpmGround();
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
@@ -457,9 +474,9 @@ int do_main() {
     simulator.AdvanceTo(FLAGS_simulation_time);
   }
 
-//   std::ofstream htmlFile("output.html");
-//   htmlFile << meshcat->StaticHtml();
-//   htmlFile.close();
+  //   std::ofstream htmlFile("output.html");
+  //   htmlFile << meshcat->StaticHtml();
+  //   htmlFile.close();
 
   return 0;
 }
