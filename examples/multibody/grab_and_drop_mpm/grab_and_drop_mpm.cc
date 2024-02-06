@@ -224,8 +224,10 @@ int do_main() {
               Vector3<double>{width * 1.5, width, width});
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-      model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(1e5, 0.4);
+      model =
+          std::make_unique<multibody::mpm::StvkHenckyWithVonMisesModel<double>>(
+              1e6, 0.25, 1e5);
+
   multibody::SpatialVelocity<double> geometry_initial_veolocity;
   geometry_initial_veolocity.translational() =
       Vector3<double>{0.0, 0.0, 0.0};  //{0.1, 0.1, 0.1};

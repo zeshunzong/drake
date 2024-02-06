@@ -430,7 +430,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
               .get_mutable_cache_entry_value(context)
               .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
       deformation_state.Update(*mpm_transfer_, manager_->plant().time_step(),
-                               &(mpm_scratch));
+                               &(mpm_scratch),
+                               (!deformable_model_->mpm_model()
+                                     .newton_params()
+                                     .linear_constitutive_model));
       MatrixX<T> linear_dynamics_matrix;
       deformable_model_->mpm_model().ComputeD2EnergyDV2(
           *mpm_transfer_, deformation_state, manager_->plant().time_step(),
@@ -477,7 +480,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             .get_mutable_cache_entry_value(context)
             .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
     deformation_state.Update(*mpm_transfer_, manager_->plant().time_step(),
-                             &(mpm_scratch));
+                             &(mpm_scratch),
+                             (!deformable_model_->mpm_model()
+                                   .newton_params()
+                                   .linear_constitutive_model));
     multibody::contact_solvers::internal::
         BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>
             hessian = deformable_model_->mpm_model()

@@ -16,6 +16,8 @@
 #include "drake/multibody/inverse_kinematics/differential_inverse_kinematics_integrator.h"
 #include "drake/multibody/mpm/constitutive_model/corotated_elastic_model.h"
 #include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
+#include "drake/multibody/mpm/constitutive_model/linear_corotated_with_plasticity.h"
+#include "drake/multibody/mpm/constitutive_model/stvk_hencky_with_von_mises_model.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -28,7 +30,7 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 0.5, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -103,12 +105,14 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
                         drake::systems::BasicVector<double>* output) const {
     if ((context.get_time() >= close_start_) &&
         (context.get_time() < open_start_)) {
-      double t = (context.get_time() - close_start_) / (close_end_ - close_start_);
+      double t =
+          (context.get_time() - close_start_) / (close_end_ - close_start_);
       Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * open_state_ +
                                 std::min(t, 1.0) * closed_state_;
       output->set_value(q_and_v);
     } else if (context.get_time() > open_start_) {
-      double t = (context.get_time() - open_start_) /(close_end_ - close_start_);
+      double t =
+          (context.get_time() - open_start_) / (close_end_ - close_start_);
       Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * closed_state_ +
                                 std::min(t, 1.0) * open_state_;
       output->set_value(q_and_v);
@@ -123,7 +127,7 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
   int size_ = 4;  // 4 fingers with 4 joints
   double close_start_ = 0.05;
   double close_end_ = 0.35;
-  double open_start_ = 1.0;
+  double open_start_ = 0.6;
   Eigen::VectorXd open_state_;
   Eigen::VectorXd closed_state_;
 };
@@ -201,7 +205,7 @@ int do_main() {
   plant_config.discrete_contact_approximation = "lagged";
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
-  plant.set_sap_near_rigid_threshold(1e-3); // not sure
+  plant.set_sap_near_rigid_threshold(1e-3);  // not sure
 
   plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
   multibody::Parser left_parser(&plant, "left");
@@ -262,7 +266,8 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(1e6, 0.2);
+                                   LinearCorotatedWithPlasticity<double>>(
+          1e6, 0.2, 2e5);
   Vector3<double> translation = {0.57, 0.15, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
@@ -275,7 +280,7 @@ int do_main() {
       static_cast<int>(FLAGS_ppc));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
-  // owned_deformable_model->SetMpmStiffness(1e8);
+  owned_deformable_model->SetMpmStiffness(1e6);
   plant.AddPhysicalModel(std::move(owned_deformable_model));
 
   double Kp = 10000.0;
@@ -440,7 +445,7 @@ int do_main() {
 
   sleep(6);
 
-  bool recording = false;
+  bool recording = true;
 
   if (recording) {
     meshcat->StartRecording();
@@ -452,9 +457,9 @@ int do_main() {
     simulator.AdvanceTo(FLAGS_simulation_time);
   }
 
-  // std::ofstream htmlFile("try_new_gripper_output.html");
-  // htmlFile << meshcat->StaticHtml();
-  // htmlFile.close();
+//   std::ofstream htmlFile("output.html");
+//   htmlFile << meshcat->StaticHtml();
+//   htmlFile.close();
 
   return 0;
 }
