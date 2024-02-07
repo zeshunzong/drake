@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include <memory>
 
 #include <gflags/gflags.h>
@@ -27,7 +29,7 @@
 
 DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 2e-3,
+DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -37,9 +39,9 @@ DEFINE_double(density, 1e3,
               "up by the suction gripper.");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
-DEFINE_string(gripper, "parallel",
-              "Type of gripper used to pick up the deformable torus. Options "
-              "are: 'parallel' and 'suction'.");
+DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
+DEFINE_double(damping, 1e2, "H&C damping.");
+DEFINE_double(ppc, 50, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -77,72 +79,104 @@ int do_main() {
 
   MultibodyPlantConfig plant_config;
   plant_config.time_step = FLAGS_time_step;
-  /* Deformable simulation only works with SAP. */
+
   plant_config.discrete_contact_approximation = "lagged";
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
-  /* Minimum required proximity properties for rigid bodies to interact with
-   deformable bodies.
-   1. A valid Coulomb friction coefficient, and
-   2. A resolution hint. (Rigid bodies need to be tessellated so that collision
-   queries can be performed against deformable geometries.) The value dictates
-   how fine the mesh used to represent the rigid collision geometry is. */
-  ProximityProperties rigid_proximity_props;
-  /* Set the friction coefficient close to that of rubber against rubber.
-   */
+  ProximityProperties compliant_hydro_props;
+  ProximityProperties rigid_hydro_props;
+
   const CoulombFriction<double> surface_friction(1.0, 1.0);
-  AddContactMaterial(3.0, {}, surface_friction, &rigid_proximity_props);
-  //   rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
-  //                                     geometry::internal::kRezHint, 0.001);
-  AddCompliantHydroelasticProperties(
-      0.01, 1e8, &rigid_proximity_props); /* Set up a ground. */
+  AddContactMaterial(FLAGS_damping, {}, surface_friction,
+                     &compliant_hydro_props);
+  AddContactMaterial(FLAGS_damping, {}, surface_friction, &rigid_hydro_props);
+
+  AddCompliantHydroelasticProperties(0.01, FLAGS_hydro_modulus,
+                                     &compliant_hydro_props);
+  AddRigidHydroelasticProperties(0.01, &rigid_hydro_props);
+  /* Set up a ground. */
   Box ground{10, 10, 10};
   const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
-                                  "ground_collision", rigid_proximity_props);
+                                  "ground_collision", rigid_hydro_props);
 
   double box_width = 0.3;
-  double box_width_with_gap = 0.5;
-  double rho1 = 10;
-  double rho2 = 100;
-  double rho3 = 1000;
+  double rho1 = 1;
+  // double rho2 = 8;
+  double rho3 = 64;
+  //   double rho4 = 512;
+  double rho5 = 4096;
 
   const SpatialInertia<double> box1spatial =
       SpatialInertia<double>::SolidBoxWithDensity(rho1, box_width, box_width,
                                                   box_width);
-  const SpatialInertia<double> box2spatial =
-      SpatialInertia<double>::SolidBoxWithDensity(rho2, box_width, box_width,
-                                                  box_width);
+//   const SpatialInertia<double> box2spatial =
+//       SpatialInertia<double>::SolidBoxWithDensity(rho2, box_width, box_width,
+//                                                   box_width);
   const SpatialInertia<double> box3spatial =
       SpatialInertia<double>::SolidBoxWithDensity(rho3, box_width, box_width,
                                                   box_width);
+  //   const SpatialInertia<double> box4spatial =
+  //       SpatialInertia<double>::SolidBoxWithDensity(rho4, box_width,
+  //       box_width,
+  //                                                   box_width);
+  const SpatialInertia<double> box5spatial =
+      SpatialInertia<double>::SolidBoxWithDensity(rho5, box_width, box_width,
+                                                  box_width);
 
   const RigidBody<double>& box1 = plant.AddRigidBody("box1", box1spatial);
-  const RigidBody<double>& box2 = plant.AddRigidBody("box2", box2spatial);
+  // const RigidBody<double>& box2 = plant.AddRigidBody("box2", box2spatial);
   const RigidBody<double>& box3 = plant.AddRigidBody("box3", box3spatial);
+  //   const RigidBody<double>& box4 = plant.AddRigidBody("box4", box4spatial);
+  const RigidBody<double>& box5 = plant.AddRigidBody("box5", box5spatial);
 
-  const Vector4<double> lightBlue(0.5, 0.8, 1.0, 1.0);
-  plant.RegisterVisualGeometry(
-      box1, RigidTransformd(Eigen::Vector3d{0, 0, 1.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube1V", lightBlue);
-  plant.RegisterCollisionGeometry(
-      box1, RigidTransformd(Eigen::Vector3d{0, 0, 1.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube1", rigid_proximity_props);
+  const Vector4<double> light_blue(0.5, 0.8, 1.0, 1.0);
+  const Vector4<double> red(1.0, 0.0, 0.0, 1.0);
+  const Vector4<double> green(0.0, 1.0, 0.0, 1.0);
+  const Vector4<double> blue(0.0, 0.0, 1.0, 1.0);
+  const Vector4<double> dark_blue(0.0, 0.0, 0.8, 1.0);
+  const Vector4<double> orange(1.0, 0.55, 0.0, 0.2);
+  unused(light_blue);
+  unused(red);
+  unused(green);
+  unused(blue);
+  unused(dark_blue);
+  unused(orange);
+  plant.RegisterVisualGeometry(box1, RigidTransformd::Identity(),
+                               Box(box_width, box_width, box_width), "Cube1V",
+                               light_blue);
+  plant.RegisterCollisionGeometry(box1, RigidTransformd::Identity(),
+                                  Box(box_width, box_width, box_width), "Cube1",
+                                  compliant_hydro_props);
 
-  plant.RegisterVisualGeometry(
-      box2, RigidTransformd(Eigen::Vector3d{0, 0, 2.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube2V", lightBlue);
-  plant.RegisterCollisionGeometry(
-      box2, RigidTransformd(Eigen::Vector3d{0, 0, 2.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube2", rigid_proximity_props);
+//   plant.RegisterVisualGeometry(box2, RigidTransformd::Identity(),
+//                                Box(box_width, box_width, box_width), "Cube2V",
+//                                red);
+//   plant.RegisterCollisionGeometry(box2, RigidTransformd::Identity(),
+//                                   Box(box_width, box_width, box_width), "Cube2",
+//                                   compliant_hydro_props);
 
-  plant.RegisterVisualGeometry(
-      box3, RigidTransformd(Eigen::Vector3d{0, 0, 3.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube3V", lightBlue);
-  plant.RegisterCollisionGeometry(
-      box3, RigidTransformd(Eigen::Vector3d{0, 0, 3.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube3", rigid_proximity_props);
+  plant.RegisterVisualGeometry(box3, RigidTransformd::Identity(),
+                               Box(box_width, box_width, box_width), "Cube3V",
+                               green);
+  plant.RegisterCollisionGeometry(box3, RigidTransformd::Identity(),
+                                  Box(box_width, box_width, box_width), "Cube3",
+                                  compliant_hydro_props);
+
+  //   plant.RegisterVisualGeometry(box4, RigidTransformd::Identity(),
+  //                                Box(box_width, box_width, box_width),
+  //                                "Cube4V", blue);
+  //   plant.RegisterCollisionGeometry(box4, RigidTransformd::Identity(),
+  //                                   Box(box_width, box_width, box_width),
+  //                                   "Cube4", compliant_hydro_props);
+
+  plant.RegisterVisualGeometry(box5, RigidTransformd::Identity(),
+                               Box(box_width, box_width, box_width), "Cube5V",
+                               orange);
+  plant.RegisterCollisionGeometry(box5, RigidTransformd::Identity(),
+                                  Box(box_width, box_width, box_width), "Cube5",
+                                  compliant_hydro_props);
 
   /* Set up a deformable torus. */
   auto owned_deformable_model =
@@ -152,22 +186,43 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.2, 0.2, 0.2));
+              Vector3<double>(box_width / 2.0, box_width / 2.0,
+                              box_width / 2.0));
+
+  std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
+      mpm_geometry_level_set2 =
+          std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
+              Vector3<double>(box_width / 2.0, box_width / 2.0,
+                              box_width / 2.0));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(1e5, 0.2);
+                                   LinearCorotatedModel<double>>(1e7, 0.2);
+  std::unique_ptr<
+      drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
+      model2 = std::make_unique<drake::multibody::mpm::constitutive_model::
+                                    LinearCorotatedModel<double>>(1e7, 0.2);
 
-  Vector3<double> translation = {1.0, 0.0, 0.5};
   std::unique_ptr<math::RigidTransform<double>> pose =
-      std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.1;
+      std::make_unique<math::RigidTransform<double>>(
+          Vector3<double>(0.0, 0.0, box_width / 2.0 + 3.0 * box_width));
+
+  std::unique_ptr<math::RigidTransform<double>> pose2 =
+      std::make_unique<math::RigidTransform<double>>(
+          Vector3<double>(0.0, 0.0, box_width / 2.0 + 1.0 * box_width));
+
+  double h = 0.15;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
-                                          1000.0, h);
+                                          512.0, h);
+  owned_deformable_model->RegisterAdditionalMpmBody(std::move(mpm_geometry_level_set2),
+                                          std::move(model2), std::move(pose2),
+                                          8.0, h);
   owned_deformable_model->SetMpmDamping(0.001);
   owned_deformable_model->SetMpmStiffness(1e6);
+  owned_deformable_model->SetMpmMinParticlesPerCell(
+      static_cast<int>(FLAGS_ppc));
   // owned_deformable_model->ApplyMpmGround();
 
   const DeformableModel<double>* deformable_model =
@@ -176,7 +231,6 @@ int do_main() {
 
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
-  plant.set_penetration_allowance(1e-4);
 
   /* It's essential to connect the vertex position port in DeformableModel to
    the source configuration port in SceneGraph when deformable bodies are
@@ -196,7 +250,7 @@ int do_main() {
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
-  meshcat_params.publish_period = FLAGS_time_step * 2;
+  meshcat_params.publish_period = FLAGS_time_step * 1;
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, scene_graph, meshcat, meshcat_params);
   auto meshcat_pc_visualizer =
@@ -212,11 +266,43 @@ int do_main() {
 
   /* Build the simulator and run! */
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
+
+  auto& mutable_context = simulator.get_mutable_context();
+  auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
+  const double gap = box_width * 0.99;
+  const double base_height = 0.15;
+  plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
+                        math::RigidTransformd{Vector3d(0, 0, base_height)});
+
+//   plant.SetFreeBodyPose(
+//       &plant_context, plant.GetBodyByName("box2"),
+//       math::RigidTransformd{Vector3d(0, 0, base_height + gap)});
+
+  plant.SetFreeBodyPose(
+      &plant_context, plant.GetBodyByName("box3"),
+      math::RigidTransformd{Vector3d(0, 0, base_height + 2.0 * gap)});
+  //   plant.SetFreeBodyPose(
+  //       &plant_context, plant.GetBodyByName("box4"),
+  //       math::RigidTransformd{Vector3d(0, 0, base_height + 3.0 * gap)});
+  plant.SetFreeBodyPose(
+      &plant_context, plant.GetBodyByName("box5"),
+      math::RigidTransformd{Vector3d(0, 0, base_height + 4.0 * gap)});
+
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
-  sleep(6);
-  simulator.AdvanceTo(FLAGS_simulation_time);
+  sleep(5);
+  bool recording = true;
+
+  if (recording) {
+    meshcat->StartRecording();
+    simulator.AdvanceTo(FLAGS_simulation_time);
+    meshcat->StopRecording();
+    meshcat->PublishRecording();
+
+  } else {
+    simulator.AdvanceTo(FLAGS_simulation_time);
+  }
 
   return 0;
 }

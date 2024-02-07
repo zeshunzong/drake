@@ -1,9 +1,9 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 #include <unordered_set>
 #include <vector>
-#include <iostream>
 
 #include "drake/geometry/query_results/mpm_particle_contact_pair.h"
 #include "drake/math/rigid_transform.h"
@@ -62,16 +62,34 @@ struct MpmState {
                             elastoplastic_model.Clone(), mass_p,
                             reference_volume_p);
     }
-    // particles.AddParticle(Vector3<T>(0, 0, 0.0), Vector3<T>(0, 0, 0.0),
-    //                       elastoplastic_model.Clone(), mass_p,
-    //                       reference_volume_p);
-    HackTear();
+    // HackTear();
     return num_particles;  // return the number of particles added
+  }
+
+  // TODO(zeshunzong): switch to this later
+  int AddParticlesViaPoissonDiskSampling(
+      const std::vector<internal::AnalyticLevelSet>& level_sets,
+      const std::vector<math::RigidTransform<double>>& poses,
+      const std::vector<mpm::constitutive_model::ElastoPlasticModel<T>>&
+          elastoplastic_models,
+      const std::vector<double>& densities, int min_num_particles_per_cell) {
+    DRAKE_DEMAND(level_sets.size() == poses.size());
+    DRAKE_DEMAND(level_sets.size() == elastoplastic_models.size());
+    DRAKE_DEMAND(level_sets.size() == densities.size());
+    int total = 0;
+    for (size_t num_body = 0; num_body < level_sets.size(); ++num_body) {
+      total = total + AddParticlesViaPoissonDiskSampling(
+                          level_sets[num_body], poses[num_body],
+                          elastoplastic_models[num_body], densities[num_body],
+                          min_num_particles_per_cell);
+    }
+    return total;
   }
 
   void HackTear() {
     for (size_t p = 0; p < particles.num_particles(); ++p) {
-      if ((particles.GetPositionAt(p)[1] > 0.27) && (particles.GetPositionAt(p)[1] < 0.29)) {
+      if ((particles.GetPositionAt(p)[1] > 0.27) &&
+          (particles.GetPositionAt(p)[1] < 0.29)) {
         particles.ScaleYoungsModulus(p, 0.21);
       }
     }
