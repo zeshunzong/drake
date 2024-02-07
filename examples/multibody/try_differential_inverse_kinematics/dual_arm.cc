@@ -95,8 +95,8 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
     open_state_(0) = -0.08;
     open_state_(1) = 0.08;
     closed_state_ = Eigen::VectorXd::Zero(4);
-    closed_state_(0) = -0.036;
-    closed_state_(1) = 0.036;
+    closed_state_(0) = -0.032;
+    closed_state_(1) = 0.032;
     this->DeclareVectorOutputPort(
         "WsgDesiredState", drake::systems::BasicVector<double>(size_),
         &HandPoseController::CalcDesiredState, {this->time_ticket()});
@@ -193,9 +193,14 @@ class IiwaController : public drake::systems::LeafSystem<double> {
       dX.setZero();  // hold
     } else if (context.get_time() <= 2.2) {
       dX(5) = -0.004;  // down for 0.2s
+    } else if (context.get_time() <= 2.8) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 3.2) {
+      dX(5) = 0.006;  // up
     } else {
       dX.setZero();  // hold
     }
+
     // if ((context.get_time() >= lift_start_) &&
     //     (context.get_time() <= lift_ends_)) {
     //   dX(5) = 0.004;
@@ -248,9 +253,15 @@ int do_main() {
                                     "ground_collision", rigid_proximity_props);
   }
 
-  plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
+  multibody::Parser ground_parser(&plant, "ground");
+  std::string visual_ground_filename = FindResourceOrThrow(
+      "drake/examples/manipulation_station/models/table_wide.sdf");
+  auto table = ground_parser.AddModels(visual_ground_filename)[0];
+
+  // plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
   multibody::Parser left_parser(&plant, "left");
   multibody::Parser right_parser(&plant, "right");
+
   const std::string iiwa_filename = FindResourceOrThrow(
       "drake/manipulation/models/"
       "iiwa_description/iiwa7/iiwa7_no_collision.sdf");
@@ -270,9 +281,12 @@ int do_main() {
   auto left_wsg = left_parser.AddModels(hand_filename)[0];
   auto right_wsg = right_parser.AddModels(hand_filename)[0];
 
-  RigidTransformd left_iiwa_position(Eigen::Vector3d(0, 0.25, 0));
+  RigidTransformd left_iiwa_position(Eigen::Vector3d(0, 0.58, 0));
   RigidTransformd right_iiwa_position =
-      FromXyzRpyDegree(Eigen::Vector3d(0, 0, 180), Eigen::Vector3d(1.15, 0, 0));
+      FromXyzRpyDegree(Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0, 0, 0));
+  plant.WeldFrames(plant.world_frame(),
+                   plant.GetBodyByName("table_body", table).body_frame(),
+                   RigidTransformd(Eigen::Vector3d(0.25, 0.29, 0)));
   plant.WeldFrames(plant.world_frame(),
                    plant.GetBodyByName("iiwa_link_0", left_iiwa).body_frame(),
                    left_iiwa_position);
@@ -308,7 +322,7 @@ int do_main() {
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
-          1e5, 0.2, 6e3);
+          10e4, 0.2, 6e3);
 
   // std::unique_ptr<
   //       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
@@ -316,10 +330,10 @@ int do_main() {
   //                                    LinearCorotatedModel<double>>(
   //           1e5, 0.2);
 
-  Vector3<double> translation = {0.573 + 0.0, 0.13, 0.042};
+  Vector3<double> translation = {0.555 + 0.0, 0.29, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.015;
+  double h = 0.015 * 1.5;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
@@ -334,7 +348,7 @@ int do_main() {
   owned_deformable_model->SetMpmStiffness(1e6);
   plant.AddPhysicalModel(std::move(owned_deformable_model));
 
-  double Kp = 30000.0;
+  double Kp = 1e6;
   double Kd = 2 * std::sqrt(Kp);
 
   drake::multibody::PdControllerGains gain(Kp, Kd);
@@ -347,8 +361,11 @@ int do_main() {
   left_iiwa_controller_plant.Finalize();
   right_iiwa_controller_plant.Finalize();
 
-  Eigen::VectorXd iiwa_initial_joint_values(7);
-  iiwa_initial_joint_values << 0, 0.9, 0, -1.5, 0, 0.75, 0;
+  Eigen::VectorXd right_iiwa_initial_joint_values(7);
+  right_iiwa_initial_joint_values << 0.3, 0.9, 0, -1.5, 0, 0.75, 0.30;
+
+  Eigen::VectorXd left_iiwa_initial_joint_values(7);
+  left_iiwa_initial_joint_values << -0.3, 0.9, 0, -1.5, 0, 0.75, -0.30;
 
   // hand controller
   auto left_hand_pose_controller =
@@ -382,9 +399,9 @@ int do_main() {
   std::unique_ptr<Context<double>> right_temp_context =
       plant.CreateDefaultContext();
   plant.SetPositions(left_temp_context.get(), left_iiwa,
-                     iiwa_initial_joint_values);
+                     left_iiwa_initial_joint_values);
   plant.SetPositions(right_temp_context.get(), right_iiwa,
-                     iiwa_initial_joint_values);
+                     right_iiwa_initial_joint_values);
   RigidTransformd left_iiwa_controller_initial_pose =
       plant.GetBodyByName("iiwa_link_7", left_iiwa)
           .body_frame()
@@ -403,19 +420,22 @@ int do_main() {
   int nu_iiwa = plant.num_actuated_dofs(left_iiwa);
   unused(nu_iiwa);
 
-  DifferentialInverseKinematicsParameters params(nq_iiwa, nv_iiwa);
-  params.set_nominal_joint_position(iiwa_initial_joint_values);
+  DifferentialInverseKinematicsParameters left_params(nq_iiwa, nv_iiwa);
+  left_params.set_nominal_joint_position(left_iiwa_initial_joint_values);
+
+  DifferentialInverseKinematicsParameters right_params(nq_iiwa, nv_iiwa);
+  right_params.set_nominal_joint_position(left_iiwa_initial_joint_values);
 
   auto left_diff_ik =
       builder.template AddSystem<DifferentialInverseKinematicsIntegrator>(
           left_iiwa_controller_plant,
           left_iiwa_controller_plant.GetFrameByName("iiwa_link_7"),
-          plant_config.time_step, params);
+          plant_config.time_step, left_params);
   auto right_diff_ik =
       builder.template AddSystem<DifferentialInverseKinematicsIntegrator>(
           right_iiwa_controller_plant,
           right_iiwa_controller_plant.GetFrameByName("iiwa_link_7"),
-          plant_config.time_step, params);
+          plant_config.time_step, right_params);
   std::vector<int> input_sizes;
   input_sizes.push_back(nq_iiwa);
   input_sizes.push_back(nv_iiwa);
@@ -486,8 +506,9 @@ int do_main() {
   auto& mutable_context = simulator.get_mutable_context();
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
 
-  plant.SetPositions(&plant_context, left_iiwa, iiwa_initial_joint_values);
-  plant.SetPositions(&plant_context, right_iiwa, iiwa_initial_joint_values);
+  plant.SetPositions(&plant_context, left_iiwa, left_iiwa_initial_joint_values);
+  plant.SetPositions(&plant_context, right_iiwa,
+                     right_iiwa_initial_joint_values);
   plant.SetPositions(&plant_context, left_wsg, Eigen::Vector2d(-0.08, 0.08));
   plant.SetPositions(&plant_context, right_wsg, Eigen::Vector2d(-0.08, 0.08));
 
@@ -508,9 +529,9 @@ int do_main() {
     simulator.AdvanceTo(FLAGS_simulation_time);
   }
 
-    std::ofstream htmlFile("output.html");
-    htmlFile << meshcat->StaticHtml();
-    htmlFile.close();
+  std::ofstream htmlFile("output.html");
+  htmlFile << meshcat->StaticHtml();
+  htmlFile.close();
 
   return 0;
 }

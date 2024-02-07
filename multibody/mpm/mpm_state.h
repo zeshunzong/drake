@@ -71,7 +71,7 @@ struct MpmState {
 
   void HackTear() {
     for (size_t p = 0; p < particles.num_particles(); ++p) {
-      if ((particles.GetPositionAt(p)[1] < 0.155) && (particles.GetPositionAt(p)[1] > 0.125)) {
+      if ((particles.GetPositionAt(p)[1] > 0.27) && (particles.GetPositionAt(p)[1] < 0.29)) {
         particles.ScaleYoungsModulus(p, 0.21);
       }
     }
