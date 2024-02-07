@@ -27,7 +27,7 @@
 
 DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 5e-3,
+DEFINE_double(time_step, 2e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -92,10 +92,11 @@ int do_main() {
   /* Set the friction coefficient close to that of rubber against rubber.
    */
   const CoulombFriction<double> surface_friction(1.0, 1.0);
-  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
-  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
-                                    geometry::internal::kRezHint, 0.01);
-  /* Set up a ground. */
+  AddContactMaterial(3.0, {}, surface_friction, &rigid_proximity_props);
+  //   rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
+  //                                     geometry::internal::kRezHint, 0.001);
+  AddCompliantHydroelasticProperties(
+      0.01, 1e8, &rigid_proximity_props); /* Set up a ground. */
   Box ground{10, 10, 10};
   const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
@@ -124,30 +125,24 @@ int do_main() {
   const Vector4<double> lightBlue(0.5, 0.8, 1.0, 1.0);
   plant.RegisterVisualGeometry(
       box1, RigidTransformd(Eigen::Vector3d{0, 0, 1.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube1V",
-      lightBlue);
+      Box(box_width, box_width, box_width), "Cube1V", lightBlue);
   plant.RegisterCollisionGeometry(
       box1, RigidTransformd(Eigen::Vector3d{0, 0, 1.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube1",
-      rigid_proximity_props);
+      Box(box_width, box_width, box_width), "Cube1", rigid_proximity_props);
 
   plant.RegisterVisualGeometry(
       box2, RigidTransformd(Eigen::Vector3d{0, 0, 2.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube2V",
-      lightBlue);
+      Box(box_width, box_width, box_width), "Cube2V", lightBlue);
   plant.RegisterCollisionGeometry(
       box2, RigidTransformd(Eigen::Vector3d{0, 0, 2.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube2",
-      rigid_proximity_props);
+      Box(box_width, box_width, box_width), "Cube2", rigid_proximity_props);
 
   plant.RegisterVisualGeometry(
       box3, RigidTransformd(Eigen::Vector3d{0, 0, 3.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube3V",
-      lightBlue);
+      Box(box_width, box_width, box_width), "Cube3V", lightBlue);
   plant.RegisterCollisionGeometry(
       box3, RigidTransformd(Eigen::Vector3d{0, 0, 3.0 * box_width_with_gap}),
-      Box(box_width, box_width, box_width), "Cube3",
-      rigid_proximity_props);
+      Box(box_width, box_width, box_width), "Cube3", rigid_proximity_props);
 
   /* Set up a deformable torus. */
   auto owned_deformable_model =
@@ -181,6 +176,7 @@ int do_main() {
 
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
+  plant.set_penetration_allowance(1e-4);
 
   /* It's essential to connect the vertex position port in DeformableModel to
    the source configuration port in SceneGraph when deformable bodies are
