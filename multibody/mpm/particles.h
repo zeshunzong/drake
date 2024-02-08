@@ -10,10 +10,12 @@
 #include "drake/common/autodiff.h"
 #include "drake/common/copyable_unique_ptr.h"
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/math/spatial_algebra.h"
 #include "drake/multibody/mpm/constitutive_model/elastoplastic_model.h"
 #include "drake/multibody/mpm/internal/mass_and_momentum.h"
 #include "drake/multibody/mpm/interpolation_weights.h"
 #include "drake/multibody/mpm/particles_data.h"
+#include "multibody/tree/multibody_tree_indexes.h"
 
 namespace drake {
 namespace multibody {
@@ -464,6 +466,9 @@ class Particles {
     elastoplastic_models_[p]->set_E(elastoplastic_models_[p]->youngs_modulus() *
                                     scale);
   }
+
+  std::vector<SpatialForce<T>> forces_to_rigid_bodies;
+  std::vector<drake::multibody::internal::MobodIndex> mobod_indices;
 
  private:
   // Ensures that all attributes (std::vectors) have correct size. This only

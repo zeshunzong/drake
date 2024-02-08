@@ -175,7 +175,7 @@ class DiscreteUpdateManager : public ScalarConvertibleComponent<T> {
     // DoCalcAbstractValues(context, update);
     if constexpr (std::is_same_v<T, double>) {
       if (deformable_driver_ != nullptr) {
-        deformable_driver_->CalcAbstractStates(context, update);
+        deformable_driver_->CalcAbstractStatesExplicit(context, update);
       }
     }
   }

@@ -119,8 +119,38 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   // ------------ newly added for MPM ---------------
   bool ExistsMpmBody() const { return deformable_model_->ExistsMpmModel(); }
 
-  void CalcAbstractStates(const systems::Context<T>& context,
-                          systems::State<T>* update) const {
+  //   void CalcAbstractStates(const systems::Context<T>& context,
+  //                           systems::State<T>* update) const {
+  //     if (deformable_model_->ExistsMpmModel()) {
+  //       WriteMpmParticlesToBgeo(context);
+  //       // We require that the state in const context is sorted and prepared
+  //       for
+  //       // transfer.
+  //       const mpm::MpmState<T>& state =
+  //           context.template get_abstract_state<mpm::MpmState<T>>(
+  //               deformable_model_->mpm_model().mpm_state_index());
+  //       DRAKE_DEMAND(!state.particles.NeedReordering());
+
+  //       // grid v after sap
+  //       const mpm::GridData<T>& grid_data_post_contact =
+  //           EvalGridDataPostContact(context);
+
+  //       // write to mpm_state from grid_data_post_contact
+  //       mpm::MpmState<T>& mutable_mpm_state =
+  //           update->template get_mutable_abstract_state<mpm::MpmState<T>>(
+  //               deformable_model_->mpm_model().mpm_state_index());
+
+  //       UpdateParticlesFromGridData(context, grid_data_post_contact,
+  //                                   &(mutable_mpm_state.particles));
+
+  //       // after mpm_state is updated, sort it to prepare for next step
+  //       mpm_transfer_->SetUpTransfer(&(mutable_mpm_state.sparse_grid),
+  //                                    &(mutable_mpm_state.particles));
+  //     }
+  //   }
+
+  void CalcAbstractStatesExplicit(const systems::Context<T>& context,
+                                  systems::State<T>* update) const {
     if (deformable_model_->ExistsMpmModel()) {
       WriteMpmParticlesToBgeo(context);
       // We require that the state in const context is sorted and prepared for
@@ -130,19 +160,64 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
               deformable_model_->mpm_model().mpm_state_index());
       DRAKE_DEMAND(!state.particles.NeedReordering());
 
-      // grid v after sap
-      const mpm::GridData<T>& grid_data_post_contact =
-          EvalGridDataPostContact(context);
+      // add additional contact momentum
+      contact_solvers::internal::ContactSolverResults<T> results =
+          manager_->EvalContactSolverResults(context);
+      const std::vector<geometry::internal::MpmParticleContactPair<T>>&
+          mpm_contact_pairs = EvalMpmContactPairs(context);
 
-      // write to mpm_state from grid_data_post_contact
+      int non_mpm_contact = results.fn.size() - mpm_contact_pairs.size();
+      int num_mpm_contact_pairs = mpm_contact_pairs.size();
+      double dt = manager_->plant().time_step();  // this will be mpm dt
+      mpm::MpmSolverScratch<T>& mpm_scratch =
+          manager_->plant()
+              .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+              .get_mutable_cache_entry_value(context)
+              .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
       mpm::MpmState<T>& mutable_mpm_state =
           update->template get_mutable_abstract_state<mpm::MpmState<T>>(
               deformable_model_->mpm_model().mpm_state_index());
 
-      UpdateParticlesFromGridData(context, grid_data_post_contact,
-                                  &(mutable_mpm_state.particles));
+      mutable_mpm_state.particles.mobod_indices.clear();
+      mutable_mpm_state.particles.forces_to_rigid_bodies.clear();
+      for (int i = 0; i < num_mpm_contact_pairs; ++i) {
+        const Vector3<T>& contact_normal = mpm_contact_pairs[i].normal;
+        size_t p = mpm_contact_pairs[i].particle_in_contact_index;
 
-      // after mpm_state is updated, sort it to prepare for next step
+        constexpr int kZAxis = 2;
+        math::RotationMatrix<T> R_WC =
+            math::RotationMatrix<T>::MakeFromOneUnitVector(contact_normal,
+                                                           kZAxis);
+        double fn = results.fn(non_mpm_contact + i);
+        double ft1 = results.ft(2 * non_mpm_contact + 2 * i);
+        double ft2 = results.ft(2 * non_mpm_contact + 2 * i + 1);
+        Vector3<T> contact_force_C(-ft1, -ft2, -fn);
+        Vector3<T> contact_force_W = R_WC * contact_force_C;
+        const Vector3<T>& current_particle_v =
+            mutable_mpm_state.particles.GetVelocityAt(p);
+        mutable_mpm_state.particles.SetVelocityAt(
+            p,
+            current_particle_v + contact_force_W * dt /
+                                     mutable_mpm_state.particles.GetMassAt(p));
+        const BodyIndex rigid_body_index =
+            manager_->geometry_id_to_body_index().at(
+                mpm_contact_pairs[i].non_mpm_id);
+        const auto& rigid_body = manager_->plant().get_body(rigid_body_index);
+        const auto body_mobod_index = rigid_body.mobod_index();
+        SpatialForce<T> spatial_force_C_W(Vector3<T>::Zero(), -contact_force_W);
+        mutable_mpm_state.particles.mobod_indices.push_back(body_mobod_index);
+        const Vector3<T>& Bo = manager_->plant()
+            .EvalBodyPoseInWorld(context, rigid_body)
+            .translation();
+        mutable_mpm_state.particles.forces_to_rigid_bodies.emplace_back(
+            spatial_force_C_W.Shift(Bo
+                -mpm_contact_pairs[i].particle_in_contact_position));
+      }
+
+      mpm::GridData<T> grid_data_scratch;
+      mpm_solver_->AdvanceExplicitly(&mutable_mpm_state, *mpm_transfer_,
+                                     deformable_model_->mpm_model(), dt,
+                                     &grid_data_scratch, &mpm_scratch);
       mpm_transfer_->SetUpTransfer(&(mutable_mpm_state.sparse_grid),
                                    &(mutable_mpm_state.particles));
     }
@@ -166,12 +241,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         deformable_model_->mpm_model(), dt, grid_data_free_motion,
         &mpm_scratch);
   }
-
-  //   void CalcGridDataPrevStep(const systems::Context<T>& context,
-  //                               mpm::GridData<T>* grid_data_prev_step);
-
-  //  void CalcGridDataFreeMotionAndLastdPdFs(const systems::Context<T>&
-  //  context, )
 
   const mpm::GridData<T>& EvalGridDataFreeMotion(
       const systems::Context<T>& context) const {
@@ -726,6 +795,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
    with the given `index`. See geometry::internal::ContactParticipation. */
   const geometry::internal::ContactParticipation& EvalConstraintParticipation(
       const systems::Context<T>& context, DeformableBodyIndex index) const;
+
+  const DeformableModel<T>* deformable_model() const {
+    return deformable_model_;
+  };
 
  private:
   friend class DeformableDriverTest;

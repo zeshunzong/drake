@@ -275,6 +275,16 @@ void DiscreteUpdateManager<T>::CalcNonContactForces(
   if (include_pd_controlled_input) {
     forces->mutable_generalized_forces() += inputs.actuation_w_pd;
   }
+
+  std::vector<SpatialForce<T>>& mutable_body_forces =
+      forces->mutable_body_forces();
+  const mpm::MpmState<T>& state =
+      context.template get_abstract_state<mpm::MpmState<T>>(
+          deformable_driver_->deformable_model()->mpm_model().mpm_state_index());
+  for (size_t i = 0; i < state.particles.forces_to_rigid_bodies.size(); ++i) {
+    mutable_body_forces[state.particles.mobod_indices[i]] +=
+        state.particles.forces_to_rigid_bodies[i];
+  }
 }
 
 template <typename T>

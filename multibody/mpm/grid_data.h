@@ -85,6 +85,12 @@ class GridData {
     }
   }
 
+  void ExplicitlyAdvanceAndApplyGravity(double dt, const Vector3<T>& g) {
+    for (size_t i = 0; i < masses_.size(); ++i) {
+      velocities_[i] += (dt * forces_[i] / masses_[i] + dt * g);
+    }
+  }
+
   /**
    * @pre index_1d < num_active_nodes()
    */

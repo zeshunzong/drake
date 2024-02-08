@@ -32,6 +32,21 @@ class MpmSolver {
                  grid_data_prev_step, &(scratch->transfer_scratch));
   }
 
+  void AdvanceExplicitly(MpmState<T>* mpm_state, const MpmTransfer<T>& transfer,
+                         const MpmModel<T>& model, double mpm_dt,
+                         mpm::GridData<T>* grid_data,
+                         MpmSolverScratch<T>* scratch) const {
+    // TODO: modify contact particles -- or drag outside?
+    transfer.P2G(mpm_state->particles, mpm_state->sparse_grid, grid_data,
+                 &(scratch->transfer_scratch));
+    grid_data->ExplicitlyAdvanceAndApplyGravity(mpm_dt, model.gravity());
+    transfer.G2P(mpm_state->sparse_grid, *grid_data, mpm_state->particles,
+                 &(scratch->particles_data), &(scratch->transfer_scratch));
+    transfer.UpdateParticlesState(scratch->particles_data, mpm_dt,
+                                  &(mpm_state->particles));
+    mpm_state->particles.AdvectParticles(mpm_dt);
+  }
+
   int SolveGridVelocities(const NewtonParams& params,
                           const MpmState<T>& mpm_state,
                           const MpmTransfer<T>& transfer,

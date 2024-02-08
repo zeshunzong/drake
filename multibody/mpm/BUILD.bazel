@@ -61,6 +61,8 @@ drake_cc_library(
         "//common:essential",
         "//multibody/mpm/constitutive_model:elastoplastic_model",
         "//multibody/mpm/internal:mass_and_momentum",
+        "//multibody/math:spatial_algebra",
+        "//multibody/tree:multibody_tree_indexes"
     ],
 )
 
