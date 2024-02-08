@@ -1044,6 +1044,8 @@ void SapDriver<T>::CalcSapSolverResults(
         context.get_time());
     throw std::runtime_error(msg);
   }
+
+  CalcFreeMotionVelocities(context, &(sap_results->v));
 }
 
 template <typename T>
