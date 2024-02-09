@@ -17,6 +17,8 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
+
+
 template <typename T>
 struct MpmState {
   explicit MpmState(double h) : sparse_grid(h) { DRAKE_DEMAND(h > 0); }
@@ -57,12 +59,16 @@ struct MpmState {
     double reference_volume_p = level_set.volume() / num_particles;
     double mass_p = common_density * reference_volume_p;
     // we assume all particles start with zero velocity
-    for (int p = 0; p < num_particles; ++p) {
-      particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
-                            elastoplastic_model.Clone(), mass_p,
-                            reference_volume_p);
-    }
-    // HackTear();
+    // for (int p = 0; p < num_particles; ++p) {
+    //   particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
+    //                         elastoplastic_model.Clone(), mass_p,
+    //                         reference_volume_p);
+    // }
+    unused(reference_volume_p);
+    unused(mass_p);
+    particles.AddParticle(Vector3<T>(0.4,0.3,0), Vector3<T>(0, 0, 0),
+                            elastoplastic_model.Clone(), 100,
+                            1.0);
     return num_particles;  // return the number of particles added
   }
 
@@ -169,6 +175,15 @@ struct MpmGridNodesPermutation {
     }
     permutation = contact_solvers::internal::PartialPermutation(new_ordering);
   }
+};
+
+template <typename T>
+struct MpmPostContactResult {
+  MpmState<T> mpm_state;
+  std::vector<SpatialForce<T>> forces_to_rigid_bodies;
+  std::vector<drake::multibody::internal::MobodIndex> mobod_indices;
+
+  MpmPostContactResult() : mpm_state(1.0) {}
 };
 
 }  // namespace mpm

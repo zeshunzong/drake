@@ -285,6 +285,26 @@ void DeformableDriver<T>::DeclareCacheEntries(
     cache_indexes_.mpm_contact_pairs =
         mpm_contact_pairs_cache_entry.cache_index();
 
+    // to reproduce maniskill2
+    mpm::MpmPostContactResult<T> mpm_post_contact_result;
+    const auto& mpm_post_contact_result_cache_entry =
+        manager->DeclareCacheEntry(
+            "particles after explicit solve, and spatial forces",
+            systems::ValueProducer(
+                mpm_post_contact_result,
+                std::function<void(const Context<T>&,
+                                   mpm::MpmPostContactResult<T>*)>{
+                    [this](const Context<T>& context,
+                           mpm::MpmPostContactResult<T>* result) {
+                      this->CalcMpmPostContactResult(context, result);
+                    }}),
+            {
+                manager_->plant().abstract_state_ticket(
+                    deformable_model_->mpm_model().mpm_state_index()),
+            });
+    cache_indexes_.mpm_post_contact_result =
+        mpm_post_contact_result_cache_entry.cache_index();
+
     // 5. permutation of grid nodes, for schur complement
     mpm::MpmGridNodesPermutation<T> mpm_grid_nodes_permutation;
     const auto& mpm_grid_nodes_permutation_cache_entry =

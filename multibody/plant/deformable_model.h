@@ -24,6 +24,15 @@
 namespace drake {
 namespace multibody {
 
+
+struct ManiskillsParams {
+int num_mpm_substeps = 1;
+double contact_stiffness = 1e5;
+double contact_damping = 10.0;
+double friction_mu = 1.0;
+double friction_kf = 1.0;
+};
+
 template <typename T>
 class MultibodyPlant;
 
@@ -79,6 +88,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   }
 
   bool ExistsMpmModel() const { return (mpm_model_ != nullptr); }
+
+  ManiskillsParams maniskill_params;
 
   bool MpmUseSchur() const { return true; }
 
@@ -439,6 +450,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   systems::OutputPortIndex mpm_particle_positions_port_index_;
   systems::OutputPortIndex mpm_point_cloud_index_;
+
+  
 };
 
 }  // namespace multibody

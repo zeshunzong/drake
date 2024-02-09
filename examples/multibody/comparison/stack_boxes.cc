@@ -28,7 +28,7 @@
 #include "drake/systems/framework/diagram_builder.h"
 
 DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
-DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
+DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
@@ -84,7 +84,6 @@ int do_main() {
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
-
   ProximityProperties compliant_hydro_props;
   ProximityProperties rigid_hydro_props;
 
@@ -102,7 +101,7 @@ int do_main() {
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
                                   "ground_collision", rigid_hydro_props);
 
-  double rho1 = 2000; unused(rho1);
+  double rho1 = 100;
   double box_width = 0.3;
   const SpatialInertia<double> box1spatial =
       SpatialInertia<double>::SolidBoxWithDensity(rho1, box_width, box_width,
@@ -152,10 +151,12 @@ int do_main() {
                                           std::move(model), std::move(pose),
                                           500.0, h);
 
-  owned_deformable_model->SetMpmDamping(0.001);
-  owned_deformable_model->SetMpmStiffness(1e6);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
+
+  owned_deformable_model->maniskill_params.num_mpm_substeps = 1;
+  owned_deformable_model->maniskill_params.friction_mu = 1.0;
+  owned_deformable_model->maniskill_params.friction_kf = 10.0;
 
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
@@ -202,10 +203,11 @@ int do_main() {
   auto& mutable_context = simulator.get_mutable_context();
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
   unused(plant_context);
-//   unused(plant_context);
-  const double base_height = 0.15;
-  plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
-                        math::RigidTransformd{Vector3d(0.0, 0, base_height+0.5)});
+  //   unused(plant_context);
+//   const double base_height = 0.15;
+//   plant.SetFreeBodyPose(
+//       &plant_context, plant.GetBodyByName("box1"),
+//       math::RigidTransformd{Vector3d(0.0, 0.0, base_height + 0.5)});
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
@@ -222,6 +224,10 @@ int do_main() {
   } else {
     simulator.AdvanceTo(FLAGS_simulation_time);
   }
+
+  std::ofstream htmlFile("output.html");
+  htmlFile << meshcat->StaticHtml();
+  htmlFile.close();
 
   return 0;
 }

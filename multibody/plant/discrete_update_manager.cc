@@ -278,12 +278,15 @@ void DiscreteUpdateManager<T>::CalcNonContactForces(
 
   std::vector<SpatialForce<T>>& mutable_body_forces =
       forces->mutable_body_forces();
-  const mpm::MpmState<T>& state =
-      context.template get_abstract_state<mpm::MpmState<T>>(
-          deformable_driver_->deformable_model()->mpm_model().mpm_state_index());
-  for (size_t i = 0; i < state.particles.forces_to_rigid_bodies.size(); ++i) {
-    mutable_body_forces[state.particles.mobod_indices[i]] +=
-        state.particles.forces_to_rigid_bodies[i];
+
+  if constexpr (std::is_same_v<T, double>) {
+    const mpm::MpmPostContactResult<T>& mpm_results =
+        deformable_driver_->EvalMpmPostContactResult(context);
+
+    for (size_t i = 0; i < mpm_results.forces_to_rigid_bodies.size(); ++i) {
+      mutable_body_forces[mpm_results.mobod_indices[i]] +=
+          mpm_results.forces_to_rigid_bodies[i];
+    }
   }
 }
 
@@ -794,7 +797,8 @@ void DiscreteUpdateManager<T>::CalcContactKinematics(
         deformable_driver_->num_deformable_bodies() > 0) {
       deformable_driver_->AppendContactKinematics(context, result);
     } else if (deformable_driver_ != nullptr &&
-               deformable_driver_->ExistsMpmBody()) {
+               deformable_driver_->ExistsMpmBody() &&
+               deformable_driver_->SapIncludesMpm()) {
       // note: no fem allowed
       deformable_driver_->AppendContactKinematicsMpm(context, result);
     }
@@ -980,7 +984,8 @@ void DiscreteUpdateManager<T>::CalcDiscreteContactPairs(
         deformable_driver_->num_deformable_bodies() > 0) {
       deformable_driver_->AppendDiscreteContactPairs(context, result);
     } else if (deformable_driver_ != nullptr &&
-               deformable_driver_->ExistsMpmBody()) {
+               deformable_driver_->ExistsMpmBody() &&
+               deformable_driver_->SapIncludesMpm()) {
       deformable_driver_->AppendDiscreteContactPairsMpm(context, result);
     }
   }

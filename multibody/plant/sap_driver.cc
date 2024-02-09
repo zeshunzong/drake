@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/unused.h"
 #include "drake/multibody/contact_solvers/contact_configuration.h"
@@ -154,11 +155,11 @@ void SapDriver<T>::CalcLinearDynamicsMatrix(const systems::Context<T>& context,
   }
 
   if constexpr (std::is_same_v<T, double>) {
-    if (
-        manager().deformable_driver()->num_deformable_bodies() > 0) {
+    if (manager().deformable_driver()->num_deformable_bodies() > 0) {
       manager().deformable_driver()->AppendLinearDynamicsMatrix(context, A);
     } else if (manager().deformable_driver() != nullptr &&
-               manager().deformable_driver()->ExistsMpmBody()) {
+               manager().deformable_driver()->ExistsMpmBody() &&
+               manager().deformable_driver()->SapIncludesMpm()) {
       manager().deformable_driver()->AppendLinearDynamicsMatrixMpm(context, A);
     }
   }
@@ -192,7 +193,8 @@ void SapDriver<T>::CalcFreeMotionVelocities(const systems::Context<T>& context,
       v_star->head(rigid_dofs) = v0 + dt * vdot0;
       v_star->tail(deformable_dofs) = deformable_v_star;
     } else if (manager().deformable_driver() != nullptr &&
-               manager().deformable_driver()->ExistsMpmBody()) {
+               manager().deformable_driver()->ExistsMpmBody() &&
+               manager().deformable_driver()->SapIncludesMpm()) {
       // TODO(zeshunzong): add eval
       VectorX<T> deformable_v_star_mpm;
       manager().deformable_driver()->CalcParticipatingFreeMotionVelocitiesMpm(
@@ -208,6 +210,8 @@ void SapDriver<T>::CalcFreeMotionVelocities(const systems::Context<T>& context,
   } else {
     *v_star = v0 + dt * vdot0;
   }
+  std::cout << "at time " << context.get_time() << std::endl;
+  fmt::print("v free motion = {}\n", fmt_eigen(v_star->transpose()));
 }
 
 template <typename T>
@@ -825,7 +829,8 @@ void SapDriver<T>::CalcContactProblemCache(
           : manager().deformable_driver()->num_deformable_bodies();
   int num_objects = num_rigid_bodies + num_deformable_bodies;
   if (manager().deformable_driver() != nullptr &&
-      manager().deformable_driver()->ExistsMpmBody()) {
+      manager().deformable_driver()->ExistsMpmBody() &&
+      manager().deformable_driver()->SapIncludesMpm()) {
     num_objects = num_objects + 1;  // there is only one MPM body
     // if this is executed, then it must be that there is no fem
     DRAKE_DEMAND(num_deformable_bodies == 0);
@@ -943,7 +948,8 @@ void SapDriver<T>::AddCliqueContribution(
         DeformableBodyIndex body_index(clique - tree_topology().num_trees());
         deformable_driver->EvalParticipatingVelocityMultiplexer(context)
             .Demultiplex(&deformable_values, body_index) += clique_values;
-      } else if (deformable_driver->ExistsMpmBody()) {
+      } else if (deformable_driver->ExistsMpmBody() &&
+                 deformable_driver->SapIncludesMpm()) {
         const int num_mpm_dofs = values->size() - plant().num_velocities();
         values->tail(num_mpm_dofs) += clique_values;
       }
@@ -992,7 +998,8 @@ void SapDriver<T>::CalcSapSolverResults(
       v0.conservativeResize(rigid_dofs + deformable_dofs);
       v0.tail(deformable_dofs) = deformable_v0;
     } else if (manager().deformable_driver() != nullptr &&
-               manager().deformable_driver()->ExistsMpmBody()) {
+               manager().deformable_driver()->ExistsMpmBody() &&
+               manager().deformable_driver()->SapIncludesMpm()) {
       // TODO(zeshunzong): write eval
       VectorX<double> deformable_v0_mpm;
       manager().deformable_driver()->CalcParticipatingVelocitiesMpm(

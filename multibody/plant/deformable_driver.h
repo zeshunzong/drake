@@ -117,109 +117,155 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                    const DiscreteUpdateManager<T>* manager);
 
   // ------------ newly added for MPM ---------------
+  bool SapIncludesMpm() const { return false; }
+
   bool ExistsMpmBody() const { return deformable_model_->ExistsMpmModel(); }
-
-  //   void CalcAbstractStates(const systems::Context<T>& context,
-  //                           systems::State<T>* update) const {
-  //     if (deformable_model_->ExistsMpmModel()) {
-  //       WriteMpmParticlesToBgeo(context);
-  //       // We require that the state in const context is sorted and prepared
-  //       for
-  //       // transfer.
-  //       const mpm::MpmState<T>& state =
-  //           context.template get_abstract_state<mpm::MpmState<T>>(
-  //               deformable_model_->mpm_model().mpm_state_index());
-  //       DRAKE_DEMAND(!state.particles.NeedReordering());
-
-  //       // grid v after sap
-  //       const mpm::GridData<T>& grid_data_post_contact =
-  //           EvalGridDataPostContact(context);
-
-  //       // write to mpm_state from grid_data_post_contact
-  //       mpm::MpmState<T>& mutable_mpm_state =
-  //           update->template get_mutable_abstract_state<mpm::MpmState<T>>(
-  //               deformable_model_->mpm_model().mpm_state_index());
-
-  //       UpdateParticlesFromGridData(context, grid_data_post_contact,
-  //                                   &(mutable_mpm_state.particles));
-
-  //       // after mpm_state is updated, sort it to prepare for next step
-  //       mpm_transfer_->SetUpTransfer(&(mutable_mpm_state.sparse_grid),
-  //                                    &(mutable_mpm_state.particles));
-  //     }
-  //   }
 
   void CalcAbstractStatesExplicit(const systems::Context<T>& context,
                                   systems::State<T>* update) const {
     if (deformable_model_->ExistsMpmModel()) {
       WriteMpmParticlesToBgeo(context);
-      // We require that the state in const context is sorted and prepared for
-      // transfer.
-      const mpm::MpmState<T>& state =
-          context.template get_abstract_state<mpm::MpmState<T>>(
-              deformable_model_->mpm_model().mpm_state_index());
-      DRAKE_DEMAND(!state.particles.NeedReordering());
 
-      // add additional contact momentum
-      contact_solvers::internal::ContactSolverResults<T> results =
-          manager_->EvalContactSolverResults(context);
-      const std::vector<geometry::internal::MpmParticleContactPair<T>>&
-          mpm_contact_pairs = EvalMpmContactPairs(context);
-
-      int non_mpm_contact = results.fn.size() - mpm_contact_pairs.size();
-      int num_mpm_contact_pairs = mpm_contact_pairs.size();
-      double dt = manager_->plant().time_step();  // this will be mpm dt
-      mpm::MpmSolverScratch<T>& mpm_scratch =
-          manager_->plant()
-              .get_cache_entry(cache_indexes_.mpm_solver_scratch)
-              .get_mutable_cache_entry_value(context)
-              .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
+      const mpm::MpmPostContactResult<T>& result =
+          EvalMpmPostContactResult(context);
       mpm::MpmState<T>& mutable_mpm_state =
           update->template get_mutable_abstract_state<mpm::MpmState<T>>(
               deformable_model_->mpm_model().mpm_state_index());
+      mutable_mpm_state = result.mpm_state;
+    }
+  }
 
-      mutable_mpm_state.particles.mobod_indices.clear();
-      mutable_mpm_state.particles.forces_to_rigid_bodies.clear();
-      for (int i = 0; i < num_mpm_contact_pairs; ++i) {
+  const mpm::MpmPostContactResult<T>& EvalMpmPostContactResult(
+      const systems::Context<T>& context) const {
+    return manager_->plant()
+        .get_cache_entry(cache_indexes_.mpm_post_contact_result)
+        .template Eval<mpm::MpmPostContactResult<T>>(context);
+  }
+
+  void CalcMpmPostContactResult(const systems::Context<T>& context,
+                                mpm::MpmPostContactResult<T>* result) const {
+    result->forces_to_rigid_bodies.clear();
+    result->mobod_indices.clear();
+    // first duplicate currenet state
+    result->mpm_state = context.template get_abstract_state<mpm::MpmState<T>>(
+        deformable_model_->mpm_model().mpm_state_index());
+
+    mpm::MpmSolverScratch<T>& mpm_scratch =
+        manager_->plant()
+            .get_cache_entry(cache_indexes_.mpm_solver_scratch)
+            .get_mutable_cache_entry_value(context)
+            .template GetMutableValueOrThrow<mpm::MpmSolverScratch<T>>();
+
+    double large_dt = manager_->plant().time_step();
+    int num_mpm_steps = deformable_model_->maniskill_params.num_mpm_substeps;
+    double mpm_dt = large_dt / num_mpm_steps;
+
+    double contact_stiffness = deformable_model_->maniskill_params.contact_stiffness;
+    double contact_damping = deformable_model_->maniskill_params.contact_damping;
+    double kf = deformable_model_->maniskill_params.friction_kf;
+    double friction_mu = deformable_model_->maniskill_params.friction_mu;
+
+    for (int step = 0; step < num_mpm_steps; ++step) {
+      // first compute contact pairs
+      std::vector<geometry::internal::MpmParticleContactPair<T>>
+          mpm_contact_pairs;
+      CalcMpmContactPairsWithParticlesInput(
+          context, result->mpm_state.particles, &mpm_contact_pairs);
+
+      // next, for each contact pair, compute and apply contact force
+      for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
         const Vector3<T>& contact_normal = mpm_contact_pairs[i].normal;
         size_t p = mpm_contact_pairs[i].particle_in_contact_index;
+        double penetration_distance = mpm_contact_pairs[i].penetration_distance;
 
+        // get relative velocity in contact frame
         constexpr int kZAxis = 2;
         math::RotationMatrix<T> R_WC =
             math::RotationMatrix<T>::MakeFromOneUnitVector(contact_normal,
                                                            kZAxis);
-        double fn = results.fn(non_mpm_contact + i);
-        double ft1 = results.ft(2 * non_mpm_contact + 2 * i);
-        double ft2 = results.ft(2 * non_mpm_contact + 2 * i + 1);
-        Vector3<T> contact_force_C(-ft1, -ft2, -fn);
+        const math::RotationMatrix<T> R_CW = R_WC.transpose();
+
+        Vector3<T> relative_v_C =
+            R_CW.matrix() * result->mpm_state.particles.GetVelocityAt(p);
+        const MultibodyTreeTopology& tree_topology =
+            manager_->internal_tree().get_topology();
+        const int nv = manager_->plant().num_velocities();
+        const BodyIndex index_B = manager_->geometry_id_to_body_index().at(
+            mpm_contact_pairs[i].non_mpm_id);
+        const TreeIndex tree_index_rigid =
+            tree_topology.body_to_tree_index(index_B);
+        if (tree_index_rigid.is_valid()) {
+          Matrix3X<T> Jv_v_WBc_W(3, nv);
+          const Body<T>& rigid_body = manager_->plant().get_body(index_B);
+          const Frame<T>& frame_W = manager_->plant().world_frame();
+          manager_->internal_tree().CalcJacobianTranslationalVelocity(
+              context, JacobianWrtVariable::kV, rigid_body.body_frame(),
+              frame_W, mpm_contact_pairs[i].particle_in_contact_position,
+              frame_W, frame_W, &Jv_v_WBc_W);
+          Matrix3X<T> J_rigid =
+              R_CW.matrix() *
+              Jv_v_WBc_W.middleCols(
+                  tree_topology.tree_velocities_start_in_v(tree_index_rigid),
+                  tree_topology.num_tree_velocities(tree_index_rigid));
+          const Eigen::VectorBlock<const VectorX<T>> v =
+              manager_->plant().GetVelocities(context);
+          relative_v_C -=
+              J_rigid *
+              v.segment(
+                  tree_topology.tree_velocities_start_in_v(tree_index_rigid),
+                  tree_topology.num_tree_velocities(tree_index_rigid));
+        }
+
+        // this normal points toward more penetration
+        double fn = std::abs(penetration_distance) *
+                    contact_stiffness;  // acting towards the reverse direction
+                                        // of normal
+        double fd = contact_damping *
+                    std::min(relative_v_C(2), 0.0);  // this will be negative
+        double ft0 = std::min(
+            std::abs(relative_v_C(0)),
+            friction_mu * std::abs(penetration_distance) * contact_stiffness);
+        if (relative_v_C(0) < 0) {
+          ft0 = -ft0;
+        }
+        double ft1 = std::min(
+            std::abs(relative_v_C(1) * kf),
+            friction_mu * std::abs(penetration_distance) * contact_stiffness);
+        if (relative_v_C(1) < 0) {
+          ft1 = -ft1;
+        }
+        Vector3<T> contact_force_C(-ft0, -ft1, -(fn + fd));
         Vector3<T> contact_force_W = R_WC * contact_force_C;
-        const Vector3<T>& current_particle_v =
-            mutable_mpm_state.particles.GetVelocityAt(p);
-        mutable_mpm_state.particles.SetVelocityAt(
-            p,
-            current_particle_v + contact_force_W * dt /
-                                     mutable_mpm_state.particles.GetMassAt(p));
+        // apply contact force to mpm
+        const Vector3<T>& current_vp =
+            result->mpm_state.particles.GetVelocityAt(p);
+        result->mpm_state.particles.SetVelocityAt(
+            p, current_vp + contact_force_W * mpm_dt /
+                                result->mpm_state.particles.GetMassAt(p));
+
+        // also store contact force for rigid body
         const BodyIndex rigid_body_index =
             manager_->geometry_id_to_body_index().at(
                 mpm_contact_pairs[i].non_mpm_id);
         const auto& rigid_body = manager_->plant().get_body(rigid_body_index);
         const auto body_mobod_index = rigid_body.mobod_index();
-        SpatialForce<T> spatial_force_C_W(Vector3<T>::Zero(), -contact_force_W);
-        mutable_mpm_state.particles.mobod_indices.push_back(body_mobod_index);
+        SpatialForce<T> spatial_force_C_W(Vector3<T>::Zero(),
+                                          -contact_force_W / num_mpm_steps);
+        result->mobod_indices.push_back(body_mobod_index);
         const Vector3<T>& Bo = manager_->plant()
-            .EvalBodyPoseInWorld(context, rigid_body)
-            .translation();
-        mutable_mpm_state.particles.forces_to_rigid_bodies.emplace_back(
-            spatial_force_C_W.Shift(Bo
-                -mpm_contact_pairs[i].particle_in_contact_position));
+                                   .EvalBodyPoseInWorld(context, rigid_body)
+                                   .translation();
+        result->forces_to_rigid_bodies.emplace_back(spatial_force_C_W.Shift(
+            Bo - mpm_contact_pairs[i].particle_in_contact_position));
       }
-
+      // contact forces have been recorded to mpm and rigid
+      // now advance mpm(small_dt)
       mpm::GridData<T> grid_data_scratch;
-      mpm_solver_->AdvanceExplicitly(&mutable_mpm_state, *mpm_transfer_,
-                                     deformable_model_->mpm_model(), dt,
+      mpm_solver_->AdvanceExplicitly(&result->mpm_state, *mpm_transfer_,
+                                     deformable_model_->mpm_model(), mpm_dt,
                                      &grid_data_scratch, &mpm_scratch);
-      mpm_transfer_->SetUpTransfer(&(mutable_mpm_state.sparse_grid),
-                                   &(mutable_mpm_state.particles));
+      mpm_transfer_->SetUpTransfer(&(result->mpm_state.sparse_grid),
+                                   &(result->mpm_state.particles));
     }
   }
 
@@ -455,6 +501,38 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
               p, p2geometry.id_G, p2geometry.distance,
               -p2geometry.grad_W.normalized(),
               state.particles.GetPositionAt(p)));
+        }
+      }
+    }
+  }
+
+  void CalcMpmContactPairsWithParticlesInput(
+      const systems::Context<T>& context,
+      const mpm::Particles<T>& current_particles,
+      std::vector<geometry::internal::MpmParticleContactPair<T>>* result)
+      const {
+    DRAKE_ASSERT(result != nullptr);
+    result->clear();
+
+    const geometry::QueryObject<T>& query_object =
+        manager_->plant()
+            .get_geometry_query_input_port()
+            .template Eval<geometry::QueryObject<T>>(context);
+    // loop over each particle
+    for (size_t p = 0; p < current_particles.num_particles(); ++p) {
+      // compute the distance of this particle with each geometry in file
+      std::vector<geometry::SignedDistanceToPoint<T>> p_to_geometries =
+          query_object.ComputeSignedDistanceToPoint(
+              current_particles.GetPositionAt(p));
+      // identify those that are in contact, i.e. signed_distance < 0
+      for (const auto& p2geometry : p_to_geometries) {
+        if (p2geometry.distance < 0) {
+          // if particle is inside rigid body, i.e. in contact
+          // note: normal direction
+          result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
+              p, p2geometry.id_G, p2geometry.distance,
+              -p2geometry.grad_W.normalized(),
+              current_particles.GetPositionAt(p)));
         }
       }
     }
@@ -823,6 +901,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     systems::CacheIndex participating_free_motion_velocities;
 
     // mpm cache indexes
+    systems::CacheIndex mpm_post_contact_result;
     systems::CacheIndex mpm_solver_scratch;
     systems::CacheIndex grid_data_free_motion;
     systems::CacheIndex grid_data_post_contact;
