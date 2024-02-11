@@ -29,7 +29,7 @@
 
 DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 1e-2,
+DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -41,7 +41,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 50, "mpm ppc");
+DEFINE_double(ppc, 150, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -102,33 +102,27 @@ int do_main() {
                                   "ground_collision", rigid_hydro_props);
 
   double box_width = 0.3;
-  double rho1 = 1;
-  // double rho2 = 8;
-  double rho3 = 64;
-  //   double rho4 = 512;
-  double rho5 = 4096;
+  double ratio = 8.0;
+  double rho1 = 1000;
+  double rho2 = rho1 * ratio;
+  double rho3 = rho2 * ratio;
+  double rho4 = rho3 * ratio;
+  double rho5 = rho4 * ratio;
 
   const SpatialInertia<double> box1spatial =
       SpatialInertia<double>::SolidBoxWithDensity(rho1, box_width, box_width,
                                                   box_width);
-//   const SpatialInertia<double> box2spatial =
-//       SpatialInertia<double>::SolidBoxWithDensity(rho2, box_width, box_width,
-//                                                   box_width);
+
   const SpatialInertia<double> box3spatial =
       SpatialInertia<double>::SolidBoxWithDensity(rho3, box_width, box_width,
                                                   box_width);
-  //   const SpatialInertia<double> box4spatial =
-  //       SpatialInertia<double>::SolidBoxWithDensity(rho4, box_width,
-  //       box_width,
-  //                                                   box_width);
+
   const SpatialInertia<double> box5spatial =
       SpatialInertia<double>::SolidBoxWithDensity(rho5, box_width, box_width,
                                                   box_width);
 
   const RigidBody<double>& box1 = plant.AddRigidBody("box1", box1spatial);
-  // const RigidBody<double>& box2 = plant.AddRigidBody("box2", box2spatial);
   const RigidBody<double>& box3 = plant.AddRigidBody("box3", box3spatial);
-  //   const RigidBody<double>& box4 = plant.AddRigidBody("box4", box4spatial);
   const RigidBody<double>& box5 = plant.AddRigidBody("box5", box5spatial);
 
   const Vector4<double> light_blue(0.5, 0.8, 1.0, 1.0);
@@ -150,26 +144,12 @@ int do_main() {
                                   Box(box_width, box_width, box_width), "Cube1",
                                   compliant_hydro_props);
 
-//   plant.RegisterVisualGeometry(box2, RigidTransformd::Identity(),
-//                                Box(box_width, box_width, box_width), "Cube2V",
-//                                red);
-//   plant.RegisterCollisionGeometry(box2, RigidTransformd::Identity(),
-//                                   Box(box_width, box_width, box_width), "Cube2",
-//                                   compliant_hydro_props);
-
   plant.RegisterVisualGeometry(box3, RigidTransformd::Identity(),
                                Box(box_width, box_width, box_width), "Cube3V",
                                green);
   plant.RegisterCollisionGeometry(box3, RigidTransformd::Identity(),
                                   Box(box_width, box_width, box_width), "Cube3",
                                   compliant_hydro_props);
-
-  //   plant.RegisterVisualGeometry(box4, RigidTransformd::Identity(),
-  //                                Box(box_width, box_width, box_width),
-  //                                "Cube4V", blue);
-  //   plant.RegisterCollisionGeometry(box4, RigidTransformd::Identity(),
-  //                                   Box(box_width, box_width, box_width),
-  //                                   "Cube4", compliant_hydro_props);
 
   plant.RegisterVisualGeometry(box5, RigidTransformd::Identity(),
                                Box(box_width, box_width, box_width), "Cube5V",
@@ -197,11 +177,11 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(1e7, 0.2);
+                                   LinearCorotatedModel<double>>(rho4 * 5e4, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model2 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(1e7, 0.2);
+                                    LinearCorotatedModel<double>>(rho2 * 5e6, 0.2);
 
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(
@@ -215,15 +195,15 @@ int do_main() {
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
-                                          512.0, h);
+                                          rho4, h);
   owned_deformable_model->RegisterAdditionalMpmBody(std::move(mpm_geometry_level_set2),
                                           std::move(model2), std::move(pose2),
-                                          8.0, h);
-  owned_deformable_model->SetMpmDamping(0.001);
+                                          rho2, h);
+
+  owned_deformable_model->SetMpmDamping(0.01);
   owned_deformable_model->SetMpmStiffness(1e6);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
-  // owned_deformable_model->ApplyMpmGround();
 
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
@@ -274,16 +254,11 @@ int do_main() {
   plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
                         math::RigidTransformd{Vector3d(0, 0, base_height)});
 
-//   plant.SetFreeBodyPose(
-//       &plant_context, plant.GetBodyByName("box2"),
-//       math::RigidTransformd{Vector3d(0, 0, base_height + gap)});
 
   plant.SetFreeBodyPose(
       &plant_context, plant.GetBodyByName("box3"),
       math::RigidTransformd{Vector3d(0, 0, base_height + 2.0 * gap)});
-  //   plant.SetFreeBodyPose(
-  //       &plant_context, plant.GetBodyByName("box4"),
-  //       math::RigidTransformd{Vector3d(0, 0, base_height + 3.0 * gap)});
+
   plant.SetFreeBodyPose(
       &plant_context, plant.GetBodyByName("box5"),
       math::RigidTransformd{Vector3d(0, 0, base_height + 4.0 * gap)});

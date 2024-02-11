@@ -339,7 +339,7 @@ class MpmModel {
       Eigen::VectorX<T>* result) const;
 
   // Vector3<T> gravity_{2.0, 0.0, -2.0};
-  Vector3<T> gravity_{0.0, 0.0, -8.0};
+  Vector3<T> gravity_{0.0, 0.0, -9.81};
 
   // consider having a list of those?
   std::unique_ptr<MpmInitialObjectParameters<T>> initial_object_params_;
