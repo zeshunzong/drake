@@ -41,7 +41,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 50, "mpm ppc");
+DEFINE_double(ppc, 150, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -101,7 +101,7 @@ int do_main() {
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
                                   "ground_collision", rigid_hydro_props);
 
-  double ratio = 3.0;
+  double ratio = 1.5;
   double box_width = 0.3;
   double rho1 = 1000;
   double rho2 = rho1 * ratio;
@@ -176,11 +176,11 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(rho4*1e3, 0.2);
+                                   LinearCorotatedModel<double>>(rho4*2e4, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model2 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(rho2*1e3, 0.2);
+                                    LinearCorotatedModel<double>>(rho2*2e4, 0.2);
 
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(
