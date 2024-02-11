@@ -101,9 +101,9 @@ int do_main() {
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
                                   "ground_collision", rigid_hydro_props);
 
-  double ratio = 1.5;
+  double ratio = 8.0;
   double box_width = 0.3;
-  double rho1 = 1000;
+  double rho1 = 100;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
   double rho4 = rho3 * ratio;
@@ -205,7 +205,7 @@ int do_main() {
   owned_deformable_model->maniskill_params.num_mpm_substeps = 50;
   owned_deformable_model->maniskill_params.friction_mu = 1.0;
   owned_deformable_model->maniskill_params.friction_kf = 10.0;
-  owned_deformable_model->maniskill_params.contact_damping = 10.0;
+  owned_deformable_model->maniskill_params.contact_damping = 500.0;
   owned_deformable_model->maniskill_params.contact_stiffness = 1e5;
 
   const DeformableModel<double>* deformable_model =
