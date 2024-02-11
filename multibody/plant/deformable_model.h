@@ -27,7 +27,7 @@ namespace multibody {
 
 struct ManiskillsParams {
 int num_mpm_substeps = 1;
-double contact_stiffness = 1e5;
+double contact_stiffness = 1e6;
 double contact_damping = 10.0;
 double friction_mu = 1.0;
 double friction_kf = 1.0;

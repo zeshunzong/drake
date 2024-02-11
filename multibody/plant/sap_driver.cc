@@ -8,7 +8,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 #include "drake/common/unused.h"
 #include "drake/multibody/contact_solvers/contact_configuration.h"
@@ -210,8 +209,6 @@ void SapDriver<T>::CalcFreeMotionVelocities(const systems::Context<T>& context,
   } else {
     *v_star = v0 + dt * vdot0;
   }
-  std::cout << "at time " << context.get_time() << std::endl;
-  fmt::print("v free motion = {}\n", fmt_eigen(v_star->transpose()));
 }
 
 template <typename T>

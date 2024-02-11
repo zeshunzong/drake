@@ -171,13 +171,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           mpm_contact_pairs;
       CalcMpmContactPairsWithParticlesInput(
           context, result->mpm_state.particles, &mpm_contact_pairs);
-
       // next, for each contact pair, compute and apply contact force
       for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
         const Vector3<T>& contact_normal = mpm_contact_pairs[i].normal;
         size_t p = mpm_contact_pairs[i].particle_in_contact_index;
         double penetration_distance = mpm_contact_pairs[i].penetration_distance;
-
         // get relative velocity in contact frame
         constexpr int kZAxis = 2;
         math::RotationMatrix<T> R_WC =
@@ -215,7 +213,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                   tree_topology.tree_velocities_start_in_v(tree_index_rigid),
                   tree_topology.num_tree_velocities(tree_index_rigid));
         }
-
         // this normal points toward more penetration
         double fn = std::abs(penetration_distance) *
                     contact_stiffness;  // acting towards the reverse direction
