@@ -27,7 +27,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -41,7 +41,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 150, "mpm ppc");
+DEFINE_double(ppc, 50, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -102,8 +102,8 @@ int do_main() {
                                   "ground_collision", rigid_hydro_props);
 
   double box_width = 0.3;
-  double ratio = 8.0;
-  double rho1 = 1000;
+  double ratio = 5.0;
+  double rho1 = 10;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
   double rho4 = rho3 * ratio;
@@ -176,12 +176,14 @@ int do_main() {
                               box_width / 2.0));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-      model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedModel<double>>(rho4 * 5e4, 0.2);
+      model =
+          std::make_unique<drake::multibody::mpm::constitutive_model::
+                               LinearCorotatedModel<double>>(rho4 * 5e4, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-      model2 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(rho2 * 5e6, 0.2);
+      model2 =
+          std::make_unique<drake::multibody::mpm::constitutive_model::
+                               LinearCorotatedModel<double>>(rho2 * 5e4, 0.2);
 
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(
@@ -191,17 +193,17 @@ int do_main() {
       std::make_unique<math::RigidTransform<double>>(
           Vector3<double>(0.0, 0.0, box_width / 2.0 + 1.0 * box_width));
 
-  double h = 0.15;
+  double h = 0.1;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           rho4, h);
-  owned_deformable_model->RegisterAdditionalMpmBody(std::move(mpm_geometry_level_set2),
-                                          std::move(model2), std::move(pose2),
-                                          rho2, h);
+  owned_deformable_model->RegisterAdditionalMpmBody(
+      std::move(mpm_geometry_level_set2), std::move(model2), std::move(pose2),
+      rho2, h);
 
-  owned_deformable_model->SetMpmDamping(0.01);
-  owned_deformable_model->SetMpmStiffness(1e6);
+  owned_deformable_model->SetMpmDamping(10.0);
+  owned_deformable_model->SetMpmStiffness(1e5);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
 
@@ -254,7 +256,6 @@ int do_main() {
   plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
                         math::RigidTransformd{Vector3d(0, 0, base_height)});
 
-
   plant.SetFreeBodyPose(
       &plant_context, plant.GetBodyByName("box3"),
       math::RigidTransformd{Vector3d(0, 0, base_height + 2.0 * gap)});
@@ -278,6 +279,10 @@ int do_main() {
   } else {
     simulator.AdvanceTo(FLAGS_simulation_time);
   }
+
+  std::ofstream htmlFile("output.html");
+  htmlFile << meshcat->StaticHtml();
+  htmlFile.close();
 
   return 0;
 }

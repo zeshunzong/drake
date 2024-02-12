@@ -353,7 +353,7 @@ class MpmModel {
 
   NewtonParams newton_params_;
 
-  double friction_mu_ = 0.1;
+  double friction_mu_ = 1.0;
 };
 
 }  // namespace mpm
