@@ -27,7 +27,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -41,7 +41,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 50, "mpm ppc");
+DEFINE_double(ppc, 12, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -96,14 +96,19 @@ int do_main() {
                                      &compliant_hydro_props);
   AddRigidHydroelasticProperties(0.01, &rigid_hydro_props);
   /* Set up a ground. */
-  Box ground{10, 10, 10};
+  Box ground{20, 20, 10};
   const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
                                   "ground_collision", rigid_hydro_props);
+  IllustrationProperties illustration_props;
+  illustration_props.AddProperty("phong", "diffuse",
+                                 Vector4d(0.7, 0.7, 0.7, 1.0));
+  plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
+                               "ground_visual", std::move(illustration_props));
 
   double box_width = 0.3;
   double ratio = 5.0;
-  double rho1 = 10;
+  double rho1 = 20;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
   double rho4 = rho3 * ratio;
@@ -178,12 +183,12 @@ int do_main() {
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model =
           std::make_unique<drake::multibody::mpm::constitutive_model::
-                               LinearCorotatedModel<double>>(rho4 * 5e4, 0.2);
+                               LinearCorotatedModel<double>>( 50e4, 0.0);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model2 =
           std::make_unique<drake::multibody::mpm::constitutive_model::
-                               LinearCorotatedModel<double>>(rho2 * 5e4, 0.2);
+                               LinearCorotatedModel<double>>( 50e4, 0.0);
 
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(
@@ -251,7 +256,7 @@ int do_main() {
 
   auto& mutable_context = simulator.get_mutable_context();
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
-  const double gap = box_width * 0.99;
+  const double gap = box_width * 1.0;
   const double base_height = 0.15;
   plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
                         math::RigidTransformd{Vector3d(0, 0, base_height)});
