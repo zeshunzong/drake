@@ -27,7 +27,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
 DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -41,7 +41,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 150, "mpm ppc");
+DEFINE_double(ppc, 50, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -101,9 +101,9 @@ int do_main() {
   plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
                                   "ground_collision", rigid_hydro_props);
 
-  double ratio = 8.0;
+  double ratio = 5.0;
   double box_width = 0.3;
-  double rho1 = 100;
+  double rho1 = 10;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
   double rho4 = rho3 * ratio;
@@ -190,7 +190,7 @@ int do_main() {
       std::make_unique<math::RigidTransform<double>>(
           Vector3<double>(0.0, 0.0, box_width / 2.0 + 1.0 * box_width));
 
-  double h = 0.15;
+  double h = 0.10;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
@@ -204,8 +204,8 @@ int do_main() {
 
   owned_deformable_model->maniskill_params.num_mpm_substeps = 50;
   owned_deformable_model->maniskill_params.friction_mu = 1.0;
-  owned_deformable_model->maniskill_params.friction_kf = 10.0;
-  owned_deformable_model->maniskill_params.contact_damping = 500.0;
+  owned_deformable_model->maniskill_params.friction_kf = 100.0;
+  owned_deformable_model->maniskill_params.contact_damping = 100.0;
   owned_deformable_model->maniskill_params.contact_stiffness = 1e5;
 
   const DeformableModel<double>* deformable_model =
