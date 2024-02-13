@@ -145,10 +145,24 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       const std::vector<Vector3<double>>& particle_positions =
           state.particles.positions();
 
+      // double total_count = particle_positions.size();
+
+      // Vector3<uint8_t> color1(102, 194, 165);
+      // Vector3<uint8_t> color2(141, 160, 203);
+      // Vector3<uint8_t> color3(166, 216, 84);
+
+
       // TODO(zeshunzong): set default value and get rid of the if
       if (cloud.size() == static_cast<int>(state.particles.num_particles())) {
         for (size_t p = 0; p < state.particles.num_particles(); ++p) {
           cloud.mutable_xyzs().col(p) = particle_positions[p].cast<float>();
+          // if (p < total_count / 3) {
+          //   cloud.mutable_rgb(p) = color1;
+          // } else if (p < 2 * total_count / 3) {
+          //   cloud.mutable_rgb(p) = color2;
+          // } else {
+          //   cloud.mutable_rgb(p) = color3;
+          // }
         }
         // TODO(zeshunzong): may also change stress / color map here
       } else {
@@ -157,6 +171,13 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
             perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
         for (size_t p = 0; p < state.particles.num_particles(); ++p) {
           new_cloud.mutable_xyzs().col(p) = particle_positions[p].cast<float>();
+          // if (p < total_count / 3) {
+          //   new_cloud.mutable_rgb(p) = color1;
+          // } else if (p < 2 * total_count / 3) {
+          //   new_cloud.mutable_rgb(p) = color2;
+          // } else {
+          //   new_cloud.mutable_rgb(p) = color3;
+          // }
         }
         cloud = new_cloud;
       }
