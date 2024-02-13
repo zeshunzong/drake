@@ -17,8 +17,6 @@ namespace drake {
 namespace multibody {
 namespace mpm {
 
-
-
 template <typename T>
 struct MpmState {
   explicit MpmState(double h) : sparse_grid(h) { DRAKE_DEMAND(h > 0); }
@@ -65,6 +63,35 @@ struct MpmState {
                             reference_volume_p);
     }
     return num_particles;  // return the number of particles added
+  }
+
+  int AddParticlesUniformly(
+      const internal::AnalyticLevelSet& level_set,
+      const math::RigidTransform<double>& pose,
+      const mpm::constitutive_model::ElastoPlasticModel<T>& elastoplastic_model,
+      double common_density, int particles_per_dim) {
+    const std::array<Vector3<double>, 2>& bounding_box =
+        level_set.bounding_box();
+
+    double max_length = std::max(bounding_box[1](0) - bounding_box[0](0),
+                                 bounding_box[1](1) - bounding_box[0](1));
+    max_length = std::max(bounding_box[1](2) - bounding_box[0](2), max_length);
+
+    double dx = max_length / (particles_per_dim + 1);
+
+    double vol = level_set.volume() /
+                 (particles_per_dim * particles_per_dim * particles_per_dim);
+    double mp = vol * common_density;
+    for (int i = 1; i < particles_per_dim + 1; ++i) {
+      for (int j = 1; j < particles_per_dim + 1; ++j) {
+        for (int k = 0; k < particles_per_dim + 2; ++k) {
+          particles.AddParticle(
+              pose * (bounding_box[0] + Vector3<T>(i * dx, j * dx, k * dx)),
+              Vector3<T>(0, 0, 0), elastoplastic_model.Clone(), mp, vol);
+        }
+      }
+    }
+    return particles_per_dim * particles_per_dim * particles_per_dim;
   }
 
   // TODO(zeshunzong): switch to this later
