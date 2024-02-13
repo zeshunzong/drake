@@ -160,8 +160,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     int num_mpm_steps = deformable_model_->maniskill_params.num_mpm_substeps;
     double mpm_dt = large_dt / num_mpm_steps;
 
-    double contact_stiffness = deformable_model_->maniskill_params.contact_stiffness;
-    double contact_damping = deformable_model_->maniskill_params.contact_damping;
+    double contact_stiffness =
+        deformable_model_->maniskill_params.contact_stiffness;
+    double contact_damping =
+        deformable_model_->maniskill_params.contact_damping;
     double kf = deformable_model_->maniskill_params.friction_kf;
     double friction_mu = deformable_model_->maniskill_params.friction_mu;
 
@@ -219,15 +221,11 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                                         // of normal
         double fd = contact_damping *
                     std::min(relative_v_C(2), 0.0);  // this will be negative
-        double ft0 = std::min(
-            std::abs(relative_v_C(0)),
-            friction_mu * std::abs(penetration_distance) * contact_stiffness);
+        double ft0 = std::min(std::abs(relative_v_C(0) * kf), friction_mu * fn);
         if (relative_v_C(0) < 0) {
           ft0 = -ft0;
         }
-        double ft1 = std::min(
-            std::abs(relative_v_C(1) * kf),
-            friction_mu * std::abs(penetration_distance) * contact_stiffness);
+        double ft1 = std::min(std::abs(relative_v_C(1) * kf), friction_mu * fn);
         if (relative_v_C(1) < 0) {
           ft1 = -ft1;
         }

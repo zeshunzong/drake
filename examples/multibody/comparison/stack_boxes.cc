@@ -87,7 +87,7 @@ int do_main() {
   ProximityProperties compliant_hydro_props;
   ProximityProperties rigid_hydro_props;
 
-  const CoulombFriction<double> surface_friction(10.0, 10.0);
+  const CoulombFriction<double> surface_friction(1.0, 1.0);
   AddContactMaterial(FLAGS_damping, {}, surface_friction,
                      &compliant_hydro_props);
   AddContactMaterial(FLAGS_damping, {}, surface_friction, &rigid_hydro_props);
@@ -106,10 +106,8 @@ int do_main() {
   plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
                                "ground_visual", std::move(illustration_props));
 
-  double ratio = 1.2;
+  double ratio = 1.5;
   double box_width = 0.3;
-  double dx = 2 * box_width / (FLAGS_ppc + 1);
-  dx = 0;
   double rho1 = 100;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
@@ -190,17 +188,17 @@ int do_main() {
 
   std::unique_ptr<math::RigidTransform<double>> pose1 =
       std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(0.0, 0.0, box_width / 2.0 - dx));
+          Vector3<double>(0.0, 0.0, box_width / 2.0));
 
   std::unique_ptr<math::RigidTransform<double>> pose3 =
       std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(0.0, 0.0, box_width / 2.0 + 2.0 * box_width - 3 * dx));
+          Vector3<double>(0.0, 0.0, box_width / 2.0 + 2.0 * box_width));
 
   std::unique_ptr<math::RigidTransform<double>> pose5 =
       std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(0.0, 0.0, box_width / 2.0 + 4.0 * box_width - 5 * dx));
+          Vector3<double>(0.0, 0.0, box_width / 2.0 + 4.0 * box_width));
 
-  double h = 0.15;
+  double h = 0.06;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set1),
                                           std::move(model1), std::move(pose1),
@@ -243,7 +241,7 @@ int do_main() {
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
-  meshcat_params.publish_period = FLAGS_time_step * 1;
+  meshcat_params.publish_period = FLAGS_time_step;
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, scene_graph, meshcat, meshcat_params);
   auto meshcat_pc_visualizer =
@@ -266,16 +264,15 @@ int do_main() {
 
   plant.SetFreeBodyPose(
       &plant_context, plant.GetBodyByName("box2"),
-      math::RigidTransformd{Vector3d(0, 0, base_height + 1.0 * box_width - 2 * dx)});
+      math::RigidTransformd{Vector3d(0, 0, base_height + 1.0 * box_width)});
 
   plant.SetFreeBodyPose(
       &plant_context, plant.GetBodyByName("box4"),
-      math::RigidTransformd{Vector3d(0, 0, base_height + 3.0 * box_width - 4 * dx)});
+      math::RigidTransformd{Vector3d(0, 0, base_height + 3.0 * box_width)});
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
-  sleep(5);
   bool recording = true;
 
   if (recording) {
