@@ -178,16 +178,16 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model1 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(4e5, 0.2);
+                                    LinearCorotatedModel<double>>(8e5, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model3 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(4e5, 0.2);
+                                    LinearCorotatedModel<double>>(8e5, 0.2);
 
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model5 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(4e5, 0.2);
+                                    LinearCorotatedModel<double>>(8e5, 0.2);
 
   std::unique_ptr<math::RigidTransform<double>> pose1 =
       std::make_unique<math::RigidTransform<double>>(
@@ -201,7 +201,7 @@ int do_main() {
       std::make_unique<math::RigidTransform<double>>(
           Vector3<double>(0.0, 0.0, box_width / 2.0 + 4.0 * box_width));
 
-  double h = 0.15;
+  double h = 0.1;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set1),
                                           std::move(model1), std::move(pose1),
