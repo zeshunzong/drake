@@ -27,7 +27,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 6.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 3, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -107,8 +107,8 @@ int do_main() {
                                "ground_visual", std::move(illustration_props));
 
   double box_width = 0.3;
-  double ratio = 6.0;
-  double rho1 = 10;
+  double ratio = 1.5;
+  double rho1 = 100;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
   double rho4 = rho3 * ratio;
@@ -178,16 +178,16 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model1 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(8e5, 0.2);
+                                    LinearCorotatedModel<double>>(1e4, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model3 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(8e5, 0.2);
+                                    LinearCorotatedModel<double>>(1e4, 0.2);
 
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model5 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(8e5, 0.2);
+                                    LinearCorotatedModel<double>>(1e4, 0.2);
 
   std::unique_ptr<math::RigidTransform<double>> pose1 =
       std::make_unique<math::RigidTransform<double>>(
@@ -201,7 +201,7 @@ int do_main() {
       std::make_unique<math::RigidTransform<double>>(
           Vector3<double>(0.0, 0.0, box_width / 2.0 + 4.0 * box_width));
 
-  double h = 0.1;
+  double h = 0.06;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set1),
                                           std::move(model1), std::move(pose1),
@@ -236,7 +236,7 @@ int do_main() {
 
   /* Add a visualizer that emits LCM messages for visualization. */
   geometry::DrakeVisualizerParams params;
-  params.publish_period = 1.0 / 64;
+  params.publish_period = FLAGS_time_step;
   auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(
       &builder, scene_graph, nullptr, params);
   // connect mpm to output port
