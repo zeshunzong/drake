@@ -38,8 +38,8 @@ DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
-DEFINE_double(friction, 0.5, "mpm friction");
-DEFINE_double(ppc, 40, "mpm ppc");
+DEFINE_double(friction, 0.1, "mpm friction");
+DEFINE_double(ppc, 10, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
@@ -81,7 +81,6 @@ RigidTransformd FromXyzRpy(const Vector3<double>& rpy,
                            const Vector3<double>& p) {
   return RigidTransformd(math::RollPitchYaw<double>(rpy), p);
 }
-
 RigidTransformd FromXyzRpyDegree(const Vector3<double>& rpy_deg,
                                  const Vector3<double>& p) {
   return RigidTransformd(
@@ -144,31 +143,26 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
 
   std::vector<std::string> GetPreferredJointOrdering() {
     std::vector<std::string> joint_name_mapping;
-
     // Thumb finger
     joint_name_mapping.push_back("joint_12");
     joint_name_mapping.push_back("joint_13");
     joint_name_mapping.push_back("joint_14");
     joint_name_mapping.push_back("joint_15");
-
     // Index finger
     joint_name_mapping.push_back("joint_0");
     joint_name_mapping.push_back("joint_1");
     joint_name_mapping.push_back("joint_2");
     joint_name_mapping.push_back("joint_3");
-
     // Middle finger
     joint_name_mapping.push_back("joint_4");
     joint_name_mapping.push_back("joint_5");
     joint_name_mapping.push_back("joint_6");
     joint_name_mapping.push_back("joint_7");
-
     // Ring finger
     joint_name_mapping.push_back("joint_8");
     joint_name_mapping.push_back("joint_9");
     joint_name_mapping.push_back("joint_10");
     joint_name_mapping.push_back("joint_11");
-
     return joint_name_mapping;
   }
 
@@ -194,7 +188,6 @@ class IiwaController : public drake::systems::LeafSystem<double> {
     // state = [ryp, translation]
     X_xyz_rpy.segment(0, 3) = init_pose.rotation().ToRollPitchYaw().vector();
     X_xyz_rpy.segment(3, 3) = init_pose.translation();
-
     this->DeclareDiscreteState(X_xyz_rpy);
     this->DeclarePeriodicDiscreteUpdateEvent(plant_.time_step(), 0,
                                              &IiwaController::Update);
@@ -208,7 +201,6 @@ class IiwaController : public drake::systems::LeafSystem<double> {
                   RigidTransformd* value) const {
     // Eigen::VectorXd current_robot_qv =
     //     this->get_input_port(robot_state_index_).Eval(context);
-
     const VectorXd xd = context.get_discrete_state().value();
     // xd = [rpy, translation]
     *value = FromXyzRpy(xd.segment(0, 3), xd.segment(3, 3));
@@ -218,13 +210,11 @@ class IiwaController : public drake::systems::LeafSystem<double> {
               systems::DiscreteValues<double>* next_states) const {
     const VectorX<double>& current_state_values =
         context.get_discrete_state().value();
-    unused(next_states);
     unused(current_state_values);
 
     // fake update:
     VectorX<double> dX = current_state_values;
     dX.setZero();
-
     // if (context.get_time() > 0.4) {
     //   dX(5) = 0.004;  // vertical
     // }
@@ -280,48 +270,41 @@ int do_main() {
 
   double mug_outer_radius = 0.2;
   double mug_height = 0.6;
-  double mug_thickness = 0.05;
+  double mug_thickness = mug_outer_radius / 6.0;
   double mug_inner_radius = mug_outer_radius - mug_thickness;
   double mug_inner_height = mug_height - mug_thickness;
+  Vector4<double> outer_cylinder_color(1.0, 0.55, 0.0, 0.2);
+  Vector4<double> inner_cylinder_color(1.0, 0.55, 0.5, 0.6);
 
-  Vector3<double> mug_outer_translation(0.0, -1.0, 0.5);
-  RigidTransformd mug_outer_transform(mug_outer_translation);
-
-  Vector3<double> mug_inner_translation =
-      mug_outer_translation + Vector3<double>(0.5, 0, mug_thickness);
-  unused(mug_inner_translation);
+  Vector3<double> mug_outer_translation(0.0, -1.0, mug_height / 2.0);
 
   const SpatialInertia<double> outer_cylinder_spatial =
       SpatialInertia<double>::SolidCylinderWithDensity(
           1000, mug_height, mug_outer_radius, Vector3<double>(0, 0, 1));
-
   const RigidBody<double>& outer_cylinder_body =
       plant.AddRigidBody("outer_cylinder", outer_cylinder_spatial);
-
   plant.RegisterVisualGeometry(
       outer_cylinder_body, RigidTransformd::Identity(),
       drake::geometry::Cylinder(mug_outer_radius, mug_height),
-      "OuterCylinderVisual", Vector4<double>(1.0, 0.55, 0.0, 0.2));
+      "OuterCylinderVisual", outer_cylinder_color);
   geometry::GeometryId outer_cylinder_geometry_id =
       plant.RegisterCollisionGeometry(
           outer_cylinder_body, RigidTransformd::Identity(),
           drake::geometry::Cylinder(mug_outer_radius, mug_height),
           "OuterCylinderCollision", compliant_hydro_props);
-
-  plant.RegisterVisualGeometry(
-      plant.GetBodyByName("outer_cylinder"),
-      RigidTransformd(Eigen::Vector3d{0, 0, mug_thickness / 2.0}),
-      drake::geometry::Cylinder(mug_inner_radius, mug_inner_height),
-      "InnerCylinderVisual", Vector4<double>(1.0, 0.55, 0.5, 0.6));
-
   geometry::GeometryId inner_cylinder_geometry_id =
       plant.RegisterCollisionGeometry(
           outer_cylinder_body,
           RigidTransformd(Eigen::Vector3d{0, 0, mug_thickness / 2.0}),
           drake::geometry::Cylinder(mug_inner_radius, mug_inner_height),
           "InnerCylinderCollision", compliant_hydro_props);
+  plant.RegisterVisualGeometry(
+      plant.GetBodyByName("outer_cylinder"),
+      RigidTransformd(Eigen::Vector3d{0, 0, mug_thickness / 2.0}),
+      drake::geometry::Cylinder(mug_inner_radius, mug_inner_height),
+      "InnerCylinderVisual", inner_cylinder_color);
 
-  unused(outer_cylinder_geometry_id, inner_cylinder_geometry_id);
+  // ------------- a container on the ground
   Box skewed_pad{1, 1, 0.05};
   const RigidTransformd X_WG =
       FromXyzRpyDegree(Eigen::Vector3d(45, 0, 0), Eigen::Vector3d{0, 0, 0});
@@ -332,15 +315,13 @@ int do_main() {
                                  Vector4d(0.7, 0.5, 0.4, 0.3));
   plant.RegisterVisualGeometry(plant.world_body(), X_WG, skewed_pad,
                                "skewed_pad_visual", (illustration_props));
-
-  Box vertical_pad{1, 0.05, 1};
+  Box vertical_pad{2, 0.05, 2};
   plant.RegisterCollisionGeometry(
       plant.world_body(), RigidTransformd(Eigen::Vector3d(0, -0.3, 0)),
       vertical_pad, "vertical_pad", rigid_proximity_props);
   plant.RegisterVisualGeometry(
       plant.world_body(), RigidTransformd(Eigen::Vector3d(0, -0.3, 0)),
       vertical_pad, "vertical_pad_visual", (illustration_props));
-
   Box left_side_pad{0.05, 1, 1};
   plant.RegisterCollisionGeometry(
       plant.world_body(), RigidTransformd(Eigen::Vector3d(-0.2, 0, 0)),
@@ -348,7 +329,6 @@ int do_main() {
   plant.RegisterVisualGeometry(
       plant.world_body(), RigidTransformd(Eigen::Vector3d(-0.20, 0, 0)),
       left_side_pad, "left_side_pad_visual", (illustration_props));
-
   Box right_side_pad{0.05, 1, 1};
   plant.RegisterCollisionGeometry(
       plant.world_body(), RigidTransformd(Eigen::Vector3d(0.2, 0, 0)),
@@ -356,6 +336,7 @@ int do_main() {
   plant.RegisterVisualGeometry(
       plant.world_body(), RigidTransformd(Eigen::Vector3d(0.20, 0, 0)),
       right_side_pad, "right_side_pad_visual", (illustration_props));
+  // ------------- a container on the ground
 
   MultibodyPlant<double> iiwa_controller_plant =
       MultibodyPlant<double>(plant_config.time_step);
@@ -399,40 +380,35 @@ int do_main() {
       owned_deformable_model.get();
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
-          std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.1, 0.1, 0.3));
+          std::make_unique<drake::multibody::mpm::internal::CylinderLevelSet>(
+              mug_height / 2.0, mug_inner_radius * 0.98);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
-          1e4, 0.2, 10);
-  Vector3<double> translation = {0.0, 0.0, 0.45};
+          2e4, 0.3, 0.0);
+  Vector3<double> translation = {mug_outer_translation(0),
+                                 mug_outer_translation(1),
+                                 mug_height / 2.0 + mug_thickness * 1.02};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.08;
+  double h = mug_outer_radius / 3.0;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
-  // owned_deformable_model->ApplyMpmGround();
+
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
+  owned_deformable_model->SetMpmStiffness(1e5);
 
-  const geometry::SceneGraphInspector<double>& inspector =
-      scene_graph.model_inspector();
-  auto list = inspector.GetAllGeometryIds();
+  owned_deformable_model->inner_cylinder_id_ = inner_cylinder_geometry_id;
+  owned_deformable_model->outer_cylinder_id_ = outer_cylinder_geometry_id;
 
-  std::unordered_map<geometry::GeometryId, std::string> geometryId2name;
-  unused(geometryId2name);
-  std::cout << "length: " << list.size() << std::endl;
-  for (size_t i = 0; i < list.size(); ++i) {
-    geometryId2name.insert({(list[i]), inspector.GetName(list[i])});
-  }
-  owned_deformable_model->geometryids2names_ = geometryId2name;
   plant.AddPhysicalModel(std::move(owned_deformable_model));
 
-  double Kp = 1000000.0;
+  double Kp = 10000.0;
   double Kd = 2 * std::sqrt(Kp);
 
   drake::multibody::PdControllerGains gain(Kp, Kd);
@@ -467,7 +443,6 @@ int do_main() {
   for (int a = 0; a < plant.num_actuators(); ++a) {
     auto& actuator =
         plant.get_joint_actuator(drake::multibody::JointActuatorIndex(a));
-
     for (int i = 0; i < static_cast<int>(preferred_joint_ordering.size());
          ++i) {
       if (actuator.joint().name() == preferred_joint_ordering[i]) {
@@ -479,7 +454,6 @@ int do_main() {
       }
     }
   }
-
   auto actuated_states_selector =
       builder.template AddSystem<drake::systems::MatrixGain<double>>(
           state_selector);
@@ -518,7 +492,6 @@ int do_main() {
   input_sizes.push_back(nv_iiwa);
   auto mux = builder.template AddSystem<drake::systems::Multiplexer<double>>(
       input_sizes);
-
   auto zero_vs =
       builder.template AddSystem<drake::systems::ConstantVectorSource>(
           Eigen::VectorXd::Zero(nv_iiwa));
@@ -536,7 +509,7 @@ int do_main() {
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
-  meshcat_params.publish_period = FLAGS_time_step * 2;
+  meshcat_params.publish_period = FLAGS_time_step;
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, scene_graph, meshcat, meshcat_params);
   auto meshcat_pc_visualizer =
@@ -557,7 +530,7 @@ int do_main() {
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
 
   plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("outer_cylinder"),
-                        mug_outer_transform);
+                        RigidTransformd(mug_outer_translation));
   //   auto& diff_ik_context =
   //       diff_ik->GetMyMutableContextFromRoot(&mutable_context);
 

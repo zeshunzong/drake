@@ -377,17 +377,47 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       std::vector<geometry::SignedDistanceToPoint<T>> p_to_geometries =
           query_object.ComputeSignedDistanceToPoint(
               state.particles.GetPositionAt(p));
-       std::cout << "num geometries: " << p_to_geometries.size() << std::endl;
       // identify those that are in contact, i.e. signed_distance < 0
-      for (const auto& p2geometry : p_to_geometries) {
-        std::cout << "name is " << deformable_model_->geometryids2names_.at(p2geometry.id_G) << std::endl;
-        if (p2geometry.distance < 0) {
-          // if particle is inside rigid body, i.e. in contact
-          // note: normal direction
-          result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
-              p, p2geometry.id_G, p2geometry.distance,
-              -p2geometry.grad_W.normalized(),
-              state.particles.GetPositionAt(p)));
+
+      // handle mug
+      size_t outer_index;
+      size_t inner_index;
+      for (size_t i = 0; i < p_to_geometries.size(); ++i) {
+        if (p_to_geometries[i].id_G == deformable_model_->inner_cylinder_id_)
+          inner_index = i;
+        if (p_to_geometries[i].id_G == deformable_model_->outer_cylinder_id_)
+          outer_index = i;
+      }
+      auto& p2outer = p_to_geometries[outer_index];
+      auto& p2inner = p_to_geometries[inner_index];
+      if (p2outer.distance < 0) {
+        // at least within the outer cylinder
+        if (p2inner.distance > 0) {
+          if (std::abs(p2outer.distance) < std::abs(p2inner.distance)) {
+            // closer to outer surface, push out of the mug
+            // normal = nA
+            result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
+                p, p2outer.id_G, p2outer.distance, -p2outer.grad_W.normalized(),
+                state.particles.GetPositionAt(p)));
+          } else {
+            result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
+                p, p2inner.id_G, -p2inner.distance, p2inner.grad_W.normalized(),
+                state.particles.GetPositionAt(p)));
+          }
+        }
+      }
+      // handle the rest
+      for (size_t i = 0; i < p_to_geometries.size(); ++i) {
+        if ((i != outer_index) && (i != inner_index)) {
+          const auto& p2geometry = p_to_geometries[i];
+          // not related to cylinder, usual contact
+          if (p2geometry.distance < 0) {
+            // if particle is inside rigid body, i.e. in contact
+            result->emplace_back(geometry::internal::MpmParticleContactPair<T>(
+                p, p2geometry.id_G, p2geometry.distance,
+                -p2geometry.grad_W.normalized(),
+                state.particles.GetPositionAt(p)));
+          }
         }
       }
     }

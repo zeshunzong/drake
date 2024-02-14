@@ -357,6 +357,9 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   std::unordered_map<geometry::GeometryId, std::string> geometryids2names_;
 
+  geometry::GeometryId inner_cylinder_id_;
+  geometry::GeometryId outer_cylinder_id_;
+
  private:
   PhysicalModelPointerVariant<T> DoToPhysicalModelPointerVariant() const final {
     return PhysicalModelPointerVariant<T>(this);
