@@ -355,6 +355,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
     mpm_model_->SetMinNumParticlesPerCell(m);
   }
 
+  std::unordered_map<geometry::GeometryId, std::string> geometryids2names_;
+
  private:
   PhysicalModelPointerVariant<T> DoToPhysicalModelPointerVariant() const final {
     return PhysicalModelPointerVariant<T>(this);

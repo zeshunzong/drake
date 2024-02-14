@@ -3,12 +3,14 @@
 #include <gflags/gflags.h>
 
 #include "drake/common/find_resource.h"
+#include "drake/geometry/collision_filter_manager.h"
 #include "drake/geometry/drake_visualizer.h"
 #include "drake/geometry/meshcat_point_cloud_visualizer.h"
 #include "drake/geometry/meshcat_visualizer.h"
 #include "drake/geometry/meshcat_visualizer_params.h"
 #include "drake/geometry/proximity_properties.h"
 #include "drake/geometry/scene_graph.h"
+#include "drake/geometry/scene_graph_inspector.h"
 #include "drake/manipulation/kuka_iiwa/iiwa_constants.h"
 #include "drake/math/rigid_transform.h"
 #include "drake/multibody/inverse_kinematics/differential_inverse_kinematics_integrator.h"
@@ -59,6 +61,8 @@ using drake::multibody::DifferentialInverseKinematicsParameters;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
 using drake::multibody::Parser;
+using drake::multibody::RigidBody;
+using drake::multibody::SpatialInertia;
 using drake::systems::BasicVector;
 using drake::systems::Context;
 using Eigen::Matrix2d;
@@ -251,14 +255,73 @@ int do_main() {
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
-  /* Set up a ground. */
+  ProximityProperties compliant_hydro_props;
   ProximityProperties rigid_proximity_props;
-  /* Set the friction coefficient close to that of rubber against rubber. */
-  const CoulombFriction<double> surface_friction(0.0, 0.0);
-  AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
-  rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
-                                    geometry::internal::kRezHint, 0.01);
 
+  const CoulombFriction<double> surface_friction(1.0, 1.0);
+  AddContactMaterial(FLAGS_damping, {}, surface_friction,
+                     &compliant_hydro_props);
+  AddContactMaterial(FLAGS_damping, {}, surface_friction,
+                     &rigid_proximity_props);
+
+  AddCompliantHydroelasticProperties(0.01, 1e8, &compliant_hydro_props);
+  AddRigidHydroelasticProperties(0.01, &rigid_proximity_props);
+
+  Box ground{20, 20, 10};
+  const RigidTransformd X_WGround(Eigen::Vector3d{0, 0, -5});
+  plant.RegisterCollisionGeometry(plant.world_body(), X_WGround, ground,
+                                  "ground_collision", rigid_proximity_props);
+  IllustrationProperties illustration_props_G;
+  illustration_props_G.AddProperty("phong", "diffuse",
+                                   Vector4d(0.9, 0.9, 0.9, 1.0));
+  plant.RegisterVisualGeometry(plant.world_body(), X_WGround, ground,
+                               "ground_visual",
+                               std::move(illustration_props_G));
+
+  double mug_outer_radius = 0.2;
+  double mug_height = 0.6;
+  double mug_thickness = 0.05;
+  double mug_inner_radius = mug_outer_radius - mug_thickness;
+  double mug_inner_height = mug_height - mug_thickness;
+
+  Vector3<double> mug_outer_translation(0.0, -1.0, 0.5);
+  RigidTransformd mug_outer_transform(mug_outer_translation);
+
+  Vector3<double> mug_inner_translation =
+      mug_outer_translation + Vector3<double>(0.5, 0, mug_thickness);
+  unused(mug_inner_translation);
+
+  const SpatialInertia<double> outer_cylinder_spatial =
+      SpatialInertia<double>::SolidCylinderWithDensity(
+          1000, mug_height, mug_outer_radius, Vector3<double>(0, 0, 1));
+
+  const RigidBody<double>& outer_cylinder_body =
+      plant.AddRigidBody("outer_cylinder", outer_cylinder_spatial);
+
+  plant.RegisterVisualGeometry(
+      outer_cylinder_body, RigidTransformd::Identity(),
+      drake::geometry::Cylinder(mug_outer_radius, mug_height),
+      "OuterCylinderVisual", Vector4<double>(1.0, 0.55, 0.0, 0.2));
+  geometry::GeometryId outer_cylinder_geometry_id =
+      plant.RegisterCollisionGeometry(
+          outer_cylinder_body, RigidTransformd::Identity(),
+          drake::geometry::Cylinder(mug_outer_radius, mug_height),
+          "OuterCylinderCollision", compliant_hydro_props);
+
+  plant.RegisterVisualGeometry(
+      plant.GetBodyByName("outer_cylinder"),
+      RigidTransformd(Eigen::Vector3d{0, 0, mug_thickness / 2.0}),
+      drake::geometry::Cylinder(mug_inner_radius, mug_inner_height),
+      "InnerCylinderVisual", Vector4<double>(1.0, 0.55, 0.5, 0.6));
+
+  geometry::GeometryId inner_cylinder_geometry_id =
+      plant.RegisterCollisionGeometry(
+          outer_cylinder_body,
+          RigidTransformd(Eigen::Vector3d{0, 0, mug_thickness / 2.0}),
+          drake::geometry::Cylinder(mug_inner_radius, mug_inner_height),
+          "InnerCylinderCollision", compliant_hydro_props);
+
+  unused(outer_cylinder_geometry_id, inner_cylinder_geometry_id);
   Box skewed_pad{1, 1, 0.05};
   const RigidTransformd X_WG =
       FromXyzRpyDegree(Eigen::Vector3d(45, 0, 0), Eigen::Vector3d{0, 0, 0});
@@ -297,7 +360,7 @@ int do_main() {
   MultibodyPlant<double> iiwa_controller_plant =
       MultibodyPlant<double>(plant_config.time_step);
 
-  plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
+  // plant.mutable_gravity_field().set_gravity_vector(Eigen::Vector3d::Zero());
   multibody::Parser parser(&plant);
   const std::string filename = FindResourceOrThrow(
       "drake/manipulation/models/"
@@ -355,6 +418,18 @@ int do_main() {
       static_cast<int>(FLAGS_ppc));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
+
+  const geometry::SceneGraphInspector<double>& inspector =
+      scene_graph.model_inspector();
+  auto list = inspector.GetAllGeometryIds();
+
+  std::unordered_map<geometry::GeometryId, std::string> geometryId2name;
+  unused(geometryId2name);
+  std::cout << "length: " << list.size() << std::endl;
+  for (size_t i = 0; i < list.size(); ++i) {
+    geometryId2name.insert({(list[i]), inspector.GetName(list[i])});
+  }
+  owned_deformable_model->geometryids2names_ = geometryId2name;
   plant.AddPhysicalModel(std::move(owned_deformable_model));
 
   double Kp = 1000000.0;
@@ -480,6 +555,9 @@ int do_main() {
 
   auto& mutable_context = simulator.get_mutable_context();
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
+
+  plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("outer_cylinder"),
+                        mug_outer_transform);
   //   auto& diff_ik_context =
   //       diff_ik->GetMyMutableContextFromRoot(&mutable_context);
 

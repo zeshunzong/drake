@@ -377,8 +377,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       std::vector<geometry::SignedDistanceToPoint<T>> p_to_geometries =
           query_object.ComputeSignedDistanceToPoint(
               state.particles.GetPositionAt(p));
+       std::cout << "num geometries: " << p_to_geometries.size() << std::endl;
       // identify those that are in contact, i.e. signed_distance < 0
       for (const auto& p2geometry : p_to_geometries) {
+        std::cout << "name is " << deformable_model_->geometryids2names_.at(p2geometry.id_G) << std::endl;
         if (p2geometry.distance < 0) {
           // if particle is inside rigid body, i.e. in contact
           // note: normal direction
