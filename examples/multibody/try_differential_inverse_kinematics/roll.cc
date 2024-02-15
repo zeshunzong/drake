@@ -39,7 +39,7 @@ DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
-DEFINE_double(friction, 10.5, "mpm friction");
+DEFINE_double(friction, 1.0, "mpm friction");
 DEFINE_double(ppc, 2, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 1.0, "larger, more damping");
@@ -62,6 +62,8 @@ using drake::multibody::DifferentialInverseKinematicsParameters;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
 using drake::multibody::Parser;
+using drake::multibody::RigidBody;
+using drake::multibody::SpatialInertia;
 using drake::systems::BasicVector;
 using drake::systems::Context;
 using Eigen::Matrix2d;
@@ -91,44 +93,22 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
  public:
   HandPoseController(const multibody::MultibodyPlant<double>& plant)
       : plant_(plant) {
-    open_state_ = Eigen::VectorXd::Zero(4);
-    open_state_(0) = -0.08;
-    open_state_(1) = 0.08;
     closed_state_ = Eigen::VectorXd::Zero(4);
-    closed_state_(0) = -0.032;
-    closed_state_(1) = 0.032;
+    closed_state_(0) = -0.015;
+    closed_state_(1) = 0.015;
     this->DeclareVectorOutputPort(
         "WsgDesiredState", drake::systems::BasicVector<double>(size_),
         &HandPoseController::CalcDesiredState, {this->time_ticket()});
   }
   void CalcDesiredState(const Context<double>& context,
                         drake::systems::BasicVector<double>* output) const {
-    if (context.get_time() < 0.5) {
-      output->set_value(open_state_);
-    } else if (context.get_time() < 2.4) {
-      // gripper gripping from 0.5 to 0.8, then hold until 2.2
-      double t = (context.get_time() - 0.5) / (0.3);
-      Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * open_state_ +
-                                std::min(t, 1.0) * closed_state_;
-      output->set_value(q_and_v);
-    } else if (context.get_time() < 2.7) {
-      // gripper opening from 2.4 to 2.7
-      double t = (context.get_time() - 2.4) / (0.3);
-      Eigen::VectorXd q_and_v = std::max(1.0 - t, 0.0) * closed_state_ +
-                                std::min(t, 1.0) * open_state_;
-      output->set_value(q_and_v);
-    } else {
-      output->set_value(open_state_);
-    }
+    unused(context);
+    output->set_value(closed_state_);
   }
 
  private:
   const multibody::MultibodyPlant<double>& plant_;
   int size_ = 4;  // 4 fingers with 4 joints
-  double close_start_ = 0.05;
-  double close_end_ = 0.35;
-  double open_start_ = 1.25;
-  Eigen::VectorXd open_state_;
   Eigen::VectorXd closed_state_;
 };
 
@@ -172,47 +152,18 @@ class IiwaController : public drake::systems::LeafSystem<double> {
     dX.setZero();
 
     if ((context.get_time() >= 0.0) && (context.get_time() <= 0.2)) {
-      dX(5) = 0.006;  // up
+      dX.setZero();  // hold
     } else if (context.get_time() <= 0.3) {
       dX.setZero();  // hold
     } else if (context.get_time() <= 0.5) {
-      dX(5) = -0.006;  // down
+      dX(5) = -0.005;  // down
     } else if (context.get_time() <= 0.8) {
       dX.setZero();  // hold, grip is gripping from 0.5 to 0.8
-    } else if (context.get_time() <= 1.2) {
-      dX(5) = 0.003;  // up for 0.4s
-    } else if (context.get_time() <= 1.3) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 1.9) {
-      if (is_left_) {
-        dX(4) = 0.0025;  // split
-      } else {
-        dX(4) = -0.0025;  // split
-      }
-    } else if (context.get_time() <= 2.0) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 2.2) {
-      dX(5) = -0.004;  // down for 0.2s
-    } else if (context.get_time() <= 2.8) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 3.2) {
-      dX(5) = 0.006;  // up
+    } else if (context.get_time() <= 2.4) {
+      dX(3) = 0.0025;
     } else {
       dX.setZero();  // hold
     }
-
-    // if ((context.get_time() >= lift_start_) &&
-    //     (context.get_time() <= lift_ends_)) {
-    //   dX(5) = 0.004;
-    // }
-    // if ((context.get_time() >= split_start_) &&
-    //     (context.get_time() <= split_end_)) {
-    //   if (is_left_) {
-    //     dX(4) = 0.004;  // split
-    //   } else {
-    //     dX(4) = -0.004;  // split
-    //   }
-    // }
 
     auto new_value = current_state_values + dX;
     next_states->set_value(new_value);
@@ -238,13 +189,56 @@ int do_main() {
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
+  ProximityProperties compliant_hydro_props;
+  const CoulombFriction<double> surface_friction(1.0, 1.0);
+  AddContactMaterial(FLAGS_damping, {}, surface_friction,
+                     &compliant_hydro_props);
+  AddCompliantHydroelasticProperties(0.01, 1e6, &compliant_hydro_props);
+
+  double inner_rod_radius = 0.02;
+  double inner_rod_length = 0.6;
+  Vector4<double> inner_cylinder_color(1.0, 0.55, 0.5, 0.6);
+  Vector4<double> outer_cylinder_color(1.0, 0.55, 0.0, 0.6);
+
+  double outer_rod_radius = inner_rod_radius * 2.0;
+  double outer_rod_length = inner_rod_length * 0.6;
+
+  const SpatialInertia<double> inner_rod_inertia =
+      SpatialInertia<double>::SolidCylinderWithDensity(
+          300.0, inner_rod_radius, inner_rod_length, Vector3<double>(0, 0, 1));
+
+  const RigidBody<double>& inner_rod_body =
+      plant.AddRigidBody("inner_rod", inner_rod_inertia);
+
+  RigidTransformd inner_rod_transform = FromXyzRpyDegree(
+      Vector3<double>(90, 0, 0), Vector3<double>(0.0, 0, 0.18));
+
+  plant.RegisterVisualGeometry(
+      inner_rod_body, RigidTransformd::Identity(),
+      drake::geometry::Cylinder(inner_rod_radius, inner_rod_length),
+      "InnerRodVisual", inner_cylinder_color);
+
+  plant.RegisterCollisionGeometry(
+      inner_rod_body, RigidTransformd::Identity(),
+      drake::geometry::Cylinder(inner_rod_radius, inner_rod_length),
+      "InnerRodCollision", compliant_hydro_props);
+
+  plant.RegisterCollisionGeometry(
+      inner_rod_body, RigidTransformd(Eigen::Vector3d{0, 0, 0}),
+      drake::geometry::Cylinder(outer_rod_radius, outer_rod_length),
+      "InnerCylinderCollision", compliant_hydro_props);
+  plant.RegisterVisualGeometry(
+      inner_rod_body, RigidTransformd(Eigen::Vector3d{0, 0, 0}),
+      drake::geometry::Cylinder(outer_rod_radius, outer_rod_length),
+      "InnerCylinderVisual", outer_cylinder_color);
+
   bool use_mpm_ground = false;
   if (!use_mpm_ground) {
     /* Set up a ground. */
     ProximityProperties rigid_proximity_props;
     /* Set the friction coefficient close to that of rubber against rubber. */
-    const CoulombFriction<double> surface_friction(0.0, 0.0);
-    AddContactMaterial({}, {}, surface_friction, &rigid_proximity_props);
+    const CoulombFriction<double> surface_friction_ground(0.0, 0.0);
+    AddContactMaterial({}, {}, surface_friction_ground, &rigid_proximity_props);
     rigid_proximity_props.AddProperty(geometry::internal::kHydroGroup,
                                       geometry::internal::kRezHint, 0.01);
     Box ground{10, 10, 10};
@@ -277,16 +271,17 @@ int do_main() {
 
   std::string hand_filename = FindResourceOrThrow(
       "drake/manipulation/models/wsg_50_description/sdf/"
-      "schunk_wsg_50_simon.sdf");
+      "schunk_wsg_50.sdf");
   auto left_wsg = left_parser.AddModels(hand_filename)[0];
   auto right_wsg = right_parser.AddModels(hand_filename)[0];
 
-  RigidTransformd left_iiwa_position(Eigen::Vector3d(0, 0.58, 0));
+  RigidTransformd left_iiwa_position =
+      FromXyzRpyDegree(Eigen::Vector3d(0, 0, -90), Eigen::Vector3d(0, 0.8, 0));
   RigidTransformd right_iiwa_position =
-      FromXyzRpyDegree(Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0, 0, 0));
+      FromXyzRpyDegree(Eigen::Vector3d(0, 0, 90), Eigen::Vector3d(0, -0.8, 0));
   plant.WeldFrames(plant.world_frame(),
                    plant.GetBodyByName("table_body", table).body_frame(),
-                   RigidTransformd(Eigen::Vector3d(0.25, 0.29, 0)));
+                   RigidTransformd(Eigen::Vector3d(0, 0, 0)));
   plant.WeldFrames(plant.world_frame(),
                    plant.GetBodyByName("iiwa_link_0", left_iiwa).body_frame(),
                    left_iiwa_position);
@@ -317,20 +312,14 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.048, 0.16, 0.042));
+              Vector3<double>(0.16, 0.05, 0.042));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
-          10e4, 0.2, 6e3);
+          5e4, 0.2, 2e3);
 
-  // std::unique_ptr<
-  //       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-  //       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-  //                                    LinearCorotatedModel<double>>(
-  //           1e5, 0.2);
-
-  Vector3<double> translation = {0.555 + 0.0, 0.29, 0.042};
+  Vector3<double> translation = {0,0,0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
   double h = 0.015 * 1.5;
@@ -362,10 +351,10 @@ int do_main() {
   right_iiwa_controller_plant.Finalize();
 
   Eigen::VectorXd right_iiwa_initial_joint_values(7);
-  right_iiwa_initial_joint_values << 0.3, 0.9, 0, -1.5, 0, 0.75, 0.30;
+  right_iiwa_initial_joint_values << 0.0, 0.7, 0, -1.5, 0, 0.9, 3.14 / 2.0;
 
   Eigen::VectorXd left_iiwa_initial_joint_values(7);
-  left_iiwa_initial_joint_values << -0.3, 0.9, 0, -1.5, 0, 0.75, -0.30;
+  left_iiwa_initial_joint_values << 0.0, 0.7, 0, -1.5, 0, 0.9, 3.14 / 2.0;
 
   // hand controller
   auto left_hand_pose_controller =
@@ -500,8 +489,11 @@ int do_main() {
   plant.SetPositions(&plant_context, left_iiwa, left_iiwa_initial_joint_values);
   plant.SetPositions(&plant_context, right_iiwa,
                      right_iiwa_initial_joint_values);
-  plant.SetPositions(&plant_context, left_wsg, Eigen::Vector2d(-0.08, 0.08));
-  plant.SetPositions(&plant_context, right_wsg, Eigen::Vector2d(-0.08, 0.08));
+  plant.SetPositions(&plant_context, left_wsg, Eigen::Vector2d(-0.03, 0.03));
+  plant.SetPositions(&plant_context, right_wsg, Eigen::Vector2d(-0.03, 0.03));
+
+  plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("inner_rod"),
+                        inner_rod_transform);
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
