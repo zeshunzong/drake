@@ -30,7 +30,7 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 3.5, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 8, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 10e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -161,8 +161,44 @@ class IiwaController : public drake::systems::LeafSystem<double> {
       dX.setZero();  // hold, grip is gripping from 0.5 to 0.8
     } else if (context.get_time() <= 2.4) {
       dX(3) = 0.0025;
-    } else {
+    } else if (context.get_time() <= 2.8) {
       dX.setZero();  // hold
+    } else if (context.get_time() <= 3.1) {
+      dX(5) = 0.005;  // up
+    } else if (context.get_time() <= 3.4) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 5.0) {
+      dX(3) = -0.0025;
+    } else if (context.get_time() <= 5.2) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 5.7) {
+      double rotation_time = 0.5;  // 5.2-5.7
+      double angle = (context.get_time() - 5.2) / rotation_time * 3.14159 / 4.0;
+      double R = 0.22;
+      if (is_left_) {
+        double desired_x = R * std::sin(angle);
+        double desired_y = R * std::cos(angle);
+        dX(3) = desired_x - current_state_values(3);
+        dX(4) = desired_y - current_state_values(4);
+        double desired_z = -angle;
+        dX(2) = desired_z - current_state_values(2);
+      } else {
+        double desired_x = -R * std::sin(angle);
+        double desired_y = -R * std::cos(angle);
+        dX(3) = desired_x - current_state_values(3);
+        dX(4) = desired_y - current_state_values(4);
+        double desired_z = 3.14 - angle;
+        dX(2) = desired_z - current_state_values(2);
+      }
+    } else if (context.get_time() <= 5.9) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 6.1) {
+      dX(5) = -0.005;  // down
+    } else if (context.get_time() <= 6.3) {
+      dX.setZero();  // hold
+    } else if (context.get_time() <= 7.8) {
+      dX(3) = -0.002;
+      dX(4) = 0.002;
     }
 
     auto new_value = current_state_values + dX;
@@ -197,6 +233,7 @@ int do_main() {
 
   RigidTransformd inner_rod_transform = FromXyzRpyDegree(
       Vector3<double>(90, 0, 0), Vector3<double>(0.0, 0, 0.18));
+  unused(inner_rod_transform);
 
   bool use_mpm_ground = false;
   if (!use_mpm_ground) {
@@ -293,10 +330,10 @@ int do_main() {
                                    LinearCorotatedWithPlasticity<double>>(
           5e4, 0.49, 2e3);
 
-  Vector3<double> translation = {0, 0, 0.042};
+  Vector3<double> translation = {0 + 1, 0, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.015 * 1.5;
+  double h = 0.015 * 1.5 * 5;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
@@ -325,10 +362,10 @@ int do_main() {
   right_iiwa_controller_plant.Finalize();
 
   Eigen::VectorXd right_iiwa_initial_joint_values(7);
-  right_iiwa_initial_joint_values << 0.0, 0.7, 0, -1.5, 0, 0.9, 3.14 / 2.0;
+  right_iiwa_initial_joint_values << 0.0, 0.7, 0, -1.5, 0, 0.92, 3.14 / 2.0;
 
   Eigen::VectorXd left_iiwa_initial_joint_values(7);
-  left_iiwa_initial_joint_values << 0.0, 0.7, 0, -1.5, 0, 0.9, 3.14 / 2.0;
+  left_iiwa_initial_joint_values << 0.0, 0.7, 0, -1.5, 0, 0.92, 3.14 / 2.0;
 
   // hand controller
   auto left_hand_pose_controller =
