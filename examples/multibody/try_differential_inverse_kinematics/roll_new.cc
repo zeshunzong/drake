@@ -291,7 +291,7 @@ int do_main() {
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
-          5e4, 0.2, 2e3);
+          5e4, 0.49, 2e3);
 
   Vector3<double> translation = {0, 0, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
