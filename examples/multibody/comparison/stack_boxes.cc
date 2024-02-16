@@ -107,8 +107,8 @@ int do_main() {
                                "ground_visual", std::move(illustration_props));
 
   double box_width = 0.3;
-  double ratio = 1.5;
-  double rho1 = 100;
+  double ratio = 2.0;
+  double rho1 = 1000;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
   double rho4 = rho3 * ratio;
@@ -178,16 +178,16 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model1 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(1e4, 0.2);
+                                    LinearCorotatedModel<double>>(8e5, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model3 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(1e4, 0.2);
+                                    LinearCorotatedModel<double>>(8e5, 0.2);
 
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model5 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(1e4, 0.2);
+                                    LinearCorotatedModel<double>>(8e5, 0.2);
 
   std::unique_ptr<math::RigidTransform<double>> pose1 =
       std::make_unique<math::RigidTransform<double>>(
