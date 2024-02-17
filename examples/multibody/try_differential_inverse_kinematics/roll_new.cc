@@ -30,7 +30,7 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 8, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 8.5, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 10e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -151,29 +151,27 @@ class IiwaController : public drake::systems::LeafSystem<double> {
     VectorX<double> dX = current_state_values;
     dX.setZero();
 
-    if ((context.get_time() >= 0.0) && (context.get_time() <= 0.2)) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 0.3) {
+    if (context.get_time() <= 0.3) {
       dX.setZero();  // hold
     } else if (context.get_time() <= 0.5) {
-      dX(5) = -0.005;  // down
-    } else if (context.get_time() <= 0.8) {
-      dX.setZero();  // hold, grip is gripping from 0.5 to 0.8
-    } else if (context.get_time() <= 2.4) {
-      dX(3) = 0.0025;
-    } else if (context.get_time() <= 2.8) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 3.1) {
-      dX(5) = 0.005;  // up
-    } else if (context.get_time() <= 3.4) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 5.0) {
-      dX(3) = -0.0025;
-    } else if (context.get_time() <= 5.2) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 5.7) {
-      double rotation_time = 0.5;  // 5.2-5.7
-      double angle = (context.get_time() - 5.2) / rotation_time * 3.14159 / 4.0;
+      dX(5) = -0.005;  // down, 0.3-0.5
+    } else if (context.get_time() <= 0.7) {
+      dX.setZero();  // hold, 0.5 to 0.7
+    } else if (context.get_time() <= 2.0) {
+      dX(3) = 0.0032;  // move, 0.7 to 2.0
+    } else if (context.get_time() <= 2.3) {
+      dX.setZero();  // hold, 2.0 to 2.3
+    } else if (context.get_time() <= 2.6) {
+      dX(5) = 0.005;  // up, 2.3 to 2.6
+    } else if (context.get_time() <= 2.7) {
+      dX.setZero();  // hold, 2.6-2.7
+    } else if (context.get_time() <= 4.0) {
+      dX(3) = -0.0032;  // move back, 2.7 - 4.0
+    } else if (context.get_time() <= 4.2) {
+      dX.setZero();  // hold, 4.0-4.2
+    } else if (context.get_time() <= 4.7) {
+      double rotation_time = 0.5;  // 4.2-4.7
+      double angle = (context.get_time() - 4.2) / rotation_time * 3.14159 / 6.0;
       double R = 0.22;
       if (is_left_) {
         double desired_x = R * std::sin(angle);
@@ -190,15 +188,34 @@ class IiwaController : public drake::systems::LeafSystem<double> {
         double desired_z = 3.14 - angle;
         dX(2) = desired_z - current_state_values(2);
       }
-    } else if (context.get_time() <= 5.9) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 6.1) {
-      dX(5) = -0.005;  // down
-    } else if (context.get_time() <= 6.3) {
-      dX.setZero();  // hold
-    } else if (context.get_time() <= 7.8) {
-      dX(3) = -0.002;
+    } else if (context.get_time() <= 4.8) {
+      dX.setZero();  // hold, 4.7-4.8
+    } else if (context.get_time() <= 5.1) {
+      dX(5) = -0.005;  // down, 4.8-5.1
+    } else if (context.get_time() <= 5.3) {
+      dX.setZero();  // hold, 5.1-5.3
+    } else if (context.get_time() <= 6.0) {
+      // move for 0.7s
       dX(4) = 0.002;
+      dX(3) = -0.002 * std::tan(3.14159 / 6.0);
+    } else if (context.get_time() <= 6.2) {
+      dX.setZero();  // hold, 6.0-6.2
+    } else if (context.get_time() <= 6.5) {
+      dX(5) = 0.005; // lift, 6.2-6.5
+    } else if (context.get_time() <= 7.0) {
+      // move for 0.7s
+      dX(4) = -0.002;
+      dX(3) = 0.002 * std::tan(3.14159 / 6.0);
+    } else if (context.get_time() <= 7.3) {
+      dX(5) = -0.0065; // down, 6.2-6.5
+    } else if (context.get_time() <= 7.9) {
+      // move for 0.7s
+      dX(4) = -0.002;
+      dX(3) = 0.002 * std::tan(3.14159 / 6.0);
+    } else if (context.get_time() <= 8.1) {
+      dX.setZero();  // hold, 5.1-5.3
+    } else if (context.get_time() <= 8.35) {
+      dX(5) = 0.007; // down, 6.2-6.5
     }
 
     auto new_value = current_state_values + dX;
@@ -323,17 +340,17 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(0.16, 0.05, 0.042));
+              Vector3<double>(0.16, 0.06, 0.05));
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
           5e4, 0.49, 2e3);
 
-  Vector3<double> translation = {0 + 1, 0, 0.042};
+  Vector3<double> translation = {0.05, 0.0, 0.05};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.015 * 1.5 * 5;
+  double h = 0.015 * 1.5;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
@@ -477,7 +494,7 @@ int do_main() {
   // meshcat viz
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
-  meshcat_params.publish_period = FLAGS_time_step * 2;
+  meshcat_params.publish_period = FLAGS_time_step;
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, scene_graph, meshcat, meshcat_params);
   auto meshcat_pc_visualizer =
