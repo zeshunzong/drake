@@ -107,7 +107,7 @@ int do_main() {
                                "ground_visual", std::move(illustration_props));
 
   double box_width = 0.3;
-  double ratio = 1.2;
+  double ratio = 2.0;
   double rho1 = 90;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
@@ -178,16 +178,16 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model1 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(5e4, 0.2);
+                                    LinearCorotatedModel<double>>(8e4, 0.2);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model3 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(5e4, 0.2);
+                                    LinearCorotatedModel<double>>(8e4, 0.2);
 
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model5 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(5e4, 0.2);
+                                    LinearCorotatedModel<double>>(8e4, 0.2);
 
   std::unique_ptr<math::RigidTransform<double>> pose1 =
       std::make_unique<math::RigidTransform<double>>(
@@ -216,7 +216,7 @@ int do_main() {
       rho5, h);
 
   owned_deformable_model->SetMpmDamping(10.0);
-  owned_deformable_model->SetMpmStiffness(1e5);
+  owned_deformable_model->SetMpmStiffness(5e4*ratio);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
 
@@ -234,14 +234,6 @@ int do_main() {
       deformable_model->vertex_positions_port(),
       scene_graph.get_source_configuration_port(plant.get_source_id().value()));
 
-  /* Add a visualizer that emits LCM messages for visualization. */
-  geometry::DrakeVisualizerParams params;
-  params.publish_period = FLAGS_time_step;
-  auto& visualizer = geometry::DrakeVisualizerd::AddToBuilder(
-      &builder, scene_graph, nullptr, params);
-  // connect mpm to output port
-  builder.Connect(deformable_model->mpm_particle_positions_port(),
-                  visualizer.mpm_data_input_port());
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();

@@ -120,7 +120,7 @@ class InterpolationWeights {
           // eqn (173), momentum
           (*p2g_pad).momentums[node_index_local] +=
               weights_[node_index_local] * m_p *
-              (v_p + 0.95 * 
+              (v_p + 0.97 * 
                C_p * (internal::ComputePositionFromIndex3D(node_index_3d, h) -
                       x_p));
           // eqn (188), force
