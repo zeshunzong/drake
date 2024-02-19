@@ -145,6 +145,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
             perception::pc_flags::kXYZs | perception::pc_flags::kRGBs);
         for (size_t p = 0; p < state.particles.num_particles(); ++p) {
           new_cloud.mutable_xyzs().col(p) = particle_positions[p].cast<float>();
+          new_cloud.mutable_rgb(p) = Vector3<uint8_t>(241, 220, 167);
         }
         cloud = new_cloud;
       }
