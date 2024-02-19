@@ -333,7 +333,7 @@ int do_main() {
   Vector3<double> translation = {0.555 + 0.0, 0.29, 0.042};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.015 * 1.5 / 1.2;
+  double h = 0.015 * 1.5;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
