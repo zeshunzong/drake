@@ -137,6 +137,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       if (cloud.size() == static_cast<int>(state.particles.num_particles())) {
         for (size_t p = 0; p < state.particles.num_particles(); ++p) {
           cloud.mutable_xyzs().col(p) = particle_positions[p].cast<float>();
+          cloud.mutable_rgb(p) = Vector3<uint8_t>(241, 220, 167);
         }
         // TODO(zeshunzong): may also change stress / color map here
       } else {
