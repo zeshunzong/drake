@@ -9,6 +9,7 @@
 #include "drake/multibody/mpm/mpm_transfer.h"
 #include "drake/systems/framework/context.h"
 #include "drake/multibody/mpm/constitutive_model/linear_corotated_model.h"
+#include "drake/multibody/mpm/constitutive_model/equation_of_state.h"
 
 
 namespace drake {
@@ -55,7 +56,7 @@ namespace mpm {
 struct NewtonParams {
   int max_newton_iter = 500;
   double newton_gradient_epsilon = 1e-5;
-  bool matrix_free = true;
+  bool matrix_free = false;
   bool linear_constitutive_model = true;
   bool apply_ground = false;
   bool sticky_ground = false;

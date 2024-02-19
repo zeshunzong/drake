@@ -84,7 +84,6 @@ void MpmTransfer<T>::ComputeGridElasticHessian(
   const std::vector<size_t>& batch_starts = particles.batch_starts();
   MatrixX<T> pad_hessian;
   
-  
   for (size_t i = 0; i < particles.num_batches(); ++i) {
     // compute pad_hessian for this batch
     particles.ComputePadHessianForOneBatch(i, dPdF_contractF0_contractF0,

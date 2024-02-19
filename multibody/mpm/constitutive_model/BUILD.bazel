@@ -85,6 +85,16 @@ drake_cc_library(
     ],
 )
 
+drake_cc_library(
+    name = "equation_of_state",
+    hdrs = [
+        "equation_of_state.h",
+    ],
+    deps = [
+        ":elastoplastic_model",
+    ],
+)
+
 drake_cc_googletest(
     name = "linear_corotated_model_test",
     deps = [

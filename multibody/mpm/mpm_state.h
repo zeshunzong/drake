@@ -1,9 +1,9 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 #include <unordered_set>
 #include <vector>
-#include <iostream>
 
 #include "drake/geometry/query_results/mpm_particle_contact_pair.h"
 #include "drake/math/rigid_transform.h"
@@ -25,7 +25,8 @@ struct MpmState {
       const internal::AnalyticLevelSet& level_set,
       const math::RigidTransform<double>& pose,
       const mpm::constitutive_model::ElastoPlasticModel<T>& elastoplastic_model,
-      double common_density, int min_num_particles_per_cell) {
+      double common_density, int min_num_particles_per_cell,
+      const Vector3<T>& gravity) {
     const std::array<Vector3<double>, 2> bounding_box =
         level_set.bounding_box();
     // TODO(zeshunzong): pass is input
@@ -57,23 +58,42 @@ struct MpmState {
     double reference_volume_p = level_set.volume() / num_particles;
     double mass_p = common_density * reference_volume_p;
     // we assume all particles start with zero velocity
+    using std::pow;
     for (int p = 0; p < num_particles; ++p) {
-      particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0),
-                            elastoplastic_model.Clone(), mass_p,
-                            reference_volume_p);
+      T base = mass_p / reference_volume_p / 100.0 *
+                   gravity.dot(particles_positions[p] - Vector3<T>(0, 0, 0.2)) +
+               1.0;
+      Matrix3<T> F = Matrix3<T>::Identity() * pow(base, -1 / 7.0);
+      particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0), mass_p,
+                            reference_volume_p, F, F,
+                            elastoplastic_model.Clone(), Matrix3<T>::Zero());
     }
-    // particles.AddParticle(Vector3<T>(0, 0, 0.0), Vector3<T>(0, 0, 0.0),
-    //                       elastoplastic_model.Clone(), mass_p,
-    //                       reference_volume_p);
-    HackTear();
+    unused(num_particles, reference_volume_p, mass_p);
+
+    // T m = 1000;
+    // T v = 1.0;
+    // using std::pow;
+    // T base = m / v / 100.0 *
+    //              gravity.dot(Vector3<T>(0, 0, 0.1) - Vector3<T>(0, 0, 0.2)) +
+    //          1.0;
+    // Matrix3<T> F = Matrix3<T>::Identity() * pow(base, -1 / 7.0);
+    // particles.AddParticle(Vector3<T>(0, 0, 0.1), Vector3<T>(0, 0, 0), m, v, F,
+    //                       F, elastoplastic_model.Clone(), Matrix3<T>::Zero());
     return num_particles;  // return the number of particles added
   }
 
-  void HackTear() {
+  void InitializeParticleJ(const Vector3<T>& gravity) {
     for (size_t p = 0; p < particles.num_particles(); ++p) {
-      if ((particles.GetPositionAt(p)[1] > 0.27) && (particles.GetPositionAt(p)[1] < 0.29)) {
-        particles.ScaleYoungsModulus(p, 0.21);
-      }
+      using std::pow;
+      T base =
+          particles.GetMassAt(p) / particles.GetReferenceVolumeAt(p) / 100.0 *
+              gravity.dot(particles.GetPositionAt(p) - Vector3<T>(0, 0, 0.2)) +
+          1.0;
+      T J = pow(base, -1 / 7.0);
+      std::cout << "J is " << J << std::endl;
+      Matrix3<T> F = Matrix3<T>::Identity() * J;
+      particles.SetElasticDeformationGradientAt(p, F);
+      particles.SetTrialDeformationGradientAt(p, F);
     }
   }
 

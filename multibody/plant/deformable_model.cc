@@ -355,7 +355,9 @@ void DeformableModel<T>::DoDeclareSystemResources(MultibodyPlant<T>* plant) {
         *(mpm_model_->InitialObjectParams().pose),
         *(mpm_model_->InitialObjectParams().constitutive_model),
         mpm_model_->InitialObjectParams().density,
-        mpm_model_->min_num_particles_per_cell());
+        mpm_model_->min_num_particles_per_cell(), mpm_model_->gravity());
+
+    // mpm_state.InitializeParticleJ(mpm_model_->gravity());
 
     // TODO(zeshunzong): add to initialize event?
     mpm::MpmTransfer<T> initial_tranfer{};

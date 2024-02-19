@@ -29,7 +29,7 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -392,7 +392,7 @@ int do_main() {
       "allegro_hand_description/sdf/allegro_hand_description_right.sdf");
   auto allegro = parser.AddModels(hand_filename)[0];
 
-  RigidTransformd iiwa_position(Eigen::Vector3d(0, 0, 0));
+  RigidTransformd iiwa_position(Eigen::Vector3d(10, 0, 0));
 
   plant.WeldFrames(plant.world_frame(),
                    plant.GetBodyByName("iiwa_link_0").body_frame(),
@@ -419,17 +419,17 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedWithPlasticity<double>>(
-          5e3, 0.49, 0.0);
+                                   EquationOfState<double>>(
+          0.111, 0.111, 100.0, 7.0);
   Vector3<double> translation = {mug_outer_translation(0),
                                  mug_outer_translation(1),
                                  mug_height / 2.0 + mug_thickness * 1.02};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = mug_outer_radius / 3.0;
+  double h = mug_outer_radius / 2.0;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
-                                          100.0, h);
+                                          1000.0, h);
 
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
@@ -549,7 +549,7 @@ int do_main() {
   auto meshcat_pc_visualizer =
       builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
           meshcat, "cloud", meshcat_params.publish_period);
-  meshcat_pc_visualizer->set_point_size(0.001);
+  meshcat_pc_visualizer->set_point_size(0.01);
   builder.Connect(deformable_model->mpm_point_cloud_port(),
                   meshcat_pc_visualizer->cloud_input_port());
 

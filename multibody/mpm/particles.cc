@@ -180,7 +180,7 @@ void Particles<T>::WriteParticlesDataFromG2pPad(
 
 template <typename T>
 void Particles<T>::ComputeFsPsdPdFs(
-    const std::vector<Matrix3<T>>& particle_grad_v, double dt, 
+    const std::vector<Matrix3<T>>& particle_grad_v, double dt,
     std::vector<Matrix3<T>>* Fs, std::vector<Matrix3<T>>* Ps,
     std::vector<Eigen::Matrix<T, 9, 9>>* dPdFs, bool project_pd) const {
   DRAKE_ASSERT(particle_grad_v.size() == num_particles());
@@ -189,8 +189,12 @@ void Particles<T>::ComputeFsPsdPdFs(
     Matrix3<T>& P = (*Ps)[p];
     Eigen::Matrix<T, 9, 9>& dPdF = (*dPdFs)[p];
 
-    F = (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
-        GetElasticDeformationGradientAt(p);
+    // F = (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
+    //     GetElasticDeformationGradientAt(p);
+    T scalar = (1.0 + dt * particle_grad_v[p].trace()) *
+               GetElasticDeformationGradientAt(p)(0, 0);
+
+    F = Matrix3<T>::Identity() * scalar;
     elastoplastic_models_[p]->CalcFirstPiolaStress(
         elastic_deformation_gradients_[p], F, &P);
     elastoplastic_models_[p]->CalcFirstPiolaStressDerivative(
@@ -221,18 +225,23 @@ void Particles<T>::ComputePadHessianForOneBatch(
           for (size_t rho = 0; rho < 3; ++rho) {
             const Vector3<T>& gradNi_p = GetWeightGradientAt(p, i);
             const Vector3<T>& gradNj_p = GetWeightGradientAt(p, j);
-            // The matrix for this particle, the indexing is A(α+3β, ρ+3γ)
-            const Eigen::Matrix<T, 9, 9>& A_alphabeta_rhogamma =
-                dPdF_contractF0_contractF0[p];
-            // compute ∑ᵦᵧ A(α+3β, ρ+3γ) ⋅ ∇Nᵢ(xₚ)[β] ⋅ ∇Nⱼ(xₚ)[γ]
-            for (size_t beta = 0; beta < 3; ++beta) {
-              for (size_t gamma = 0; gamma < 3; ++gamma) {
-                (*pad_hessian)(alpha + 3 * i, rho + 3 * j) +=
-                    gradNi_p(beta) *
-                    A_alphabeta_rhogamma(alpha + 3 * beta, rho + gamma * 3) *
-                    gradNj_p(gamma) * GetReferenceVolumeAt(p);
-              }
-            }
+
+            (*pad_hessian)(alpha + 3 * i, rho + 3 * j) +=
+                GetReferenceVolumeAt(p) * dPdF_contractF0_contractF0[p](0, 0) *
+                gradNi_p(alpha) * gradNj_p(rho);
+
+            // // The matrix for this particle, the indexing is A(α+3β, ρ+3γ)
+            // const Eigen::Matrix<T, 9, 9>& A_alphabeta_rhogamma =
+            //     dPdF_contractF0_contractF0[p];
+            // // compute ∑ᵦᵧ A(α+3β, ρ+3γ) ⋅ ∇Nᵢ(xₚ)[β] ⋅ ∇Nⱼ(xₚ)[γ]
+            // for (size_t beta = 0; beta < 3; ++beta) {
+            //   for (size_t gamma = 0; gamma < 3; ++gamma) {
+            //     (*pad_hessian)(alpha + 3 * i, rho + 3 * j) +=
+            //         gradNi_p(beta) *
+            //         A_alphabeta_rhogamma(alpha + 3 * beta, rho + gamma * 3) *
+            //         gradNj_p(gamma) * GetReferenceVolumeAt(p);
+            //   }
+            // }
           }
         }
       }
@@ -251,22 +260,23 @@ Particles<T>::ComputeDPDFContractF0ContractF0(
     const Matrix3<T>& F0 = elastic_deformation_gradients_[p];
     // initialize
     matrix_p.setZero();
-    // next contract with F0 twice
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        for (int alpha = 0; alpha < 3; ++alpha) {
-          for (int beta = 0; beta < 3; ++beta) {
-            for (int gamma = 0; gamma < 3; ++gamma) {
-              for (int rho = 0; rho < 3; ++rho) {
-                matrix_p(alpha + 3 * beta, rho + 3 * gamma) +=
-                    dPdFs[p](alpha + 3 * i, rho + 3 * j) * F0(gamma, j) *
-                    F0(beta, i);
-              }
-            }
-          }
-        }
-      }
-    }
+    matrix_p(0, 0) = dPdFs[p](0, 0) * F0(0, 0) * F0(0, 0);
+    // // next contract with F0 twice
+    // for (int i = 0; i < 3; ++i) {
+    //   for (int j = 0; j < 3; ++j) {
+    //     for (int alpha = 0; alpha < 3; ++alpha) {
+    //       for (int beta = 0; beta < 3; ++beta) {
+    //         for (int gamma = 0; gamma < 3; ++gamma) {
+    //           for (int rho = 0; rho < 3; ++rho) {
+    //             matrix_p(alpha + 3 * beta, rho + 3 * gamma) +=
+    //                 dPdFs[p](alpha + 3 * i, rho + 3 * j) * F0(gamma, j) *
+    //                 F0(beta, i);
+    //           }
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
   }
   return dPdF_contractF0_contractF0;
 }

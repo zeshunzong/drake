@@ -31,7 +31,7 @@
 
 DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
-DEFINE_double(time_step, 1e-2,
+DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -373,18 +373,18 @@ int do_main() {
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   LinearCorotatedWithPlasticity<double>>(
-          1e4, 0.49, 0.0);
+                                   EquationOfState<double>>(
+          10.0, 0.2, 100.0, 7.0);
 
   Vector3<double> translation = {mug_outer_translation(0),
                                  mug_outer_translation(1),
                                  mug_height / 2.0 + mug_thickness * 1.02};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = mug_outer_radius / 3.5;
+  double h = mug_outer_radius / 2.5;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
-                                          100.0, h);
+                                          1000.0, h);
 
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
@@ -502,17 +502,17 @@ int do_main() {
   builder.Connect(mux->get_output_port(),
                   plant.get_desired_state_input_port(iiwa));
 
-  //   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
-  //   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
-  //   meshcat_params.publish_period = FLAGS_time_step;
-  //   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
-  //       &builder, scene_graph, meshcat, meshcat_params);
-  //   auto meshcat_pc_visualizer =
-  //       builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
-  //           meshcat, "cloud", meshcat_params.publish_period);
-  //   meshcat_pc_visualizer->set_point_size(0.001);
-  //   builder.Connect(deformable_model->mpm_point_cloud_port(),
-  //                   meshcat_pc_visualizer->cloud_input_port());
+    auto meshcat = std::make_shared<drake::geometry::Meshcat>();
+    auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
+    meshcat_params.publish_period = FLAGS_time_step;
+    drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
+        &builder, scene_graph, meshcat, meshcat_params);
+    auto meshcat_pc_visualizer =
+        builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
+            meshcat, "cloud", meshcat_params.publish_period);
+    meshcat_pc_visualizer->set_point_size(0.001);
+    builder.Connect(deformable_model->mpm_point_cloud_port(),
+                    meshcat_pc_visualizer->cloud_input_port());
 
   auto diagram = builder.Build();
   std::unique_ptr<Context<double>> diagram_context =
@@ -542,18 +542,18 @@ int do_main() {
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
-  // sleep(6);
-  // bool recording = false;
+  sleep(6);
+  bool recording = false;
 
-  //   if (recording) {
-  //     meshcat->StartRecording();
-  //     simulator.AdvanceTo(FLAGS_simulation_time);
-  //     meshcat->StopRecording();
-  //     meshcat->PublishRecording();
+    if (recording) {
+      meshcat->StartRecording();
+      simulator.AdvanceTo(FLAGS_simulation_time);
+      meshcat->StopRecording();
+      meshcat->PublishRecording();
 
-  //   } else {
+    } else {
   simulator.AdvanceTo(FLAGS_simulation_time);
-  // }
+  }
 
   return 0;
 }

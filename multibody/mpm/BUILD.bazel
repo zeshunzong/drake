@@ -167,11 +167,12 @@ drake_cc_library(
         "//systems/framework:context",
         "//multibody/mpm/constitutive_model:linear_corotated_model",
         "//multibody/mpm/constitutive_model:stvk_hencky_with_von_mises_model",
+        "//multibody/mpm/constitutive_model:equation_of_state",
     ],
 )
 
 drake_cc_googletest(
-    name = "mpm_model_test",
+    name = "equation_of_state_test",
     deps = [
         ":mpm_model",
         "//common/test_utilities:eigen_matrix_compare",

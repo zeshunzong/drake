@@ -95,6 +95,8 @@ class MpmSolver {
           // newton to converge in one step
           cg_dense.setTolerance(0.5 * params.newton_gradient_epsilon /
                                 std::max(gradient_norm, 1e-6));
+        } else {
+          cg_dense.setTolerance(1e-6);
         }
         model.ComputeD2EnergyDV2(transfer, deformation_state, dt,
                                  &(scratch->d2Edv2));

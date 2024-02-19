@@ -2,6 +2,7 @@
 
 #include <unordered_set>
 #include <vector>
+#include <iostream>
 
 #include "drake/common/autodiff.h"
 #include "drake/common/eigen_types.h"
@@ -76,13 +77,16 @@ class GridData {
    * clearly zero. We add an if statement to prevent 0/0.
    */
   void ComputeVelocitiesFromMomentums() {
+    T total_vertical_force = 0.0;
     for (size_t i = 0; i < masses_.size(); ++i) {
       if (masses_[i] == 0.0) {
         velocities_[i].setZero();
       } else {
         velocities_[i] = momentums_[i] / masses_[i];
       }
+      total_vertical_force += forces_[i](2);
     }
+    std::cout << "total vertical force after p2g: " <<  total_vertical_force << std::endl;
   }
 
   /**
