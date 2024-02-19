@@ -30,7 +30,7 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 8.5, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 10.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 10e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -40,7 +40,8 @@ DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(friction, 1.0, "mpm friction");
-DEFINE_double(ppc, 2, "mpm ppc");
+DEFINE_double(ppc, 3, "mpm ppc");
+// DEFINE_double(ppc, 2, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 1.0, "larger, more damping");
 
@@ -196,28 +197,29 @@ class IiwaController : public drake::systems::LeafSystem<double> {
       dX.setZero();  // hold, 5.1-5.3
     } else if (context.get_time() <= 6.0) {
       // move for 0.7s
-      dX(4) = 0.002;
-      dX(3) = -0.002 * std::tan(3.14159 / 6.0);
+      dX(4) = 0.002 * 0.6;
+      dX(3) = -0.002 / std::tan(3.14159 / 6.0) * 0.6;
     } else if (context.get_time() <= 6.2) {
       dX.setZero();  // hold, 6.0-6.2
     } else if (context.get_time() <= 6.5) {
-      dX(5) = 0.005; // lift, 6.2-6.5
+      dX(5) = 0.005;  // lift, 6.2-6.5
     } else if (context.get_time() <= 7.0) {
       // move for 0.7s
-      dX(4) = -0.002;
-      dX(3) = 0.002 * std::tan(3.14159 / 6.0);
+      dX(4) = -0.002 * 0.6;
+      dX(3) = 0.002 / std::tan(3.14159 / 6.0) * 0.6;
     } else if (context.get_time() <= 7.3) {
-      dX(5) = -0.0065; // down, 6.2-6.5
+      dX(5) = -0.0065;  // down, 6.2-6.5
     } else if (context.get_time() <= 7.9) {
-      // move for 0.7s
-      dX(4) = -0.002;
-      dX(3) = 0.002 * std::tan(3.14159 / 6.0);
-    } else if (context.get_time() <= 8.1) {
+      // move for 0.6s
+      dX(4) = -0.002 * 0.6;
+      dX(3) = 0.002 / std::tan(3.14159 / 6.0) * 0.6;
+    } else if (context.get_time() <= 8.2) {
       dX.setZero();  // hold, 5.1-5.3
-    } else if (context.get_time() <= 8.35) {
-      dX(5) = 0.007; // down, 6.2-6.5
-    }
-
+    } else if (context.get_time() <= 8.8) {
+      dX(5) = 0.005;  // lift, 6.2-6.5
+    } else if (context.get_time() <= 9.0) {
+      dX.setZero();  // hold,
+    } 
     auto new_value = current_state_values + dX;
     next_states->set_value(new_value);
   }
@@ -345,12 +347,12 @@ int do_main() {
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model = std::make_unique<drake::multibody::mpm::constitutive_model::
                                    LinearCorotatedWithPlasticity<double>>(
-          5e4, 0.49, 2e3);
+          2e4, 0.49, 1e3);
 
   Vector3<double> translation = {0.05, 0.0, 0.05};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = 0.015 * 1.0;
+  double h = 0.015 * 1.2;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
