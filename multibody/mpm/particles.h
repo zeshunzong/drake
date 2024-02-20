@@ -346,9 +346,10 @@ class Particles {
   void UpdateTrialDeformationGradients(
       double dt, const std::vector<Matrix3<T>>& particle_grad_v) {
     for (size_t p = 0; p < num_particles(); ++p) {
-      SetTrialDeformationGradientAt(
-          p, (Matrix3<T>::Identity() + dt * particle_grad_v[p]) *
-                 GetElasticDeformationGradientAt(p));
+      T scalar = (1.0 + dt * particle_grad_v[p].trace()) *
+                 GetElasticDeformationGradientAt(p)(0, 0);
+      Matrix3<T> F = Matrix3<T>::Identity() * scalar;
+      SetTrialDeformationGradientAt(p, F);
     }
   }
 

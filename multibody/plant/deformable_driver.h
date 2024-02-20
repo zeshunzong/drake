@@ -620,7 +620,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           manager_->geometry_id_to_body_index().at(contact_pair.non_mpm_id);
       const TreeIndex tree_index_rigid =
           tree_topology.body_to_tree_index(index_B);
-
       if (tree_index_rigid.is_valid()) {
         Matrix3X<T> Jv_v_WBc_W(3, nv);
         const Body<T>& rigid_body = manager_->plant().get_body(index_B);
@@ -645,7 +644,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                   tree_topology.tree_velocities_start_in_v(tree_index_rigid),
                   tree_topology.num_tree_velocities(tree_index_rigid));
       }
-
       // configuration part
       const int objectA =
           tree_topology.num_trees() + num_deformable_bodies() + 1;

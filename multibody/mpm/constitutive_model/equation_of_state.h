@@ -64,7 +64,6 @@ class EquationOfState : public ElastoPlasticModel<T> {
                                       bool project_pd = false) const final {
     unused(project_pd, F0);
     T J = FE(0, 0);
-    std::cout << "J is " << J << std::endl;
     using std::pow;
     T scalar = bulk_ * gamma_ * pow(J, -gamma_ - 1.0);
     (*dPdF) = scalar * Eigen::Matrix<T, 9, 9>::Identity();
