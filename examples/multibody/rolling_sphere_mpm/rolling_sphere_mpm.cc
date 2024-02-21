@@ -30,7 +30,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 
 DEFINE_double(friction, 0.0, "mpm friction");
-DEFINE_double(ppc, 8, "mpm ppc");
+DEFINE_double(ppc, 100, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
@@ -90,7 +90,7 @@ int do_main() {
   /* Set up a deformable torus. */
   auto owned_deformable_model =
       std::make_unique<DeformableModel<double>>(&plant);
-  double radius = 0.4;
+  double radius = 0.5;
   // set a MPM body
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
