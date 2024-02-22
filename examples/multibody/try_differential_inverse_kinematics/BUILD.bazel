@@ -118,6 +118,7 @@ drake_cc_binary(
     data = [
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/allegro_hand_description:models",
+        "//examples/manipulation_station:models",
     ],
     test_rule_args = [
         "-simulation_time=0.1",

@@ -61,7 +61,7 @@ struct MpmState {
     using std::pow;
     for (int p = 0; p < num_particles; ++p) {
       T base = mass_p / reference_volume_p / 100.0 *
-                   gravity.dot(particles_positions[p] - Vector3<T>(0, 0, 0.2)) +
+                   gravity.dot(particles_positions[p] - Vector3<T>(0, 0, 3.5*0.055)) +
                1.0;
       Matrix3<T> F = Matrix3<T>::Identity() * pow(base, -1 / 7.0);
       particles.AddParticle(particles_positions[p], Vector3<T>(0, 0, 0), mass_p,

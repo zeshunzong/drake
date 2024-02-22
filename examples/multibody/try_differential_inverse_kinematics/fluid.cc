@@ -29,17 +29,17 @@
 #include "drake/systems/primitives/matrix_gain.h"
 #include "drake/systems/primitives/multiplexer.h"
 
-DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 7.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
-DEFINE_double(time_step, 1e-2,
+DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
-DEFINE_double(friction, 0.1, "mpm friction");
-DEFINE_double(ppc, 1, "mpm ppc");
+DEFINE_double(friction, 0.04, "mpm friction");
+DEFINE_double(ppc, 6, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
@@ -105,22 +105,12 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
       Eigen::VectorXd q_and_v(32);
       q_and_v << positions, GetHomeVelocity();
       output->set_value(q_and_v);
-    } else if ((context.get_time() > grip_start_) &&
-               (context.get_time() < grip_start_ + grip_time_)) {
+    } else {
       // start gripping
-      double t = (context.get_time() - grip_start_) / grip_time_;
+      double t = (context.get_time() - prep_time_) / grip_time_;
       Eigen::VectorXd positions =
           std::max(1.0 - t * alpha, 0.0) * GetHomePosition() +
           std::min(t * alpha, 1.0) * GetGripPosition();
-      Eigen::VectorXd q_and_v(32);
-      q_and_v << positions, GetHomeVelocity();
-      output->set_value(q_and_v);
-    } else if ((context.get_time() > grip_release_) &&
-               (context.get_time() < grip_release_ + grip_time_)) {
-      double t = (context.get_time() - grip_release_) / grip_time_;
-      Eigen::VectorXd positions =
-          std::max(1.0 - t * alpha, 0.0) * GetGripPosition() +
-          std::min(t * alpha, 1.0) * GetHomePosition();
       Eigen::VectorXd q_and_v(32);
       q_and_v << positions, GetHomeVelocity();
       output->set_value(q_and_v);
@@ -173,9 +163,7 @@ class HandPoseController : public drake::systems::LeafSystem<double> {
   const multibody::MultibodyPlant<double>& plant_;
   int size_ = 16 * 2;  // 4 fingers with 4 joints
   double grip_time_ = 0.3;
-  double prep_time_ = 0.4;
-  double grip_start_ = 0.5;
-  double grip_release_ = 4.99;
+  double prep_time_ = 0.4 + 1.0;
 };
 
 class IiwaController : public drake::systems::LeafSystem<double> {
@@ -219,22 +207,27 @@ class IiwaController : public drake::systems::LeafSystem<double> {
     // fake update:
     VectorX<double> dX = current_state_values;
     dX.setZero();
-    if ((context.get_time() >= 0.0) && (context.get_time() < 0.1)) {
-      dX(4) = 0.002;  // vertical
+    if ((context.get_time() >= 0.0 + 1) && (context.get_time() < 0.1 + 1)) {
+      double target_displacement = 0.02;
+      dX(4) = target_displacement /
+              (0.1 / FLAGS_time_step);  // a horinzontal squeeze
     }
-    if ((context.get_time() > 0.8) && (context.get_time() < 1.2)) {
-      dX(5) = 0.006;  // vertical
+    if ((context.get_time() > 1.0 + 1) && (context.get_time() < 1.6 + 1)) {
+      double target_displacement = 0.19;
+      dX(5) = target_displacement / (0.6 / FLAGS_time_step);  // move up
     }
-    if ((context.get_time() > 1.2) && (context.get_time() < 1.6)) {
-      dX(1) = 0.065;  // rotate
+    if ((context.get_time() > 1.6 + 1) && (context.get_time() < 1.9 + 1)) {
+      // hold
+      dX.setZero();
     }
-
-    // // dX(0) = -0.004; // r
-    // // dX(1) = -0.004; // p
-    // // dX(2) = -0.004;  // y
-    // // dX(3) = -0.004; // x
-    // // dX(4) = 0.004;  // y
-    // dX(5) = 0.00;  // vertical
+    if ((context.get_time() > 1.9 + 1) && (context.get_time() < 2.5 + 1)) {
+      double target_displacement = 0.21;
+      dX(4) = target_displacement / (0.6 / FLAGS_time_step);
+    }
+    if ((context.get_time() > 2.7 + 1) && (context.get_time() < 3.5 + 1)) {
+      double target_displacement = 0.25 * 8.5;
+      dX(1) = target_displacement / (0.8 / FLAGS_time_step);  // rotate
+    }
     auto new_value = current_state_values + dX;
     next_states->set_value(new_value);
   }
@@ -262,9 +255,10 @@ int do_main() {
   ProximityProperties rigid_proximity_props;
 
   const CoulombFriction<double> surface_friction(100.0, 100.0);
+  const CoulombFriction<double> pad_surface_friction(0.1, 0.1);
   AddContactMaterial(FLAGS_damping, {}, surface_friction,
                      &compliant_hydro_props);
-  AddContactMaterial(FLAGS_damping, {}, surface_friction,
+  AddContactMaterial(FLAGS_damping, {}, pad_surface_friction,
                      &rigid_proximity_props);
 
   AddCompliantHydroelasticProperties(0.01, 1e6, &compliant_hydro_props);
@@ -273,23 +267,23 @@ int do_main() {
   Box ground{20, 20, 10};
   const RigidTransformd X_WGround(Eigen::Vector3d{0, 0, -5});
   plant.RegisterCollisionGeometry(plant.world_body(), X_WGround, ground,
-                                  "ground_collision", compliant_hydro_props);
-  IllustrationProperties illustration_props_G;
-  illustration_props_G.AddProperty("phong", "diffuse",
-                                   Vector4d(0.9, 0.9, 0.9, 1.0));
-  plant.RegisterVisualGeometry(plant.world_body(), X_WGround, ground,
-                               "ground_visual",
-                               std::move(illustration_props_G));
+                                  "ground_collision", rigid_proximity_props);
+  // IllustrationProperties illustration_props_G;
+  // illustration_props_G.AddProperty("phong", "diffuse",
+  //                                  Vector4d(0.9, 0.9, 0.9, 1.0));
+  // plant.RegisterVisualGeometry(plant.world_body(), X_WGround, ground,
+  //                              "ground_visual",
+  //                              std::move(illustration_props_G));
 
   double mug_outer_radius = 0.055;
   double mug_height = 3.5 * mug_outer_radius;
   double mug_thickness = mug_outer_radius / 6.0;
   double mug_inner_radius = mug_outer_radius - mug_thickness;
-  double mug_inner_height = mug_height - mug_thickness;
-  Vector4<double> outer_cylinder_color(1.0, 0.55, 0.0, 0.2);
-  Vector4<double> inner_cylinder_color(1.0, 0.55, 0.5, 0.6);
+  double mug_inner_height = mug_height - 2.0 * mug_thickness;
+  Vector4<double> outer_cylinder_color(0.7, 0.7, 0.7, 0.4);
+  Vector4<double> inner_cylinder_color(0.7, 0.7, 0.7, 0.2);
 
-  Vector3<double> mug_outer_translation(0.69 + 0.0, 0.08, mug_height / 2.0);
+  Vector3<double> mug_outer_translation(0.69, 0.08, mug_height / 2.0);
 
   const SpatialInertia<double> outer_cylinder_spatial =
       SpatialInertia<double>::SolidCylinderWithDensity(
@@ -308,7 +302,7 @@ int do_main() {
   geometry::GeometryId inner_cylinder_geometry_id =
       plant.RegisterCollisionGeometry(
           outer_cylinder_body,
-          RigidTransformd(Eigen::Vector3d{0, 0, mug_thickness / 2.0}),
+          RigidTransformd(Eigen::Vector3d{0, 0, mug_thickness}),
           drake::geometry::Cylinder(mug_inner_radius, mug_inner_height),
           "InnerCylinderCollision", compliant_hydro_props);
   plant.RegisterVisualGeometry(
@@ -317,69 +311,81 @@ int do_main() {
       drake::geometry::Cylinder(mug_inner_radius, mug_inner_height),
       "InnerCylinderVisual", inner_cylinder_color);
 
-//   // ------------- a container on the ground
-//   IllustrationProperties illustration_props;
-//   illustration_props.AddProperty("phong", "diffuse",
-//                                  Vector4d(0.7, 0.5, 0.4, 0.3));
-//   Vector3<double> shift(0, 0.5, 0);
-//   double pad_size = 0.15;
-//   Box vertical_pad1{mug_thickness, pad_size, pad_size};
-//   plant.RegisterCollisionGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d((pad_size) / 2.0,
-//                                       -mug_thickness / 2.0, pad_size / 2.0) + shift),
-//       vertical_pad1, "vertical_pad1", rigid_proximity_props);
-//   plant.RegisterVisualGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d((pad_size) / 2.0,
-//                                       -mug_thickness / 2.0, pad_size / 2.0)+ shift),
-//       vertical_pad1, "vertical_pad1_visual", (illustration_props));
-//   Box vertical_pad2{pad_size, mug_thickness, pad_size};
-//   plant.RegisterCollisionGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(mug_thickness / 2.0, (pad_size) / 2.0,
-//                                       pad_size / 2.0)+ shift),
-//       vertical_pad2, "vertical_pad2_pad", rigid_proximity_props);
-//   plant.RegisterVisualGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(mug_thickness / 2.0, (pad_size) / 2.0,
-//                                       pad_size / 2.0)+ shift),
-//       vertical_pad2, "vertical_pad2_visual", (illustration_props));
-//   Box vertical_pad3{mug_thickness, pad_size, pad_size};
-//   plant.RegisterCollisionGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(-(pad_size) / 2.0,
-//                                       mug_thickness / 2.0, pad_size / 2.0)+ shift),
-//       vertical_pad3, "vertical_pad3_pad", rigid_proximity_props);
-//   plant.RegisterVisualGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(-(pad_size) / 2.0,
-//                                       mug_thickness / 2.0, pad_size / 2.0)+ shift),
-//       vertical_pad3, "vertical_pad3_visual", (illustration_props));
+  // plant.WeldFrames(plant.world_frame(),
+  //                  plant.GetBodyByName("table_body", table).body_frame(),
+  //                  RigidTransformd(Eigen::Vector3d(0, 0, 0)));
 
-//   Box vertical_pad4{pad_size, mug_thickness, pad_size};
-//   plant.RegisterCollisionGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(-mug_thickness / 2.0,
-//                                       -(pad_size) / 2.0, pad_size / 2.0)+ shift),
-//       vertical_pad4, "vertical_pad4", rigid_proximity_props);
-//   plant.RegisterVisualGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(-mug_thickness / 2.0,
-//                                       -(pad_size) / 2.0, pad_size / 2.0)+ shift),
-//       vertical_pad4, "vertical_pad4_visual", (illustration_props));
+  // ------------- a container on the ground
+  IllustrationProperties illustration_props;
+  illustration_props.AddProperty("phong", "diffuse",
+                                 Vector4d(0.6, 0.6, 0.6, 0.4));
+  Vector3<double> shift(mug_outer_translation(0), 0.3, 0);
+  double pad_size = 0.12;
+  double pad_thickness = 1.5 * mug_thickness;
+  Box vertical_pad1{pad_thickness, pad_size + pad_thickness,
+                    pad_size + pad_thickness};
+  plant.RegisterCollisionGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d((pad_size) / 2.0, -pad_thickness / 100.0,
+                                      pad_size / 2.0) +
+                      shift),
+      vertical_pad1, "vertical_pad1", rigid_proximity_props);
+  plant.RegisterVisualGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d((pad_size) / 2.0, 0, pad_size / 2.0) +
+                      shift),
+      vertical_pad1, "vertical_pad1_visual", (illustration_props));
+  Box vertical_pad2{pad_size + pad_thickness, pad_thickness,
+                    pad_size + pad_thickness};
+  plant.RegisterCollisionGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(0, (pad_size) / 2.0, pad_size / 2.0) +
+                      shift),
+      vertical_pad2, "vertical_pad2_pad", rigid_proximity_props);
+  plant.RegisterVisualGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(0, (pad_size) / 2.0, pad_size / 2.0) +
+                      shift),
+      vertical_pad2, "vertical_pad2_visual", (illustration_props));
+  Box vertical_pad3{pad_thickness, pad_size + pad_thickness,
+                    pad_size + pad_thickness};
+  plant.RegisterCollisionGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(-(pad_size) / 2.0, 0, pad_size / 2.0) +
+                      shift),
+      vertical_pad3, "vertical_pad3_pad", rigid_proximity_props);
+  plant.RegisterVisualGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(-(pad_size) / 2.0, 0.0, pad_size / 2.0) +
+                      shift),
+      vertical_pad3, "vertical_pad3_visual", (illustration_props));
 
-//   Box bottom_pad{pad_size + mug_thickness, pad_size + mug_thickness,
-//                  mug_thickness};
-//   plant.RegisterCollisionGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(0, 0, mug_thickness / 2.0)+ shift), bottom_pad,
-//       "bottom_pad", rigid_proximity_props);
-//   plant.RegisterVisualGeometry(
-//       plant.world_body(),
-//       RigidTransformd(Eigen::Vector3d(0, 0, mug_thickness / 2.0)+ shift), bottom_pad,
-//       "bottom_pad_visual", (illustration_props));
-//   // ------------- a container on the ground
+  Box vertical_pad4{pad_size + pad_thickness, pad_thickness,
+                    pad_size + pad_thickness};
+  plant.RegisterCollisionGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(0, -(pad_size) / 2.0,
+                                      pad_size / 2.0) +
+                      shift),
+      vertical_pad4, "vertical_pad4", rigid_proximity_props);
+  plant.RegisterVisualGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(0, -(pad_size) / 2.0,
+                                      pad_size / 2.0) +
+                      shift),
+      vertical_pad4, "vertical_pad4_visual", (illustration_props));
+
+  Box bottom_pad{pad_size + pad_thickness, pad_size + pad_thickness,
+                 pad_thickness};
+  plant.RegisterCollisionGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(0, 0, pad_thickness / 2.0) + shift),
+      bottom_pad, "bottom_pad", rigid_proximity_props);
+  plant.RegisterVisualGeometry(
+      plant.world_body(),
+      RigidTransformd(Eigen::Vector3d(0, 0, pad_thickness / 2.0) + shift),
+      bottom_pad, "bottom_pad_visual", (illustration_props));
+  // ------------- a container on the ground
 
   MultibodyPlant<double> iiwa_controller_plant =
       MultibodyPlant<double>(plant_config.time_step);
@@ -391,6 +397,15 @@ int do_main() {
       "iiwa_description/iiwa7/iiwa7_no_collision.sdf");
   auto iiwa = parser.AddModels(filename)[0];
   Parser(&iiwa_controller_plant).AddModels(filename);
+
+  // multibody::Parser ground_parser(&plant, "ground");
+  std::string visual_ground_filename = FindResourceOrThrow(
+      "drake/examples/manipulation_station/models/table_wide.sdf");
+  auto table = parser.AddModels(visual_ground_filename)[0];
+  unused(table);
+  plant.WeldFrames(plant.world_frame(),
+                   plant.GetBodyByName("table_body", table).body_frame(),
+                   RigidTransformd(Eigen::Vector3d(0.35, 0.0, -0.002)));
 
   std::string hand_filename = FindResourceOrThrow(
       "drake/manipulation/models/"
@@ -420,18 +435,18 @@ int do_main() {
   std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
       mpm_geometry_level_set =
           std::make_unique<drake::multibody::mpm::internal::CylinderLevelSet>(
-              mug_height / 2.0, mug_inner_radius * 0.98);
+              mug_inner_height / 2.0, mug_inner_radius * 0.98);
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-      model = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                   EquationOfState<double>>(
+      model = std::make_unique<
+          drake::multibody::mpm::constitutive_model::EquationOfState<double>>(
           0.111, 0.111, 100.0, 7.0);
   Vector3<double> translation = {mug_outer_translation(0),
                                  mug_outer_translation(1),
-                                 (mug_height-mug_thickness) / 2.0 + mug_thickness * 1.0};
+                                 mug_inner_height / 2.0 + mug_thickness * 2.0};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = mug_outer_radius / 2.4;
+  double h = mug_outer_radius / 3.0 * 1.5;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
@@ -440,7 +455,7 @@ int do_main() {
       static_cast<int>(FLAGS_ppc));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
-  owned_deformable_model->SetMpmStiffness(1e5);
+  owned_deformable_model->SetMpmStiffness(1e6);
 
   owned_deformable_model->inner_cylinder_id_ = inner_cylinder_geometry_id;
   owned_deformable_model->outer_cylinder_id_ = outer_cylinder_geometry_id;
@@ -554,7 +569,7 @@ int do_main() {
   auto meshcat_pc_visualizer =
       builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
           meshcat, "cloud", meshcat_params.publish_period);
-  meshcat_pc_visualizer->set_point_size(0.01);
+  meshcat_pc_visualizer->set_point_size(0.008);
   builder.Connect(deformable_model->mpm_point_cloud_port(),
                   meshcat_pc_visualizer->cloud_input_port());
 
@@ -597,6 +612,10 @@ int do_main() {
   } else {
     simulator.AdvanceTo(FLAGS_simulation_time);
   }
+
+  std::ofstream htmlFile("fluid.html");
+  htmlFile << meshcat->StaticHtml();
+  htmlFile.close();
 
   return 0;
 }
