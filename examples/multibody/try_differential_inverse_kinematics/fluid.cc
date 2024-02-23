@@ -31,7 +31,7 @@
 
 DEFINE_double(simulation_time, 7.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
-DEFINE_double(time_step, 5e-3,
+DEFINE_double(time_step, 10e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -39,7 +39,7 @@ DEFINE_double(density, 1e3, "Mass density of the deformable body [kg/m³].");
 DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(friction, 0.04, "mpm friction");
-DEFINE_double(ppc, 6, "mpm ppc");
+DEFINE_double(ppc, 5, "mpm ppc");
 DEFINE_double(shift, 0.98, "shift");
 DEFINE_double(damping, 10.0, "larger, more damping");
 
@@ -375,15 +375,15 @@ int do_main() {
                       shift),
       vertical_pad4, "vertical_pad4_visual", (illustration_props));
 
-  Box bottom_pad{pad_size + pad_thickness, pad_size + pad_thickness,
-                 pad_thickness};
+  Box bottom_pad{pad_size + pad_thickness + 0, pad_size + pad_thickness + 0,
+                 pad_thickness * 1.5};
   plant.RegisterCollisionGeometry(
       plant.world_body(),
-      RigidTransformd(Eigen::Vector3d(0, 0, pad_thickness / 2.0) + shift),
+      RigidTransformd(Eigen::Vector3d(0, 0, pad_thickness * 1.5 / 2.0) + shift),
       bottom_pad, "bottom_pad", rigid_proximity_props);
   plant.RegisterVisualGeometry(
       plant.world_body(),
-      RigidTransformd(Eigen::Vector3d(0, 0, pad_thickness / 2.0) + shift),
+      RigidTransformd(Eigen::Vector3d(0, 0, pad_thickness * 1.5 / 2.0) + shift),
       bottom_pad, "bottom_pad_visual", (illustration_props));
   // ------------- a container on the ground
 
@@ -446,7 +446,7 @@ int do_main() {
                                  mug_inner_height / 2.0 + mug_thickness * 2.0};
   std::unique_ptr<math::RigidTransform<double>> pose =
       std::make_unique<math::RigidTransform<double>>(translation);
-  double h = mug_outer_radius / 3.0 * 1.5;
+  double h = mug_outer_radius / 3.0 * 1.4;
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
                                           std::move(model), std::move(pose),
                                           1000.0, h);
@@ -455,7 +455,7 @@ int do_main() {
       static_cast<int>(FLAGS_ppc));
   owned_deformable_model->SetMpmFriction(FLAGS_friction);
   owned_deformable_model->SetMpmDamping(FLAGS_damping);
-  owned_deformable_model->SetMpmStiffness(1e6);
+  owned_deformable_model->SetMpmStiffness(1e5);
 
   owned_deformable_model->inner_cylinder_id_ = inner_cylinder_geometry_id;
   owned_deformable_model->outer_cylinder_id_ = outer_cylinder_geometry_id;
