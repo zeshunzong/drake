@@ -118,6 +118,9 @@ int do_main() {
       "translate_x_joint", plant.world_body(), RigidTransformd(), x_body,
       std::nullopt, Vector3d::UnitX());
 
+    plant.GetMutableJointByName<PrismaticJoint>("translate_x_joint")
+      .set_default_translation(0.5);
+
   const auto actuator_x_index =
       plant.AddJointActuator("x prismatic joint actuator", prismatic_joint_x)
           .index();
@@ -132,6 +135,9 @@ int do_main() {
   const auto& prismatic_joint_z = plant.AddJoint<PrismaticJoint>(
       "translate_z_joint", x_body, RigidTransformd(), box1, std::nullopt,
       Vector3d::UnitZ());
+
+     plant.GetMutableJointByName<PrismaticJoint>("translate_z_joint")
+      .set_default_translation(0.5);
 
   const auto actuator_z_index =
       plant.AddJointActuator("z prismatic joint actuator", prismatic_joint_z)
@@ -222,12 +228,12 @@ int do_main() {
   /* Build the simulator and run! */
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
 
-  auto& mutable_context = simulator.get_mutable_context();
-  auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
-  const double base_height = 0.15;
+  // auto& mutable_context = simulator.get_mutable_context();
+  // auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
+  // const double base_height = 0.15;
 
-  plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
-                        math::RigidTransformd{Vector3d(1.0, 0, base_height)});
+  // plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
+  //                       math::RigidTransformd{Vector3d(1.0, 0, base_height)});
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
