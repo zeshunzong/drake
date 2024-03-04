@@ -28,11 +28,11 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 2.5, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 2e-2,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 5e5, "Young's modulus of the deformable body [Pa].");
+DEFINE_double(E, 8e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3,
@@ -107,9 +107,9 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
  private:
   const multibody::MultibodyPlant<double>& plant_;
   double initial_height_ = 0.0;
-  double lift_start_ = 0.5;
-  double lift_duration_ = 1.0;
-  double target_z_displacement_ = 1.3;
+  double lift_start_ = 0.4;
+  double lift_duration_ = 0.8;
+  double target_z_displacement_ = 1.0;
   double box_width_;
 };
 
@@ -150,7 +150,7 @@ class XBoxController : public drake::systems::LeafSystem<double> {
   double initial_pos_;
   bool is_right_;
   double move_start_ = 0.1;
-  double move_duration_ = 0.3;
+  double move_duration_ = 0.2;
   double target_movement_ = 0.2;
   double box_width_;
 };
@@ -208,7 +208,7 @@ int do_main() {
       plant.AddJointActuator("z prismatic joint actuator", prismatic_joint_z)
           .index();
   plant.get_mutable_joint_actuator(actuator_z_index)
-      .set_controller_gains({1e4, 1});
+      .set_controller_gains({1e6, 1});
 
   // box controlled on the left
   ModelInstanceIndex left_box_model_instance =
@@ -333,7 +333,7 @@ std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
 
   owned_deformable_model->SetMpmDamping(10.0);
   owned_deformable_model->SetMpmStiffness(5e5);
-  owned_deformable_model->SetMpmFriction(0.15);
+  owned_deformable_model->SetMpmFriction(0.2);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
 
