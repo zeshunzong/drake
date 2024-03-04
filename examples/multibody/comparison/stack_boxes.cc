@@ -29,7 +29,7 @@
 
 DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 5e-3,
+DEFINE_double(time_step, 10e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -107,8 +107,8 @@ int do_main() {
                                "ground_visual", std::move(illustration_props));
 
   double box_width = 0.3;
-  double ratio = 2.0;
-  double rho1 = 90;
+  double ratio = 6.0;
+  double rho1 = 2;
   double rho2 = rho1 * ratio;
   double rho3 = rho2 * ratio;
   double rho4 = rho3 * ratio;

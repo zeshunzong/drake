@@ -28,11 +28,12 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 7.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 2.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 5e-3,
+DEFINE_double(time_step, 2e-2,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
+DEFINE_double(E, 5e5, "Young's modulus of the deformable body [Pa].");
+DEFINE_double(rho, 100, "density.");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3,
               "Mass density of the deformable body [kg/m³]. We observe that "
@@ -42,7 +43,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 12, "mpm ppc");
+DEFINE_double(ppc, 10, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -58,6 +59,7 @@ using drake::multibody::AddMultibodyPlant;
 using drake::multibody::CoulombFriction;
 using drake::multibody::DeformableBodyId;
 using drake::multibody::DeformableModel;
+using drake::multibody::ModelInstanceIndex;
 using drake::multibody::MultibodyPlantConfig;
 using drake::multibody::Parser;
 using drake::multibody::PrismaticJoint;
@@ -74,6 +76,84 @@ using Eigen::VectorXd;
 namespace drake {
 namespace examples {
 namespace {
+
+class DummyZBoxController : public drake::systems::LeafSystem<double> {
+ public:
+  DummyZBoxController(const multibody::MultibodyPlant<double>& plant,
+                      double initial_height, double box_width)
+      : plant_(plant) {
+    this->DeclareVectorOutputPort(
+        "DummyZBoxDesiredState", drake::systems::BasicVector<double>(2),
+        &DummyZBoxController::CalcDesiredState, {this->time_ticket()});
+    initial_height_ = initial_height;
+    box_width_ = box_width;
+    target_z_displacement_ = target_z_displacement_ * box_width;
+  }
+  void CalcDesiredState(const Context<double>& context,
+                        drake::systems::BasicVector<double>* output) const {
+    unused(context);
+    unused(output);
+    Vector2<double> state_value;
+    double target_z_pos = initial_height_;
+    if (context.get_time() > lift_start_) {
+      double fraction = (context.get_time() - lift_start_) / lift_duration_;
+      target_z_pos =
+          initial_height_ + std::min(fraction, 1.0) * target_z_displacement_;
+    }
+    state_value << target_z_pos, 0;
+    output->set_value(state_value);
+  }
+
+ private:
+  const multibody::MultibodyPlant<double>& plant_;
+  double initial_height_ = 0.0;
+  double lift_start_ = 0.5;
+  double lift_duration_ = 1.0;
+  double target_z_displacement_ = 1.3;
+  double box_width_;
+};
+
+class XBoxController : public drake::systems::LeafSystem<double> {
+ public:
+  XBoxController(const multibody::MultibodyPlant<double>& plant, bool is_right,
+                 double initial_pos, double box_width)
+      : plant_(plant) {
+    this->DeclareVectorOutputPort(
+        "XBoxDesiredState", drake::systems::BasicVector<double>(2),
+        &XBoxController::CalcDesiredState, {this->time_ticket()});
+    is_right_ = is_right;
+    initial_pos_ = initial_pos;
+    box_width_ = box_width;
+    target_movement_ = target_movement_ * box_width;
+  }
+  void CalcDesiredState(const Context<double>& context,
+                        drake::systems::BasicVector<double>* output) const {
+    unused(context);
+    Vector2<double> state_value;
+    double target_x_pos = initial_pos_;
+    if (context.get_time() > move_start_) {
+      double fraction = (context.get_time() - move_start_) / move_duration_;
+      double dx = std::min(fraction, 1.0) * target_movement_;
+
+      if (is_right_) {
+        target_x_pos -= dx;
+      } else {
+        target_x_pos += dx;
+      }
+    }
+    state_value << target_x_pos, 0;
+    output->set_value(state_value);
+  }
+
+ private:
+  const multibody::MultibodyPlant<double>& plant_;
+  double initial_pos_;
+  bool is_right_;
+  double move_start_ = 0.1;
+  double move_duration_ = 0.3;
+  double target_movement_ = 0.2;
+  double box_width_;
+};
 
 int do_main() {
   systems::DiagramBuilder<double> builder;
@@ -107,43 +187,77 @@ int do_main() {
   plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
                                "ground_visual", std::move(illustration_props));
 
-  double box_width = 0.3;
+  double box_width = 0.4;
 
+  // a dummy box for lifting in z-direction
   const drake::multibody::UnitInertia<double> unit_inertia(0, 0, 0);
   const SpatialInertia<double> zero_inertia =
       SpatialInertia<double>(0.0, Vector3<double>(0, 0, 0), unit_inertia);
-  const RigidBody<double>& x_body = plant.AddRigidBody("x_body", zero_inertia);
-
-  const auto& prismatic_joint_x = plant.AddJoint<PrismaticJoint>(
-      "translate_x_joint", plant.world_body(), RigidTransformd(), x_body,
-      std::nullopt, Vector3d::UnitX());
-
-    plant.GetMutableJointByName<PrismaticJoint>("translate_x_joint")
-      .set_default_translation(0.5);
-
-  const auto actuator_x_index =
-      plant.AddJointActuator("x prismatic joint actuator", prismatic_joint_x)
-          .index();
-  plant.get_mutable_joint_actuator(actuator_x_index)
-      .set_controller_gains({1e4, 1});
-
-  const SpatialInertia<double> box1spatial =
-      SpatialInertia<double>::SolidBoxWithDensity(10, box_width, box_width,
-                                                  box_width);
-  const RigidBody<double>& box1 = plant.AddRigidBody("box1", box1spatial);
-
+  ModelInstanceIndex dummy_z_instance =
+      plant.AddModelInstance("dummy_z_instance");
+  const RigidBody<double>& dummy_z_body =
+      plant.AddRigidBody("dummy_z_body", dummy_z_instance, zero_inertia);
   const auto& prismatic_joint_z = plant.AddJoint<PrismaticJoint>(
-      "translate_z_joint", x_body, RigidTransformd(), box1, std::nullopt,
-      Vector3d::UnitZ());
-
-     plant.GetMutableJointByName<PrismaticJoint>("translate_z_joint")
-      .set_default_translation(0.5);
-
+      "translate_z_joint", plant.world_body(), RigidTransformd(), dummy_z_body,
+      std::nullopt, Vector3d::UnitZ());
+  plant.GetMutableJointByName<PrismaticJoint>("translate_z_joint")
+      .set_default_translation(box_width / 2.0);
+  auto dummy_z_box_controller = builder.template AddSystem<DummyZBoxController>(
+      plant, box_width / 2.0, box_width);
   const auto actuator_z_index =
       plant.AddJointActuator("z prismatic joint actuator", prismatic_joint_z)
           .index();
   plant.get_mutable_joint_actuator(actuator_z_index)
       .set_controller_gains({1e4, 1});
+
+  // box controlled on the left
+  ModelInstanceIndex left_box_model_instance =
+      plant.AddModelInstance("left_box_instance");
+  const SpatialInertia<double> left_box_spatial =
+      SpatialInertia<double>::SolidBoxWithDensity(FLAGS_rho, box_width, box_width,
+                                                  box_width);
+  const RigidBody<double>& left_box =
+      plant.AddRigidBody("left_box", left_box_model_instance, left_box_spatial);
+  const auto& left_prismatic_joint_x = plant.AddJoint<PrismaticJoint>(
+      "left_translate_x_joint", dummy_z_body, RigidTransformd(), left_box,
+      std::nullopt, Vector3d::UnitX());
+  plant.GetMutableJointByName<PrismaticJoint>("left_translate_x_joint")
+      .set_default_translation(-2.0 * box_width);
+  const auto left_actuator_x_index =
+      plant.AddJointActuator("left x actuator", left_prismatic_joint_x).index();
+  plant.get_mutable_joint_actuator(left_actuator_x_index)
+      .set_controller_gains({1e4, 1});
+  auto left_box_controller = builder.template AddSystem<XBoxController>(
+      plant, false, -2.0 * box_width, box_width);
+
+  // box controlled on the right
+  ModelInstanceIndex right_box_model_instance =
+      plant.AddModelInstance("right_box_instance");
+  const SpatialInertia<double> right_box_spatial =
+      SpatialInertia<double>::SolidBoxWithDensity(FLAGS_rho, box_width, box_width,
+                                                  box_width);
+  const RigidBody<double>& right_box = plant.AddRigidBody(
+      "right_box", right_box_model_instance, right_box_spatial);
+  const auto& right_prismatic_joint_x = plant.AddJoint<PrismaticJoint>(
+      "right_translate_x_joint", dummy_z_body, RigidTransformd(), right_box,
+      std::nullopt, Vector3d::UnitX());
+  plant.GetMutableJointByName<PrismaticJoint>("right_translate_x_joint")
+      .set_default_translation(2.0 * box_width);
+  const auto right_actuator_x_index =
+      plant.AddJointActuator("right x actuator", right_prismatic_joint_x)
+          .index();
+  plant.get_mutable_joint_actuator(right_actuator_x_index)
+      .set_controller_gains({1e4, 1});
+  auto right_box_controller = builder.template AddSystem<XBoxController>(
+      plant, true, 2.0 * box_width, box_width);
+
+  ModelInstanceIndex free_body_model_instance =
+      plant.AddModelInstance("free_body_instance");
+  const SpatialInertia<double> free_body_box_spatial =
+      SpatialInertia<double>::SolidBoxWithDensity(FLAGS_rho, box_width, box_width,
+                                                  box_width);
+  const RigidBody<double>& free_box = plant.AddRigidBody(
+      "free_box", free_body_model_instance, free_body_box_spatial);
 
   const Vector4<double> light_blue(0.5, 0.8, 1.0, 1.0);
   const Vector4<double> red(1.0, 0.0, 0.0, 1.0);
@@ -151,19 +265,27 @@ int do_main() {
   const Vector4<double> blue(0.0, 0.0, 1.0, 1.0);
   const Vector4<double> dark_blue(0.0, 0.0, 0.8, 1.0);
   const Vector4<double> orange(1.0, 0.55, 0.0, 0.2);
-  unused(light_blue);
-  unused(red);
-  unused(green);
-  unused(blue);
-  unused(dark_blue);
-  unused(orange);
+  unused(light_blue, red, green, blue, dark_blue, orange);
 
-  plant.RegisterVisualGeometry(box1, RigidTransformd::Identity(),
-                               Box(box_width, box_width, box_width), "Cube0V",
-                               dark_blue);
-  plant.RegisterCollisionGeometry(box1, RigidTransformd::Identity(),
-                                  Box(box_width, box_width, box_width), "Cube0",
-                                  compliant_hydro_props);
+  plant.RegisterVisualGeometry(left_box, RigidTransformd::Identity(),
+                               Box(box_width, box_width, box_width),
+                               "LeftCubeV", dark_blue);
+  plant.RegisterCollisionGeometry(left_box, RigidTransformd::Identity(),
+                                  Box(box_width, box_width, box_width),
+                                  "LeftCube", compliant_hydro_props);
+  plant.RegisterVisualGeometry(right_box, RigidTransformd::Identity(),
+                               Box(box_width, box_width, box_width),
+                               "RightCubeV", dark_blue);
+  plant.RegisterCollisionGeometry(right_box, RigidTransformd::Identity(),
+                                  Box(box_width, box_width, box_width),
+                                  "RightCube", compliant_hydro_props);
+
+  plant.RegisterVisualGeometry(free_box, RigidTransformd::Identity(),
+                               Box(box_width, box_width, box_width),
+                               "FreeCubeV", red);
+  plant.RegisterCollisionGeometry(free_box, RigidTransformd::Identity(),
+                                  Box(box_width, box_width, box_width),
+                                  "FreeCube", compliant_hydro_props);
 
   auto owned_deformable_model =
       std::make_unique<DeformableModel<double>>(&plant);
@@ -175,23 +297,43 @@ int do_main() {
               Vector3<double>(box_width / 2.0, box_width / 2.0,
                               box_width / 2.0));
 
+std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
+      mpm_geometry_level_set2 =
+          std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
+              Vector3<double>(box_width / 2.0, box_width / 2.0,
+                              box_width / 2.0));
+
   std::unique_ptr<
       drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
       model1 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(10e4, 0.2);
+                                    LinearCorotatedModel<double>>(FLAGS_E, FLAGS_nu);
+
+ std::unique_ptr<
+      drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
+      model2 = std::make_unique<drake::multibody::mpm::constitutive_model::
+                                    LinearCorotatedModel<double>>(FLAGS_E, FLAGS_nu);
 
   std::unique_ptr<math::RigidTransform<double>> pose1 =
       std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(0.0, 0.0, box_width / 2.0 + 0.0 * box_width));
+          Vector3<double>(-1.0 * box_width, 0.0, box_width / 2.0));
 
-  double h = 0.15;
+            std::unique_ptr<math::RigidTransform<double>> pose2 =
+      std::make_unique<math::RigidTransform<double>>(
+          Vector3<double>(1.0 * box_width, 0.0, box_width / 2.0));
+
+  double h = box_width/4.0;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set1),
                                           std::move(model1), std::move(pose1),
-                                          100, h);
+                                          FLAGS_rho, h);
+
+  owned_deformable_model->RegisterAdditionalMpmBody(std::move(mpm_geometry_level_set2),
+                                          std::move(model2), std::move(pose2),
+                                          FLAGS_rho, h);
 
   owned_deformable_model->SetMpmDamping(10.0);
-  owned_deformable_model->SetMpmStiffness(5e4);
+  owned_deformable_model->SetMpmStiffness(5e5);
+  owned_deformable_model->SetMpmFriction(0.15);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
 
@@ -202,12 +344,14 @@ int do_main() {
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
 
-  /* It's essential to connect the vertex position port in DeformableModel to
-   the source configuration port in SceneGraph when deformable bodies are
-   present in the plant. */
-  builder.Connect(
-      deformable_model->vertex_positions_port(),
-      scene_graph.get_source_configuration_port(plant.get_source_id().value()));
+  builder.Connect(dummy_z_box_controller->get_output_port(),
+                  plant.get_desired_state_input_port(dummy_z_instance));
+
+  builder.Connect(left_box_controller->get_output_port(),
+                  plant.get_desired_state_input_port(left_box_model_instance));
+
+  builder.Connect(right_box_controller->get_output_port(),
+                  plant.get_desired_state_input_port(right_box_model_instance));
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
@@ -228,12 +372,12 @@ int do_main() {
   /* Build the simulator and run! */
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
 
-  // auto& mutable_context = simulator.get_mutable_context();
-  // auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
-  // const double base_height = 0.15;
+  auto& mutable_context = simulator.get_mutable_context();
+  auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
 
-  // plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("box1"),
-  //                       math::RigidTransformd{Vector3d(1.0, 0, base_height)});
+  plant.SetFreeBodyPose(&plant_context, plant.GetBodyByName("free_box"),
+                        math::RigidTransformd{Vector3d(0.0, 0,
+                        box_width/2.0)});
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);

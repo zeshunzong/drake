@@ -62,7 +62,6 @@ struct MpmState {
                             elastoplastic_model.Clone(), mass_p,
                             reference_volume_p);
     }
-    // HackTear();
     return num_particles;  // return the number of particles added
   }
 
