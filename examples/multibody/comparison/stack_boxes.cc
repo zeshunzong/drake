@@ -29,7 +29,7 @@
 
 DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 0.1, "Desired real time rate.");
-DEFINE_double(time_step, 1e-4,
+DEFINE_double(time_step, 10e-4,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 3e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
@@ -41,7 +41,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 12, "mpm ppc");
+DEFINE_double(ppc, 10, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -106,23 +106,20 @@ int do_main() {
   plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
                                "ground_visual", std::move(illustration_props));
 
-  double ratio = 6.0;
-  double box_width = 0.3;
-  double rho1 = 2;
-  double rho2 = rho1 * ratio;
-  double rho3 = rho2 * ratio;
-  double rho4 = rho3 * ratio;
-  double rho5 = rho4 * ratio;
+  double theta = 3.14159 / 9.0;
+  Vector3<double> gravity(std::sin(theta), 0.0, -std::cos(theta));
+  gravity = gravity * 9.81;
+  plant.mutable_gravity_field().set_gravity_vector(gravity);
 
-  const SpatialInertia<double> box2spatial =
-      SpatialInertia<double>::SolidBoxWithDensity(rho2, box_width, box_width,
-                                                  box_width);
-  const SpatialInertia<double> box4spatial =
-      SpatialInertia<double>::SolidBoxWithDensity(rho4, box_width, box_width,
-                                                  box_width);
+  double h = 0.15;
+  double box_height = 2.0 * h;
+  double box_width = 4.0 * h;
+  double ratio = 5.0;
+  double mpm_rho = 10.0;
 
-  const RigidBody<double>& box2 = plant.AddRigidBody("box2", box2spatial);
-  const RigidBody<double>& box4 = plant.AddRigidBody("box4", box4spatial);
+  double rigid_rho = 20.0;
+
+  int num_boxes = 3;
 
   const Vector4<double> light_blue(0.5, 0.8, 1.0, 1.0);
   const Vector4<double> red(1.0, 0.0, 0.0, 1.0);
@@ -130,94 +127,76 @@ int do_main() {
   const Vector4<double> blue(0.0, 0.0, 1.0, 1.0);
   const Vector4<double> dark_blue(0.0, 0.0, 0.8, 1.0);
   const Vector4<double> orange(1.0, 0.55, 0.0, 0.2);
-  unused(light_blue);
-  unused(red);
-  unused(green);
-  unused(blue);
-  unused(dark_blue);
-  unused(orange);
-  plant.RegisterVisualGeometry(box2, RigidTransformd::Identity(),
-                               Box(box_width, box_width, box_width), "Cube1V",
-                               dark_blue);
-  plant.RegisterCollisionGeometry(box2, RigidTransformd::Identity(),
-                                  Box(box_width, box_width, box_width), "Cube1",
-                                  compliant_hydro_props);
 
-  plant.RegisterVisualGeometry(box4, RigidTransformd::Identity(),
-                               Box(box_width, box_width, box_width), "Cube3V",
-                               red);
-  plant.RegisterCollisionGeometry(box4, RigidTransformd::Identity(),
-                                  Box(box_width, box_width, box_width), "Cube3",
-                                  compliant_hydro_props);
+  std::vector<Vector4<double>> colors{light_blue, red,       green,
+                                      blue,       dark_blue, orange};
+
+  for (int i = 0; i < num_boxes+1; ++i) {
+    if (i >= 1) {
+      std::string name = "rigid_box_" + std::to_string(i);
+      const RigidBody<double>& box_reference = plant.AddRigidBody(
+          name, SpatialInertia<double>::SolidBoxWithDensity(
+                    rigid_rho, box_width, box_width, box_height));
+      rigid_rho *= ratio;
+      plant.RegisterVisualGeometry(box_reference, RigidTransformd::Identity(),
+                                   Box(box_width, box_width, box_height),
+                                   name + "V", colors[i]);
+      plant.RegisterCollisionGeometry(
+          box_reference, RigidTransformd::Identity(),
+          Box(box_width, box_width, box_height), name, compliant_hydro_props);
+    } else {
+      Box first_box{box_width, box_width, box_height};
+      plant.RegisterCollisionGeometry(
+          plant.world_body(),
+          RigidTransformd(Eigen::Vector3d{0, 0, box_height / 2.0}), first_box,
+          "first box collision", compliant_hydro_props);
+      plant.RegisterVisualGeometry(
+          plant.world_body(),
+          RigidTransformd(Eigen::Vector3d{0, 0, box_height / 2.0}), first_box,
+          "first box visual", colors[i]);
+    }
+  }
 
   auto owned_deformable_model =
       std::make_unique<DeformableModel<double>>(&plant);
 
-  // set a MPM body
-  std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
-      mpm_geometry_level_set1 =
-          std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(box_width / 2.0, box_width / 2.0,
-                              box_width / 2.0));
+  for (int i = 0; i < num_boxes; ++i) {
+    std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
+        mpm_geometry_level_set =
+            std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
+                Vector3<double>(box_width / 2.0, box_width / 2.0,
+                                box_height / 2.0));
 
-  std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
-      mpm_geometry_level_set3 =
-          std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(box_width / 2.0, box_width / 2.0,
-                              box_width / 2.0));
+    std::unique_ptr<
+        drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
+        model = std::make_unique<drake::multibody::mpm::constitutive_model::
+                                     LinearCorotatedModel<double>>(8e4, 0.2);
 
-  std::unique_ptr<drake::multibody::mpm::internal::AnalyticLevelSet>
-      mpm_geometry_level_set5 =
-          std::make_unique<drake::multibody::mpm::internal::BoxLevelSet>(
-              Vector3<double>(box_width / 2.0, box_width / 2.0,
-                              box_width / 2.0));
+    std::unique_ptr<math::RigidTransform<double>> pose =
+        std::make_unique<math::RigidTransform<double>>(Vector3<double>(
+            0.0, 0.0, box_height / 2.0 + (2 * i + 1.0) * box_height));
 
-  std::unique_ptr<
-      drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-      model1 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(8e4, 0.2);
-  std::unique_ptr<
-      drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-      model3 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(8e4, 0.2);
-
-  std::unique_ptr<
-      drake::multibody::mpm::constitutive_model::ElastoPlasticModel<double>>
-      model5 = std::make_unique<drake::multibody::mpm::constitutive_model::
-                                    LinearCorotatedModel<double>>(8e4, 0.2);
-
-  std::unique_ptr<math::RigidTransform<double>> pose1 =
-      std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(0.0, 0.0, box_width / 2.0));
-
-  std::unique_ptr<math::RigidTransform<double>> pose3 =
-      std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(0.0, 0.0, box_width / 2.0 + 2.0 * box_width));
-
-  std::unique_ptr<math::RigidTransform<double>> pose5 =
-      std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(0.0, 0.0, box_width / 2.0 + 4.0 * box_width));
-
-  double h = 0.06;
-
-  owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set1),
-                                          std::move(model1), std::move(pose1),
-                                          rho1, h);
-  owned_deformable_model->RegisterAdditionalMpmBody(
-      std::move(mpm_geometry_level_set3), std::move(model3), std::move(pose3),
-      rho3, h);
-  owned_deformable_model->RegisterAdditionalMpmBody(
-      std::move(mpm_geometry_level_set5), std::move(model5), std::move(pose5),
-      rho5, h);
+    if (i == 0) {
+      owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set),
+                                              std::move(model), std::move(pose),
+                                              mpm_rho, h);
+    } else {
+      owned_deformable_model->RegisterAdditionalMpmBody(
+          std::move(mpm_geometry_level_set), std::move(model), std::move(pose),
+          mpm_rho, h);
+    }
+  }
 
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));
 
+  owned_deformable_model->SetMpmGravity(gravity);
+
   owned_deformable_model->maniskill_params.num_mpm_substeps = 50;
-  owned_deformable_model->maniskill_params.friction_mu = 1.0;
+  owned_deformable_model->maniskill_params.friction_mu = std::tan(theta) * 1.2;
   owned_deformable_model->maniskill_params.friction_kf = 100.0;
   owned_deformable_model->maniskill_params.contact_damping = 10.0;
-  owned_deformable_model->maniskill_params.contact_stiffness = 5e4 * ratio;
+  owned_deformable_model->maniskill_params.contact_stiffness = 5e5;
 
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
@@ -225,10 +204,6 @@ int do_main() {
 
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
-
-  builder.Connect(
-      deformable_model->vertex_positions_port(),
-      scene_graph.get_source_configuration_port(plant.get_source_id().value()));
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
@@ -251,19 +226,17 @@ int do_main() {
 
   auto& mutable_context = simulator.get_mutable_context();
   auto& plant_context = plant.GetMyMutableContextFromRoot(&mutable_context);
-  const double base_height = 0.15;
 
-  plant.SetFreeBodyPose(
-      &plant_context, plant.GetBodyByName("box2"),
-      math::RigidTransformd{Vector3d(0, 0, base_height + 1.0 * box_width)});
-
-  plant.SetFreeBodyPose(
-      &plant_context, plant.GetBodyByName("box4"),
-      math::RigidTransformd{Vector3d(0, 0, base_height + 3.0 * box_width)});
+  for (int i = 1; i < num_boxes+1; ++i) {
+    std::string name = "rigid_box_" + std::to_string(i);
+    plant.SetFreeBodyPose(
+        &plant_context, plant.GetBodyByName(name),
+        math::RigidTransformd{Vector3d(0, 0, (2 * i + 0.5) * box_height)});
+  }
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
-
+  sleep(5);
   bool recording = true;
 
   if (recording) {
