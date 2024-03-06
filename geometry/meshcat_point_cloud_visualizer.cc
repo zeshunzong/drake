@@ -5,6 +5,7 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <iostream>
 
 #include "drake/common/extract_double.h"
 #include "drake/geometry/meshcat_graphviz.h"

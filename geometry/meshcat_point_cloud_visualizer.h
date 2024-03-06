@@ -43,7 +43,7 @@ class MeshcatPointCloudVisualizer final : public systems::LeafSystem<T> {
   */
   MeshcatPointCloudVisualizer(std::shared_ptr<Meshcat> meshcat,
                               std::string path,
-                              double publish_period = 1 / 32.0);
+                              double publish_period = 1 / 128.0);
 
   /** Scalar-converting copy constructor. See @ref system_scalar_conversion.
    It should only be used to convert _from_ double _to_ other scalar types.
