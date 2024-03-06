@@ -28,11 +28,11 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 2.5, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 5e-4,
+DEFINE_double(time_step, 5e-5,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 2e6, "Young's modulus of the deformable body [Pa].");
+DEFINE_double(E, 5e5, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3,
@@ -106,27 +106,35 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
       }
       if ((context.get_time() >= 1.0 + delta_t_) && (context.get_time() < 1.0 + 3 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 + delta_t_)) / delta_t_;
-        target_z_pos -= fraction * 0.15 * box_width_;
+        target_z_pos -= fraction * 0.18 * box_width_;
       }
       if ((context.get_time() >= 1.0 + 3 * delta_t_) && (context.get_time() < 1.0 + 5 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 + 3 * delta_t_)) / delta_t_;
-        target_z_pos += fraction * 0.15 * box_width_;
+        target_z_pos += fraction * 0.18 * box_width_;
       }
       if ((context.get_time() >= 1.0 + 5 * delta_t_) && (context.get_time() < 1.0 + 7 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 + 5 * delta_t_)) / delta_t_;
-        target_z_pos -= fraction * 0.15 * box_width_;
+        target_z_pos -= fraction * 0.18 * box_width_;
       }
       if ((context.get_time() >= 1.0 + 7 * delta_t_) && (context.get_time() < 1.0 + 9 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 + 7 * delta_t_)) / delta_t_;
-        target_z_pos += fraction * 0.15 * box_width_;
+        target_z_pos += fraction * 0.18 * box_width_;
       }
       if ((context.get_time() >= 1.0 + 9 * delta_t_) && (context.get_time() < 1.0 + 11 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 + 9 * delta_t_)) / delta_t_;
-        target_z_pos -= fraction * 0.15 * box_width_;
+        target_z_pos -= fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 11 * delta_t_) && (context.get_time() < 1.0 + 12 * delta_t_)) {
+      if ((context.get_time() >= 1.0 + 11 * delta_t_) && (context.get_time() < 1.0 + 13 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 +11 * delta_t_)) / delta_t_;
-        target_z_pos += fraction * 0.15 * box_width_;
+        target_z_pos += fraction * 0.18 * box_width_;
+      }
+      if ((context.get_time() >= 1.0 + 13 * delta_t_) && (context.get_time() < 1.0 + 15 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (1.0 +13 * delta_t_)) / delta_t_;
+        target_z_pos -= fraction * 0.18 * box_width_;
+      }
+      if ((context.get_time() >= 1.0 + 15 * delta_t_) && (context.get_time() < 1.0 + 16 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (1.0 +15 * delta_t_)) / delta_t_;
+        target_z_pos += fraction * 0.18 * box_width_;
       }
     }
     state_value << target_z_pos, 0;
@@ -138,9 +146,9 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
   double initial_height_ = 0.0;
   double lift_start_ = 0.3;
   double lift_duration_ = 0.5;
-  double target_z_displacement_ = 1.0;
+  double target_z_displacement_ = 1.5;
   double box_width_;
-  double delta_t_ = 0.07;
+  double delta_t_ = 0.08;
 };
 
 class XBoxController : public drake::systems::LeafSystem<double> {
@@ -181,7 +189,7 @@ class XBoxController : public drake::systems::LeafSystem<double> {
   bool is_right_;
   double move_start_ = 0.05;
   double move_duration_ = 0.2;
-  double target_movement_ = 0.7;
+  double target_movement_ = 1.0;
   double box_width_;
 };
 
@@ -217,7 +225,7 @@ int do_main() {
   plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
                                "ground_visual", std::move(illustration_props));
 
-  double box_width = 0.4;
+  double box_width = 0.4/4.0;
 
   // a dummy box for lifting in z-direction
   const drake::multibody::UnitInertia<double> unit_inertia(0, 0, 0);
@@ -238,7 +246,7 @@ int do_main() {
       plant.AddJointActuator("z prismatic joint actuator", prismatic_joint_z)
           .index();
   plant.get_mutable_joint_actuator(actuator_z_index)
-      .set_controller_gains({1e6, 1});
+      .set_controller_gains({1e7, 1});
 
   // box controlled on the left
   ModelInstanceIndex left_box_model_instance =
@@ -252,13 +260,13 @@ int do_main() {
       "left_translate_x_joint", dummy_z_body, RigidTransformd(), left_box,
       std::nullopt, Vector3d::UnitX());
   plant.GetMutableJointByName<PrismaticJoint>("left_translate_x_joint")
-      .set_default_translation(-2.0 * box_width);
+      .set_default_translation(-(1.5 + 0.5/6) * box_width);
   const auto left_actuator_x_index =
       plant.AddJointActuator("left x actuator", left_prismatic_joint_x).index();
   plant.get_mutable_joint_actuator(left_actuator_x_index)
-      .set_controller_gains({10e4, 1});
+      .set_controller_gains({2e5/64.0, 1});
   auto left_box_controller = builder.template AddSystem<XBoxController>(
-      plant, false, -2.0 * box_width, box_width);
+      plant, false, -(1.5 + 0.5/6) * box_width, box_width);
 
   // box controlled on the right
   ModelInstanceIndex right_box_model_instance =
@@ -272,16 +280,16 @@ int do_main() {
       "right_translate_x_joint", dummy_z_body, RigidTransformd(), right_box,
       std::nullopt, Vector3d::UnitX());
   plant.GetMutableJointByName<PrismaticJoint>("right_translate_x_joint")
-      .set_default_translation(2.0 * box_width);
+      .set_default_translation((1.5 + 0.5/6) * box_width);
   const auto right_actuator_x_index =
       plant.AddJointActuator("right x actuator", right_prismatic_joint_x)
           .index();
   plant.get_mutable_joint_actuator(right_actuator_x_index)
-      .set_controller_gains({10e4, 1});
+      .set_controller_gains({2e5/64.0, 1});
   auto right_box_controller = builder.template AddSystem<XBoxController>(
-      plant, true, 2.0 * box_width, box_width);
+      plant, true, (1.5 + 0.5/6) * box_width, box_width);
 
-  double ratio = 100.0;
+  double ratio = 150.0;
   ModelInstanceIndex free_body_model_instance =
       plant.AddModelInstance("free_body_instance");
   const SpatialInertia<double> free_body_box_spatial =
@@ -296,19 +304,20 @@ int do_main() {
   const Vector4<double> blue(0.0, 0.0, 1.0, 1.0);
   const Vector4<double> dark_blue(0.0, 0.0, 0.8, 1.0);
   const Vector4<double> orange(1.0, 0.55, 0.0, 0.2);
+  const Vector4<double> grey(0.5, 0.5, 0.5, 1.0);
   unused(light_blue, red, green, blue, dark_blue, orange);
 
   plant.RegisterVisualGeometry(left_box, RigidTransformd::Identity(),
-                               Box(box_width, box_width, box_width),
-                               "LeftCubeV", dark_blue);
+                               Box(box_width/6, box_width * 1.4, box_width),
+                               "LeftCubeV", grey);
   plant.RegisterCollisionGeometry(left_box, RigidTransformd::Identity(),
-                                  Box(box_width, box_width, box_width),
+                                  Box(box_width/6, box_width * 1.4, box_width),
                                   "LeftCube", compliant_hydro_props);
   plant.RegisterVisualGeometry(right_box, RigidTransformd::Identity(),
-                               Box(box_width, box_width, box_width),
-                               "RightCubeV", dark_blue);
+                               Box(box_width/6, box_width * 1.4, box_width),
+                               "RightCubeV", grey);
   plant.RegisterCollisionGeometry(right_box, RigidTransformd::Identity(),
-                                  Box(box_width, box_width, box_width),
+                                  Box(box_width/6, box_width * 1.4, box_width),
                                   "RightCube", compliant_hydro_props);
 
   plant.RegisterVisualGeometry(free_box, RigidTransformd::Identity(),
@@ -354,7 +363,7 @@ int do_main() {
       std::make_unique<math::RigidTransform<double>>(
           Vector3<double>(1.0 * box_width, 0.0, box_width / 2.0));
 
-  double h = box_width / 3.0;
+  double h = box_width / 4.0;
 
   owned_deformable_model->RegisterMpmBody(std::move(mpm_geometry_level_set1),
                                           std::move(model1), std::move(pose1),
@@ -362,7 +371,7 @@ int do_main() {
 
   owned_deformable_model->RegisterAdditionalMpmBody(
       std::move(mpm_geometry_level_set2), std::move(model2), std::move(pose2),
-      FLAGS_rho, h);
+       FLAGS_rho, h);
 
   //   owned_deformable_model->SetMpmDamping(10.0);
   //   owned_deformable_model->SetMpmStiffness(5e5);
@@ -380,10 +389,10 @@ int do_main() {
                    10.0
             << std::endl;
   owned_deformable_model->maniskill_params.num_mpm_substeps = 50;
-  owned_deformable_model->maniskill_params.friction_mu = 0.5;
+  owned_deformable_model->maniskill_params.friction_mu = 0.8;
   owned_deformable_model->maniskill_params.friction_kf = kf;
   owned_deformable_model->maniskill_params.contact_damping = 10.0;
-  owned_deformable_model->maniskill_params.contact_stiffness = 5e5;
+  owned_deformable_model->maniskill_params.contact_stiffness = 1e6;
 
   const DeformableModel<double>* deformable_model =
       owned_deformable_model.get();
@@ -403,13 +412,13 @@ int do_main() {
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
-  meshcat_params.publish_period = 0.01;
+  meshcat_params.publish_period = 1.0/64;
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, scene_graph, meshcat, meshcat_params);
   auto meshcat_pc_visualizer =
       builder.AddSystem<drake::geometry::MeshcatPointCloudVisualizer>(
           meshcat, "cloud", meshcat_params.publish_period);
-  meshcat_pc_visualizer->set_point_size(0.01);
+  meshcat_pc_visualizer->set_point_size(0.01/4.0);
   builder.Connect(deformable_model->mpm_point_cloud_port(),
                   meshcat_pc_visualizer->cloud_input_port());
 
