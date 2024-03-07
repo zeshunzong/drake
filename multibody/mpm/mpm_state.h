@@ -80,11 +80,11 @@ struct MpmState {
     double dx = max_length / (particles_per_dim+1);
 
     double vol = level_set.volume() /
-                 ((particles_per_dim+2) * (particles_per_dim+2) * (particles_per_dim+2));
+                 ((particles_per_dim+1) * (particles_per_dim+1) * (particles_per_dim+1));
     double mp = vol * common_density;
     for (int i = 0; i <= particles_per_dim+1; ++i) {
-      for (int j = 0; j <= particles_per_dim+1; ++j) {
-        for (int k = 0; k <= particles_per_dim+1; ++k) {
+      for (int j = 1; j <= particles_per_dim; ++j) {
+        for (int k = 1; k < particles_per_dim+1; ++k) {
           particles.AddParticle(
               pose * (bounding_box[0] + Vector3<T>(i * dx, j * dx, k * dx)),
               Vector3<T>(0, 0, 0), elastoplastic_model.Clone(), mp, vol);

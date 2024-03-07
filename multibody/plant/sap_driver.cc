@@ -154,8 +154,7 @@ void SapDriver<T>::CalcLinearDynamicsMatrix(const systems::Context<T>& context,
   }
 
   if constexpr (std::is_same_v<T, double>) {
-    if (
-        manager().deformable_driver()->num_deformable_bodies() > 0) {
+    if (manager().deformable_driver()->num_deformable_bodies() > 0) {
       manager().deformable_driver()->AppendLinearDynamicsMatrix(context, A);
     } else if (manager().deformable_driver() != nullptr &&
                manager().deformable_driver()->ExistsMpmBody()) {
@@ -1065,7 +1064,7 @@ void SapDriver<T>::CalcDiscreteUpdateMultibodyForces(
     const systems::Context<T>& context, MultibodyForces<T>* forces) const {
   auto& generalized_forces = forces->mutable_generalized_forces();
   auto& spatial_forces = forces->mutable_body_forces();
-
+  std::cout << "sssssssssssssssSSSS" << std::endl;
   // Current state (previous time step).
   const VectorX<T>& x0 =
       context.get_discrete_state(manager().multibody_state_index()).value();

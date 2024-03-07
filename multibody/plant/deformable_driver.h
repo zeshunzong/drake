@@ -167,12 +167,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         &mpm_scratch);
   }
 
-  //   void CalcGridDataPrevStep(const systems::Context<T>& context,
-  //                               mpm::GridData<T>* grid_data_prev_step);
-
-  //  void CalcGridDataFreeMotionAndLastdPdFs(const systems::Context<T>&
-  //  context, )
-
   const mpm::GridData<T>& EvalGridDataFreeMotion(
       const systems::Context<T>& context) const {
     return manager_->plant()
@@ -225,6 +219,69 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         .template Eval<mpm::GridData<T>>(context);
   }
 
+  void WriteContactData(const systems::Context<T>& context) const {
+    double time = context.get_time();
+
+    double intpart;
+    if (std::modf(time / 0.02, &intpart) == 0.0) {
+      const auto& mpm_contact_pairs = EvalMpmContactPairs(context);
+      const contact_solvers::internal::ContactSolverResults<T>& results =
+          manager_->EvalContactSolverResults(context);
+
+      VectorX<T> normal_forces = results.fn.tail(mpm_contact_pairs.size());
+      VectorX<T> friction_forces =
+          results.ft.tail(2 * mpm_contact_pairs.size());
+      VectorX<T> vt = results.vt.tail(2 * mpm_contact_pairs.size());
+      constexpr int kZAxis = 2;
+      Vector3<T> f_total_left(0, 0, 0);
+      Vector3<T> f_total_right(0, 0, 0);
+      Vector3<T> v_total_left(0, 0, 0);
+      Vector3<T> v_total_right(0, 0, 0);
+
+      // non_mpm_id = 29 is the left guy
+      // 37 is middle free box
+      // 33 is the right guy
+      for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
+        if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 37) {
+          math::RotationMatrix<T> R_WC =
+              math::RotationMatrix<T>::MakeFromOneUnitVector(
+                  mpm_contact_pairs[i].normal, kZAxis);
+          Vector3<T> f_C(friction_forces(2 * i), friction_forces(2 * i + 1),
+                         normal_forces(i));
+          Vector3<T> f_W = R_WC * f_C;
+          Vector3<T> v_C(vt(2 * i), vt(2 * i + 1), 0);
+          Vector3<T> v_W = R_WC * v_C;
+
+          if (mpm_contact_pairs[i].particle_in_contact_position(0) < 0) {
+            f_total_left += f_W;
+            v_total_left += v_W;
+          } else {
+            f_total_right += f_W;
+            v_total_right += v_W;
+          }
+        }
+      }
+
+      if (time == 0.0) {
+        std::ofstream F("output.txt");
+        F << f_total_left(0) << ", " << f_total_left(1) << ", "
+          << f_total_left(2) << "," << f_total_right(0) << ", "
+          << f_total_right(1) << ", " << f_total_right(2) << ","
+          << v_total_left(0) << ", " << v_total_left(1) << ", "
+          << v_total_left(2) << ", " << v_total_right(0) << ", "
+          << v_total_right(1) << ", " << v_total_right(2) << std::endl;
+      } else {
+        std::ofstream F("output.txt", std::ios::app);
+        F << f_total_left(0) << ", " << f_total_left(1) << ", "
+          << f_total_left(2) << "," << f_total_right(0) << ", "
+          << f_total_right(1) << ", " << f_total_right(2) << ","
+          << v_total_left(0) << ", " << v_total_left(1) << ", "
+          << v_total_left(2) << ", " << v_total_right(0) << ", "
+          << v_total_right(1) << ", " << v_total_right(2) << std::endl;
+      }
+    }
+  }
+
   // TODO(zeshunzong): optimize it
   void CalcGridDataPostContact(const systems::Context<T>& context,
                                mpm::GridData<T>* grid_data_post_contact) const {
@@ -233,12 +290,81 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         EvalGridDataFreeMotion(context);
     (*grid_data_post_contact) = grid_data_free_motion;
 
+    WriteContactData(context);
+
     if (EvalMpmContactPairs(context).size() == 0) {
       // if no contact, no further treatment
       return;
     }
-    contact_solvers::internal::ContactSolverResults<T> results =
+
+    // const auto& mpm_contact_pairs = EvalMpmContactPairs(context);
+    const contact_solvers::internal::ContactSolverResults<T>& results =
         manager_->EvalContactSolverResults(context);
+    // Vector3<T> f_total_left(0, 0, 0);
+    // Vector3<T> f_total_right(0, 0, 0);
+
+    // int rigid_contacts = results.fn.size() - mpm_contact_pairs.size();
+    // int count = 0;
+
+    // for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
+    //   // non_mpm_id = 29 is the left guy
+    //   // 37 is middle free box
+    //   // 33 is the right guy
+    //   if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 37) {
+    //     constexpr int kZAxis = 2;
+    //     math::RotationMatrix<T> R_WC =
+    //         math::RotationMatrix<T>::MakeFromOneUnitVector(
+    //             mpm_contact_pairs[i].normal, kZAxis);
+
+    //     Vector3<T> f_C(results.ft(2 * rigid_contacts + 2 * i),
+    //                    results.ft(2 * rigid_contacts + 2 * i + 1),
+    //                    results.fn(rigid_contacts + i));
+    //     Vector3<T> f_W = R_WC * f_C;
+
+    //     // VectorX<T> normal_forces =
+    //     results.fn.tail(mpm_contact_pairs.size());
+    //     // VectorX<T> friction_forces = results.ft.tail(2 *
+    //     // mpm_contact_pairs.size()); std::cout << "friction force: " <<
+    //     // friction_forces(2*i) << " " << friction_forces(2*i+1) <<
+    //     std::endl;
+    //     // std::cout << "normal firce: " << normal_forces(i) << std::endl;
+    //     // // std::cout << "friction: " << results.ft(2 * rigid_contacts + 2
+    //     *
+    //     // i)
+    //     // //           << " " << results.ft(2 * rigid_contacts + 2 * i + 1)
+    //     // //           << std::endl;
+    //     // // std::cout << "normal force: " << results.fn(rigid_contacts + i)
+    //     // //           << std::endl;
+    //     // // std::cout << "vc: " << results.vt(rigid_contacts+2 * i) << " "
+    //     // //           << results.vt(rigid_contacts+2 * i + 1) << std::endl;
+    //     // // std::cout << "vn: " << results.vn(i) << std::endl;
+    //     // // fmt::print("contact normal: {}\n",
+    //     // //            fmt_eigen(mpm_contact_pairs[i].normal.transpose()));
+    //     // // fmt::print(
+    //     // //     "contact position: {}\n",
+    //     // //
+    //     //
+    //     fmt_eigen(mpm_contact_pairs[i].particle_in_contact_position.transpose()));
+    //     // std::cout << "penetration distance: "
+    //     //           << mpm_contact_pairs[i].penetration_distance <<
+    //     std::endl; if (mpm_contact_pairs[i].particle_in_contact_position(0) <
+    //     0) {
+    //       f_total_left += f_W;
+    //     } else {
+    //       f_total_right += f_W;
+    //     }
+    //     ++count;
+    //   }
+    // }
+    // std::cout << "count" << count << std::endl;
+    // // std::cout << "force: " << f_total(0) << " " << f_total(1) << " "
+    // //           << f_total(2) << std::endl;
+    // std::ofstream outputFile("output.txt", std::ios::app);
+
+    // outputFile << f_total_left(0) << ", " << f_total_left(1) << ", "
+    //            << f_total_left(2) << "," << f_total_right(0) << ", "
+    //            << f_total_right(1) << ", " << f_total_right(2) << std::endl;
+    // outputFile.close();
     if (!deformable_model_->MpmUseSchur()) {
       int mpm_dofs = grid_data_free_motion.num_active_nodes() * 3;
       VectorX<T> grid_v_post_contact_vec = results.v_next.tail(mpm_dofs);
@@ -510,11 +636,19 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const T k = deformable_model_->mpm_stiffness();
       const T fn0 = k * std::abs(mpm_contact_pair.penetration_distance);
       const T tau = NAN;
+      // if (mpm_contact_pair.non_mpm_id.get_value() != 16) {
       result->AppendDeformableData(DiscreteContactPair<T>{
           dummy_id, mpm_contact_pair.non_mpm_id,
           mpm_contact_pair.particle_in_contact_position,
           mpm_contact_pair.normal, mpm_contact_pair.penetration_distance, fn0,
           k, d, tau, deformable_model_->mpm_model().friction_mu()});
+      //   } else {
+      //     result->AppendDeformableData(DiscreteContactPair<T>{
+      //         dummy_id, mpm_contact_pair.non_mpm_id,
+      //         mpm_contact_pair.particle_in_contact_position,
+      //         mpm_contact_pair.normal, mpm_contact_pair.penetration_distance,
+      //         fn0, k, d, tau, 0.0});
+      //   }
     }
   }
 
