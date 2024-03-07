@@ -28,11 +28,11 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 0.3, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 10e-3,
+DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 5e6, "Young's modulus of the deformable body [Pa].");
+DEFINE_double(E, 2e6, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3,

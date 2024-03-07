@@ -221,9 +221,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
   void WriteContactData(const systems::Context<T>& context) const {
     double time = context.get_time();
+    int current_step = std::round(context.get_time() / manager_->plant().time_step());
+    int ratio = std::round(0.01/manager_->plant().time_step());
 
-    double intpart;
-    if (std::modf(time / 0.02, &intpart) == 0.0) {
+    if ((current_step % ratio)==0) {
       const auto& mpm_contact_pairs = EvalMpmContactPairs(context);
       const contact_solvers::internal::ContactSolverResults<T>& results =
           manager_->EvalContactSolverResults(context);
@@ -241,6 +242,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       // non_mpm_id = 29 is the left guy
       // 37 is middle free box
       // 33 is the right guy
+      double count = 0.0;
       for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
         if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 37) {
           math::RotationMatrix<T> R_WC =
@@ -260,8 +262,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             v_total_right += v_W;
           }
         }
+        count = count + 1.0;
       }
-
+      v_total_left = v_total_left / count;
+      v_total_right = v_total_right / count;
       if (time == 0.0) {
         std::ofstream F("output.txt");
         F << f_total_left(0) << ", " << f_total_left(1) << ", "
