@@ -28,9 +28,9 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 10e-5,
+DEFINE_double(time_step, 5e-5,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 5e5, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
@@ -100,40 +100,40 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
       target_z_pos =
           initial_height_ + std::min(fraction, 1.0) * target_z_displacement_;
 
-      if ((context.get_time() > 1.0) && (context.get_time() < 1.0 + delta_t_)) {
-        fraction = (context.get_time() - 1.0) / delta_t_;
-        target_z_pos -= fraction * 0.12 * box_width_;
+      if ((context.get_time() > shake_start_) && (context.get_time() < shake_start_ + delta_t_)) {
+        fraction = (context.get_time() - shake_start_) / delta_t_;
+        target_z_pos -= fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + delta_t_) && (context.get_time() < 1.0 + 3 * delta_t_)) {
+      if ((context.get_time() >= shake_start_ + delta_t_) && (context.get_time() < shake_start_ + 3 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 + delta_t_)) / delta_t_;
         target_z_pos -= fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 3 * delta_t_) && (context.get_time() < 1.0 + 5 * delta_t_)) {
+      if ((context.get_time() >= shake_start_ + 3 * delta_t_) && (context.get_time() < shake_start_ + 5 * delta_t_)) {
         fraction = 1.0 - (context.get_time() - (1.0 + 3 * delta_t_)) / delta_t_;
         target_z_pos += fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 5 * delta_t_) && (context.get_time() < 1.0 + 7 * delta_t_)) {
-        fraction = 1.0 - (context.get_time() - (1.0 + 5 * delta_t_)) / delta_t_;
+      if ((context.get_time() >= shake_start_ + 5 * delta_t_) && (context.get_time() < shake_start_ + 7 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (shake_start_ + 5 * delta_t_)) / delta_t_;
         target_z_pos -= fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 7 * delta_t_) && (context.get_time() < 1.0 + 9 * delta_t_)) {
-        fraction = 1.0 - (context.get_time() - (1.0 + 7 * delta_t_)) / delta_t_;
+      if ((context.get_time() >= shake_start_ + 7 * delta_t_) && (context.get_time() < shake_start_ + 9 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (shake_start_ + 7 * delta_t_)) / delta_t_;
         target_z_pos += fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 9 * delta_t_) && (context.get_time() < 1.0 + 11 * delta_t_)) {
-        fraction = 1.0 - (context.get_time() - (1.0 + 9 * delta_t_)) / delta_t_;
+      if ((context.get_time() >= shake_start_ + 9 * delta_t_) && (context.get_time() < shake_start_ + 11 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (shake_start_ + 9 * delta_t_)) / delta_t_;
         target_z_pos -= fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 11 * delta_t_) && (context.get_time() < 1.0 + 13 * delta_t_)) {
-        fraction = 1.0 - (context.get_time() - (1.0 +11 * delta_t_)) / delta_t_;
+      if ((context.get_time() >= shake_start_ + 11 * delta_t_) && (context.get_time() < shake_start_ + 13 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (shake_start_ +11 * delta_t_)) / delta_t_;
         target_z_pos += fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 13 * delta_t_) && (context.get_time() < 1.0 + 15 * delta_t_)) {
-        fraction = 1.0 - (context.get_time() - (1.0 +13 * delta_t_)) / delta_t_;
+      if ((context.get_time() >= shake_start_ + 13 * delta_t_) && (context.get_time() < shake_start_ + 15 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (shake_start_ +13 * delta_t_)) / delta_t_;
         target_z_pos -= fraction * 0.18 * box_width_;
       }
-      if ((context.get_time() >= 1.0 + 15 * delta_t_) && (context.get_time() < 1.0 + 16 * delta_t_)) {
-        fraction = 1.0 - (context.get_time() - (1.0 +15 * delta_t_)) / delta_t_;
+      if ((context.get_time() >= shake_start_ + 15 * delta_t_) && (context.get_time() < shake_start_ + 16 * delta_t_)) {
+        fraction = 1.0 - (context.get_time() - (shake_start_ +15 * delta_t_)) / delta_t_;
         target_z_pos += fraction * 0.18 * box_width_;
       }
     }
@@ -144,10 +144,11 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
  private:
   const multibody::MultibodyPlant<double>& plant_;
   double initial_height_ = 0.0;
-  double lift_start_ = 0.3;
-  double lift_duration_ = 0.5;
-  double target_z_displacement_ = 1.5;
+  double lift_start_ = 0.4;
+  double lift_duration_ = 1.6;
+  double target_z_displacement_ = 2.0;
   double box_width_;
+  double shake_start_ = 2.2;
   double delta_t_ = 0.08;
 };
 
@@ -187,8 +188,8 @@ class XBoxController : public drake::systems::LeafSystem<double> {
   const multibody::MultibodyPlant<double>& plant_;
   double initial_pos_;
   bool is_right_;
-  double move_start_ = 0.05;
-  double move_duration_ = 0.2;
+  double move_start_ = 0.0;
+  double move_duration_ = 0.4;
   double target_movement_ = 1.0;
   double box_width_;
 };
@@ -264,7 +265,7 @@ int do_main() {
   const auto left_actuator_x_index =
       plant.AddJointActuator("left x actuator", left_prismatic_joint_x).index();
   plant.get_mutable_joint_actuator(left_actuator_x_index)
-      .set_controller_gains({2e5/64.0, 1});
+      .set_controller_gains({2e5/60.0, 1});
   auto left_box_controller = builder.template AddSystem<XBoxController>(
       plant, false, -(1.5 + 0.5/6) * box_width, box_width);
 
@@ -285,7 +286,7 @@ int do_main() {
       plant.AddJointActuator("right x actuator", right_prismatic_joint_x)
           .index();
   plant.get_mutable_joint_actuator(right_actuator_x_index)
-      .set_controller_gains({2e5/64.0, 1});
+      .set_controller_gains({2e5/60.0, 1});
   auto right_box_controller = builder.template AddSystem<XBoxController>(
       plant, true, (1.5 + 0.5/6) * box_width, box_width);
 
