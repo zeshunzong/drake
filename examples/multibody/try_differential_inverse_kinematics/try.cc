@@ -28,11 +28,11 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 0.3, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 3.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 5e-3,
+DEFINE_double(time_step, 10e-3,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 2e6, "Young's modulus of the deformable body [Pa].");
+DEFINE_double(E, 2e5, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3,
@@ -147,7 +147,7 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
   double lift_start_ = 0.4;
   double lift_duration_ = 1.6;
   double target_z_displacement_ = 2.0;
-  double shake_start_ = 2.2;
+  double shake_start_ = 20.2;
   double box_width_;
   double delta_t_ = 0.15;
 };
@@ -252,7 +252,7 @@ int do_main() {
       plant.AddJointActuator("z prismatic joint actuator", prismatic_joint_z)
           .index();
   plant.get_mutable_joint_actuator(actuator_z_index)
-      .set_controller_gains({1e7, 1});
+      .set_controller_gains({1e5, 1});
 
   // box controlled on the left
   ModelInstanceIndex left_box_model_instance =
@@ -270,7 +270,7 @@ int do_main() {
   const auto left_actuator_x_index =
       plant.AddJointActuator("left x actuator", left_prismatic_joint_x).index();
   plant.get_mutable_joint_actuator(left_actuator_x_index)
-      .set_controller_gains({2e5/60.0, 1});
+      .set_controller_gains({2e5/60.0/10.0, 1});
   auto left_box_controller = builder.template AddSystem<XBoxController>(
       plant, false, -(1.5+0.5/6.0 + 0.0/FLAGS_ppc) * box_width, box_width);
 
@@ -291,12 +291,12 @@ int do_main() {
       plant.AddJointActuator("right x actuator", right_prismatic_joint_x)
           .index();
   plant.get_mutable_joint_actuator(right_actuator_x_index)
-      .set_controller_gains({2e5/60.0, 1});
+      .set_controller_gains({2e5/60.0/10.0, 1});
   auto right_box_controller = builder.template AddSystem<XBoxController>(
       plant, true, (1.5+0.5/6.0 + 0.0/FLAGS_ppc) * box_width, box_width);
 
     unused(left_prismatic_joint_x, right_prismatic_joint_x);
-  double ratio = 150.0;
+  double ratio = 15.0;
   ModelInstanceIndex free_body_model_instance =
       plant.AddModelInstance("free_body_instance");
   const SpatialInertia<double> free_body_box_spatial =
@@ -381,7 +381,7 @@ int do_main() {
       FLAGS_rho, h);
 
   owned_deformable_model->SetMpmDamping(10.0);
-  owned_deformable_model->SetMpmStiffness(1e6);
+  owned_deformable_model->SetMpmStiffness(1e5);
   owned_deformable_model->SetMpmFriction(0.8);
   owned_deformable_model->SetMpmMinParticlesPerCell(
       static_cast<int>(FLAGS_ppc));

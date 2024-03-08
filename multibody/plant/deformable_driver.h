@@ -222,7 +222,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void WriteContactData(const systems::Context<T>& context) const {
     double time = context.get_time();
     int current_step = std::round(context.get_time() / manager_->plant().time_step());
-    int ratio = std::round(0.01/manager_->plant().time_step());
+    int ratio = std::round(0.005/manager_->plant().time_step());
 
     if ((current_step % ratio)==0) {
       const auto& mpm_contact_pairs = EvalMpmContactPairs(context);
