@@ -80,7 +80,7 @@ struct MpmState {
     double dx = max_length / (particles_per_dim + 1);
 
     double vol = level_set.volume() /
-                 ((particles_per_dim+1) * (particles_per_dim+1) * (particles_per_dim+1));
+                 ((particles_per_dim+2) * (particles_per_dim) * (particles_per_dim));
     double mp = vol * common_density;
     for (int i = 0; i < particles_per_dim + 2; ++i) {
       for (int j = 1; j < particles_per_dim + 1; ++j) {

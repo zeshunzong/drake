@@ -35,6 +35,37 @@ drake_cc_binary(
 )
 
 drake_cc_binary(
+    name = "only_gravity",
+    srcs = [
+        "only_gravity.cc",
+    ],
+    add_test_rule = 1,
+    data = [
+        "//manipulation/models/iiwa_description:models",
+        "//manipulation/models/allegro_hand_description:models",
+    ],
+    test_rule_args = [
+        "-simulation_time=0.1",
+        "-realtime_rate=0.0",
+    ],
+    deps = [
+        "//geometry",
+        "//geometry:drake_visualizer",
+        "//geometry:scene_graph",
+        "//multibody/parsing",
+        "//multibody/plant",
+        "//systems/analysis:simulator",
+        "//systems/framework:diagram",
+        "@gflags",
+        "//multibody/mpm/constitutive_model:linear_corotated_model",
+        "//multibody/mpm/constitutive_model:linear_corotated_with_plasticity",
+        "//multibody/mpm/constitutive_model:corotated_elastic_model",
+        "//multibody/mpm/constitutive_model:stvk_hencky_with_von_mises_model",
+    ],
+)
+
+
+drake_cc_binary(
     name = "try_new_gripper",
     srcs = [
         "try_new_gripper.cc",

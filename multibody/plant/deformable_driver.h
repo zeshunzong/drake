@@ -174,6 +174,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     double time = context.get_time();
     int current_step = std::round(time / manager_->plant().time_step());
     int ratio = std::round(0.005 / manager_->plant().time_step());
+    ratio = 625;
     unused(f_total_left, f_total_right, v_total_left, v_total_right);
     int left_count = 0;
     int right_count = 0;
@@ -272,7 +273,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             Bo - mpm_contact_pairs[i].particle_in_contact_position));
 
         if ((step == 0) && (current_step % ratio) == 0) {
-          if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 37) {
+          if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 21) {
 
             if (mpm_contact_pairs[i].particle_in_contact_position(0) < 0) {
               f_total_left += contact_force_W;
