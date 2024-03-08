@@ -239,12 +239,14 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       Vector3<T> v_total_left(0, 0, 0);
       Vector3<T> v_total_right(0, 0, 0);
 
-      // non_mpm_id = 29 is the left guy
-      // 37 is middle free box
-      // 33 is the right guy
+      // non_mpm_id = 21 is the left guy
+      // 29 is middle free box
+      // 25 is the right guy
       double count = 0.0;
       for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
-        if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 37) {
+        // std::cout << " x pos: " << mpm_contact_pairs[i].particle_in_contact_position(0) << std::endl;
+        // std::cout << "contact geo: " << mpm_contact_pairs[i].non_mpm_id << std::endl;
+        if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 21) {
           math::RotationMatrix<T> R_WC =
               math::RotationMatrix<T>::MakeFromOneUnitVector(
                   mpm_contact_pairs[i].normal, kZAxis);

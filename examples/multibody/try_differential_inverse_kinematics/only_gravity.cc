@@ -28,7 +28,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 1.5, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 0.5, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -77,86 +77,6 @@ namespace drake {
 namespace examples {
 namespace {
 
-class DummyZBoxController : public drake::systems::LeafSystem<double> {
- public:
-  DummyZBoxController(const multibody::MultibodyPlant<double>& plant,
-                      double initial_height, double box_width)
-      : plant_(plant) {
-    this->DeclareVectorOutputPort(
-        "DummyZBoxDesiredState", drake::systems::BasicVector<double>(2),
-        &DummyZBoxController::CalcDesiredState, {this->time_ticket()});
-    initial_height_ = initial_height;
-    box_width_ = box_width;
-    target_z_displacement_ = target_z_displacement_ * box_width;
-  }
-  void CalcDesiredState(const Context<double>& context,
-                        drake::systems::BasicVector<double>* output) const {
-    unused(context);
-    unused(output);
-    Vector2<double> state_value;
-    double target_z_pos = initial_height_;
-    if (context.get_time() > lift_start_) {
-      double fraction = (context.get_time() - lift_start_) / lift_duration_;
-      target_z_pos =
-          initial_height_ + std::min(fraction, 1.0) * target_z_displacement_;
-    }
-    state_value << target_z_pos, 0;
-    output->set_value(state_value);
-  }
-
- private:
-  const multibody::MultibodyPlant<double>& plant_;
-  double initial_height_ = 0.0;
-  double lift_start_ = 0.6;
-  double lift_duration_ = 0.6;
-  double target_z_displacement_ = 0.6;
-  double shake_start_ = 2.2;
-  double box_width_;
-  double delta_t_ = 0.15;
-};
-
-class XBoxController : public drake::systems::LeafSystem<double> {
- public:
-  XBoxController(const multibody::MultibodyPlant<double>& plant, bool is_right,
-                 double initial_pos, double box_width)
-      : plant_(plant) {
-    this->DeclareVectorOutputPort(
-        "XBoxDesiredState", drake::systems::BasicVector<double>(2),
-        &XBoxController::CalcDesiredState, {this->time_ticket()});
-    is_right_ = is_right;
-    initial_pos_ = initial_pos;
-    box_width_ = box_width;
-    target_movement_ = target_movement_ * box_width;
-  }
-  void CalcDesiredState(const Context<double>& context,
-                        drake::systems::BasicVector<double>* output) const {
-    unused(context);
-    Vector2<double> state_value;
-    double target_x_pos = initial_pos_;
-    if (context.get_time() > move_start_) {
-      double fraction = (context.get_time() - move_start_) / move_duration_;
-      // fraction = std::max(fraction, 0.1);
-      double dx = std::min(fraction, 1.0) * target_movement_;
-
-      if (is_right_) {
-        target_x_pos -= dx;
-      } else {
-        target_x_pos += dx;
-      }
-    }
-    state_value << target_x_pos, 0;
-    output->set_value(state_value);
-  }
-
- private:
-  const multibody::MultibodyPlant<double>& plant_;
-  double initial_pos_;
-  bool is_right_;
-  double move_start_ = 0.0;
-  double move_duration_ = 0.3;
-  double target_movement_ = 0.5;
-  double box_width_;
-};
 
 int do_main() {
   systems::DiagramBuilder<double> builder;
@@ -181,42 +101,11 @@ int do_main() {
   AddCompliantHydroelasticProperties(0.01, FLAGS_hydro_modulus,
                                      &compliant_hydro_props);
   AddRigidHydroelasticProperties(0.01, &rigid_hydro_props);
-  /* Set up a ground. */
-  Box ground{20, 20, 10};
-  const RigidTransformd X_WG(Eigen::Vector3d{0, 0, -5});
-  plant.RegisterCollisionGeometry(plant.world_body(), X_WG, ground,
-                                  "ground_collision", rigid_hydro_props);
-  IllustrationProperties illustration_props;
-  illustration_props.AddProperty("phong", "diffuse",
-                                 Vector4d(0.9, 0.9, 0.9, 1.0));
-  plant.RegisterVisualGeometry(plant.world_body(), X_WG, ground,
-                               "ground_visual", std::move(illustration_props));
 
   double box_width = 0.4 / 4;
 
   Vector3<double> g(0, 0, -10.0);
   plant.mutable_gravity_field().set_gravity_vector(g);
-
-  // a dummy box for lifting in z-direction
-  const drake::multibody::UnitInertia<double> unit_inertia(0, 0, 0);
-  const SpatialInertia<double> zero_inertia =
-      SpatialInertia<double>(0.0, Vector3<double>(0, 0, 0), unit_inertia);
-  ModelInstanceIndex dummy_z_instance =
-      plant.AddModelInstance("dummy_z_instance");
-  const RigidBody<double>& dummy_z_body =
-      plant.AddRigidBody("dummy_z_body", dummy_z_instance, zero_inertia);
-  const auto& prismatic_joint_z = plant.AddJoint<PrismaticJoint>(
-      "translate_z_joint", plant.world_body(), RigidTransformd(), dummy_z_body,
-      std::nullopt, Vector3d::UnitZ());
-  plant.GetMutableJointByName<PrismaticJoint>("translate_z_joint")
-      .set_default_translation(box_width / 2.0 + 0.00);
-  auto dummy_z_box_controller = builder.template AddSystem<DummyZBoxController>(
-      plant, box_width / 2.0 + 0.00, box_width);
-  const auto actuator_z_index =
-      plant.AddJointActuator("z prismatic joint actuator", prismatic_joint_z)
-          .index();
-  plant.get_mutable_joint_actuator(actuator_z_index)
-      .set_controller_gains({1e5, 1e2});
 
   // box controlled on the left
   ModelInstanceIndex left_box_model_instance =
@@ -227,7 +116,7 @@ int do_main() {
   const RigidBody<double>& left_box =
       plant.AddRigidBody("left_box", left_box_model_instance, left_box_spatial);
   const auto& left_prismatic_joint_x = plant.AddJoint<PrismaticJoint>(
-      "left_translate_x_joint", dummy_z_body, RigidTransformd(), left_box,
+      "left_translate_x_joint", plant.world_body(), RigidTransformd(), left_box,
       std::nullopt, Vector3d::UnitX());
   plant.GetMutableJointByName<PrismaticJoint>("left_translate_x_joint")
       .set_default_translation(-(1.5 + 0.5 / 6.0 + 0.0 / FLAGS_ppc) *
@@ -235,11 +124,6 @@ int do_main() {
   const auto left_actuator_x_index =
       plant.AddJointActuator("left x actuator", left_prismatic_joint_x).index();
   unused(left_actuator_x_index);
-  plant.get_mutable_joint_actuator(left_actuator_x_index)
-      .set_controller_gains({200, 1});
-  auto left_box_controller = builder.template AddSystem<XBoxController>(
-      plant, false, -(1.5 + 0.5 / 6.0 + 0.0 / FLAGS_ppc) * box_width,
-      box_width);
 
   // box controlled on the right
   ModelInstanceIndex right_box_model_instance =
@@ -250,7 +134,7 @@ int do_main() {
   const RigidBody<double>& right_box = plant.AddRigidBody(
       "right_box", right_box_model_instance, right_box_spatial);
   const auto& right_prismatic_joint_x = plant.AddJoint<PrismaticJoint>(
-      "right_translate_x_joint", dummy_z_body, RigidTransformd(), right_box,
+      "right_translate_x_joint", plant.world_body(), RigidTransformd(), right_box,
       std::nullopt, Vector3d::UnitX());
   plant.GetMutableJointByName<PrismaticJoint>("right_translate_x_joint")
       .set_default_translation((1.5 + 0.5 / 6.0 + 0.0 / FLAGS_ppc) * box_width);
@@ -259,14 +143,10 @@ int do_main() {
           .index();
 
   unused(right_actuator_x_index);
-  plant.get_mutable_joint_actuator(right_actuator_x_index)
-      .set_controller_gains({200, 1});
 
-  auto right_box_controller = builder.template AddSystem<XBoxController>(
-      plant, true, (1.5 + 0.5 / 6.0 + 0.0 / FLAGS_ppc) * box_width, box_width);
 
   unused(left_prismatic_joint_x, right_prismatic_joint_x);
-  double ratio = 2.0;
+  double ratio = 4.0;
   ModelInstanceIndex free_body_model_instance =
       plant.AddModelInstance("free_body_instance");
   const SpatialInertia<double> free_body_box_spatial =
@@ -333,11 +213,11 @@ int do_main() {
 
   std::unique_ptr<math::RigidTransform<double>> pose1 =
       std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(-1.0 * box_width - 0.00, 0.0, box_width / 2.0));
+          Vector3<double>(-1.0 * box_width - 0.00, 0.0, box_width / 2.0 * 0.0));
 
   std::unique_ptr<math::RigidTransform<double>> pose2 =
       std::make_unique<math::RigidTransform<double>>(
-          Vector3<double>(1.0 * box_width + 0.00, 0.0, box_width / 2.0));
+          Vector3<double>(1.0 * box_width + 0.00, 0.0, box_width / 2.0 * 0.0));
 
   double h = box_width / 4.0;
 
@@ -371,16 +251,16 @@ int do_main() {
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
 
-  builder.Connect(dummy_z_box_controller->get_output_port(),
-                  plant.get_desired_state_input_port(dummy_z_instance));
+//   builder.Connect(dummy_z_box_controller->get_output_port(),
+//                   plant.get_desired_state_input_port(dummy_z_instance));
 
-  builder.Connect(left_box_controller->get_output_port(),
-                  plant.get_desired_state_input_port(left_box_model_instance));
+//   builder.Connect(left_box_controller->get_output_port(),
+//                   plant.get_desired_state_input_port(left_box_model_instance));
 
-  builder.Connect(right_box_controller->get_output_port(),
-                  plant.get_desired_state_input_port(right_box_model_instance));
+//   builder.Connect(right_box_controller->get_output_port(),
+//                   plant.get_desired_state_input_port(right_box_model_instance));
 
-  unused(left_box_controller, right_box_controller);
+//   unused(left_box_controller, right_box_controller);
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
@@ -406,13 +286,13 @@ int do_main() {
 
   plant.SetFreeBodyPose(
       &plant_context, plant.GetBodyByName("free_box"),
-      math::RigidTransformd{Vector3d(0.0, 0, box_width / 2.0)});
+      math::RigidTransformd{Vector3d(0.0, 0, box_width / 2.0 * 0.0)});
 
-  // const VectorXd external_normal_force = VectorXd::Ones(1) * 10.0;
-  // plant.get_actuation_input_port(right_box_model_instance).FixValue(&plant_context,
-  // -external_normal_force);
-  // plant.get_actuation_input_port(left_box_model_instance).FixValue(&plant_context,
-  // external_normal_force);
+  const VectorXd external_normal_force = VectorXd::Ones(1) * 10.0;
+  plant.get_actuation_input_port(right_box_model_instance).FixValue(&plant_context,
+  -external_normal_force);
+  plant.get_actuation_input_port(left_box_model_instance).FixValue(&plant_context,
+  external_normal_force);
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
