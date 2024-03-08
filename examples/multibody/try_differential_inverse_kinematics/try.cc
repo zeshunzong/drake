@@ -28,9 +28,9 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 0.5, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 20e-4,
+DEFINE_double(time_step, 5e-4,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 5e4, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
@@ -161,7 +161,7 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
  private:
   const multibody::MultibodyPlant<double>& plant_;
   double initial_height_ = 0.0;
-  double lift_start_ = 0.4;
+  double lift_start_ = 0.2;
   double lift_duration_ = 1.6;
   double target_z_displacement_ = 2.0;
   double shake_start_ = 2.2;
@@ -207,8 +207,8 @@ class XBoxController : public drake::systems::LeafSystem<double> {
   double initial_pos_;
   bool is_right_;
   double move_start_ = 0.0;
-  double move_duration_ = 0.4;
-  double target_movement_ = 1.0;
+  double move_duration_ = 0.2;
+  double target_movement_ = 0.5;
   double box_width_;
 };
 
@@ -288,8 +288,9 @@ int do_main() {
                                box_width);
   const auto left_actuator_x_index =
       plant.AddJointActuator("left x actuator", left_prismatic_joint_x).index();
-  plant.get_mutable_joint_actuator(left_actuator_x_index)
-      .set_controller_gains({2e5 / 6000.0, 1});
+  unused(left_actuator_x_index);
+  // plant.get_mutable_joint_actuator(left_actuator_x_index)
+  //     .set_controller_gains({500.0, 1});
   auto left_box_controller = builder.template AddSystem<XBoxController>(
       plant, false, -(1.5 + 0.5 / 6.0 + 0.0 / FLAGS_ppc) * box_width,
       box_width);
@@ -310,8 +311,9 @@ int do_main() {
   const auto right_actuator_x_index =
       plant.AddJointActuator("right x actuator", right_prismatic_joint_x)
           .index();
-  plant.get_mutable_joint_actuator(right_actuator_x_index)
-      .set_controller_gains({2e5 / 6000.0, 1});
+  unused(right_actuator_x_index);
+  // plant.get_mutable_joint_actuator(right_actuator_x_index)
+  //     .set_controller_gains({500.0, 1});
   auto right_box_controller = builder.template AddSystem<XBoxController>(
       plant, true, (1.5 + 0.5 / 6.0 + 0.0 / FLAGS_ppc) * box_width, box_width);
 
@@ -430,13 +432,15 @@ int do_main() {
   builder.Connect(dummy_z_box_controller->get_output_port(),
                   plant.get_desired_state_input_port(dummy_z_instance));
 
-  builder.Connect(left_box_controller->get_output_port(),
-                  plant.get_desired_state_input_port(left_box_model_instance));
+  // builder.Connect(left_box_controller->get_output_port(),
+  //                 plant.get_desired_state_input_port(left_box_model_instance));
 
-  builder.Connect(right_box_controller->get_output_port(),
-                  plant.get_desired_state_input_port(right_box_model_instance));
+  
 
-  unused(right_box_controller);
+  // builder.Connect(right_box_controller->get_output_port(),
+  //                 plant.get_desired_state_input_port(right_box_model_instance));
+
+  unused(left_box_controller, right_box_controller);
 
   auto meshcat = std::make_shared<drake::geometry::Meshcat>();
   auto meshcat_params = drake::geometry::MeshcatVisualizerParams();
@@ -463,6 +467,10 @@ int do_main() {
   plant.SetFreeBodyPose(
       &plant_context, plant.GetBodyByName("free_box"),
       math::RigidTransformd{Vector3d(0.0, 0, box_width / 2.0)});
+
+  const VectorXd external_normal_force = VectorXd::Ones(1) * 20.0;
+  plant.get_actuation_input_port(right_box_model_instance).FixValue(&plant_context, -external_normal_force);
+  plant.get_actuation_input_port(left_box_model_instance).FixValue(&plant_context, external_normal_force);
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
