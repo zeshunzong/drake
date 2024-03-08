@@ -30,7 +30,7 @@
 
 DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 5e-5,
+DEFINE_double(time_step, 10e-5,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 5e5, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
@@ -43,7 +43,7 @@ DEFINE_double(beta, 0.01,
               "Stiffness damping coefficient for the deformable body [1/s].");
 DEFINE_double(hydro_modulus, 1e8, "Hydroelastic modulus [Pa].");
 DEFINE_double(damping, 1e2, "H&C damping.");
-DEFINE_double(ppc, 10, "mpm ppc");
+DEFINE_double(ppc, 11, "mpm ppc");
 
 using drake::geometry::AddContactMaterial;
 using drake::geometry::Box;
@@ -321,10 +321,10 @@ int do_main() {
                                   "RightCube", compliant_hydro_props);
 
   plant.RegisterVisualGeometry(free_box, RigidTransformd::Identity(),
-                               Box(box_width, box_width, box_width),
+                               Box(box_width, box_width*1.0, box_width*1.0),
                                "FreeCubeV", red);
   plant.RegisterCollisionGeometry(free_box, RigidTransformd::Identity(),
-                                  Box(box_width, box_width, box_width),
+                                  Box(box_width, box_width*1.0, box_width*1),
                                   "FreeCube", compliant_hydro_props);
 
   auto owned_deformable_model =
@@ -389,7 +389,7 @@ int do_main() {
                    10.0
             << std::endl;
   owned_deformable_model->maniskill_params.num_mpm_substeps = 50;
-  owned_deformable_model->maniskill_params.friction_mu = 0.8;
+  owned_deformable_model->maniskill_params.friction_mu = 0.8*10;
   owned_deformable_model->maniskill_params.friction_kf = kf;
   owned_deformable_model->maniskill_params.contact_damping = 10.0;
   owned_deformable_model->maniskill_params.contact_stiffness = 1e6;
