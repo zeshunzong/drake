@@ -124,7 +124,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void CalcAbstractStatesExplicit(const systems::Context<T>& context,
                                   systems::State<T>* update) const {
     if (deformable_model_->ExistsMpmModel()) {
-      WriteMpmParticlesToBgeo(context);
+      // WriteMpmParticlesToBgeo(context);
 
       const mpm::MpmPostContactResult<T>& result =
           EvalMpmPostContactResult(context);
@@ -133,6 +133,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
               deformable_model_->mpm_model().mpm_state_index());
       mutable_mpm_state = result.mpm_state;
     }
+    std::cout << "time: " << context.get_time() << std::endl;
   }
 
   const mpm::MpmPostContactResult<T>& EvalMpmPostContactResult(
@@ -166,6 +167,16 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         deformable_model_->maniskill_params.contact_damping;
     double kf = deformable_model_->maniskill_params.friction_kf;
     double friction_mu = deformable_model_->maniskill_params.friction_mu;
+    Vector3<T> f_total_left(0, 0, 0);
+    Vector3<T> f_total_right(0, 0, 0);
+    Vector3<T> v_total_left(0, 0, 0);
+    Vector3<T> v_total_right(0, 0, 0);
+    double time = context.get_time();
+    int current_step = std::round(time / manager_->plant().time_step());
+    int ratio = std::round(0.005 / manager_->plant().time_step());
+    unused(f_total_left, f_total_right, v_total_left, v_total_right);
+    int left_count = 0;
+    int right_count = 0;
 
     for (int step = 0; step < num_mpm_steps; ++step) {
       // first compute contact pairs
@@ -175,6 +186,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
           context, result->mpm_state.particles, &mpm_contact_pairs);
       // next, for each contact pair, compute and apply contact force
       for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
+        // std::cout << "contact point x " <<
+        // mpm_contact_pairs[i].particle_in_contact_position(0) << std::endl;
+        // std::cout << "rigid index: " << mpm_contact_pairs[i].non_mpm_id <<
+        // std::endl;
         const Vector3<T>& contact_normal = mpm_contact_pairs[i].normal;
         size_t p = mpm_contact_pairs[i].particle_in_contact_index;
         double penetration_distance = mpm_contact_pairs[i].penetration_distance;
@@ -221,15 +236,18 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                                         // of normal
         double fd = contact_damping *
                     std::min(relative_v_C(2), 0.0);  // this will be negative
-        double ft0 = std::min(std::abs(relative_v_C(0) * kf), friction_mu * fn);
-        if (relative_v_C(0) < 0) {
-          ft0 = -ft0;
-        }
-        double ft1 = std::min(std::abs(relative_v_C(1) * kf), friction_mu * fn);
-        if (relative_v_C(1) < 0) {
-          ft1 = -ft1;
-        }
-        Vector3<T> contact_force_C(-ft0, -ft1, -(fn + fd));
+
+        Vector2<T> vt(relative_v_C(0), relative_v_C(1));
+        Vector2<T> ft = vt.normalized() * std::min(kf*vt.norm(), friction_mu * fn);
+        // double ft0 = std::min(std::abs(relative_v_C(0) * kf), friction_mu * fn);
+        // if (relative_v_C(0) < 0) {
+        //   ft0 = -ft0;
+        // }
+        // double ft1 = std::min(std::abs(relative_v_C(1) * kf), friction_mu * fn);
+        // if (relative_v_C(1) < 0) {
+        //   ft1 = -ft1;
+        // }
+        Vector3<T> contact_force_C(-ft(0), -ft(1), -(fn + fd));
         Vector3<T> contact_force_W = R_WC * contact_force_C;
         // apply contact force to mpm
         const Vector3<T>& current_vp =
@@ -252,6 +270,48 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                                    .translation();
         result->forces_to_rigid_bodies.emplace_back(spatial_force_C_W.Shift(
             Bo - mpm_contact_pairs[i].particle_in_contact_position));
+
+        if ((step == 0) && (current_step % ratio) == 0) {
+          if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 37) {
+
+            if (mpm_contact_pairs[i].particle_in_contact_position(0) < 0) {
+              f_total_left += contact_force_W;
+              v_total_left += R_WC * relative_v_C;
+              left_count++;
+            } else {
+              f_total_right += contact_force_W;
+              v_total_right += R_WC * relative_v_C;
+              right_count++;
+            }
+          }
+        }
+      }
+
+      if ((step == 0) && (current_step % ratio) == 0) {
+        if (left_count > 0) {
+            v_total_left = v_total_left / left_count;
+        }
+        if (right_count > 0) {
+            v_total_right = v_total_right / right_count;
+        }
+        
+        if (time == 0.0) {
+          std::ofstream F("output.txt");
+          F << f_total_left(0) << ", " << f_total_left(1) << ", "
+            << f_total_left(2) << "," << f_total_right(0) << ", "
+            << f_total_right(1) << ", " << f_total_right(2) << ","
+            << v_total_left(0) << ", " << v_total_left(1) << ", "
+            << v_total_left(2) << ", " << v_total_right(0) << ", "
+            << v_total_right(1) << ", " << v_total_right(2) << std::endl;
+        } else {
+          std::ofstream F("output.txt", std::ios::app);
+          F << f_total_left(0) << ", " << f_total_left(1) << ", "
+            << f_total_left(2) << "," << f_total_right(0) << ", "
+            << f_total_right(1) << ", " << f_total_right(2) << ","
+            << v_total_left(0) << ", " << v_total_left(1) << ", "
+            << v_total_left(2) << ", " << v_total_right(0) << ", "
+            << v_total_right(1) << ", " << v_total_right(2) << std::endl;
+        }
       }
       // contact forces have been recorded to mpm and rigid
       // now advance mpm(small_dt)
