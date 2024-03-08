@@ -221,15 +221,12 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                                         // of normal
         double fd = contact_damping *
                     std::min(relative_v_C(2), 0.0);  // this will be negative
-        double ft0 = std::min(std::abs(relative_v_C(0) * kf), friction_mu * fn);
-        if (relative_v_C(0) < 0) {
-          ft0 = -ft0;
-        }
-        double ft1 = std::min(std::abs(relative_v_C(1) * kf), friction_mu * fn);
-        if (relative_v_C(1) < 0) {
-          ft1 = -ft1;
-        }
-        Vector3<T> contact_force_C(-ft0, -ft1, -(fn + fd));
+    
+
+        Vector2<T> vt(relative_v_C(0), relative_v_C(1));
+        Vector2<T> ft = vt.normalized() * std::min(kf*vt.norm(), friction_mu * fn);
+
+        Vector3<T> contact_force_C(-ft(0), -ft(1), -(fn + fd));
         Vector3<T> contact_force_W = R_WC * contact_force_C;
         // apply contact force to mpm
         const Vector3<T>& current_vp =

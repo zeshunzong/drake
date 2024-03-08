@@ -390,7 +390,7 @@ int do_main() {
                    10.0
             << std::endl;
   owned_deformable_model->maniskill_params.num_mpm_substeps = 50;
-  owned_deformable_model->maniskill_params.friction_mu = 0.8*10;
+  owned_deformable_model->maniskill_params.friction_mu = 0.8*1.0;
   owned_deformable_model->maniskill_params.friction_kf = kf;
   owned_deformable_model->maniskill_params.contact_damping = 10.0;
   owned_deformable_model->maniskill_params.contact_stiffness = 1e6;
