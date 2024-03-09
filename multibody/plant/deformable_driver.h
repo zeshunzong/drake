@@ -246,7 +246,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       for (size_t i = 0; i < mpm_contact_pairs.size(); ++i) {
         // std::cout << " x pos: " << mpm_contact_pairs[i].particle_in_contact_position(0) << std::endl;
         // std::cout << "contact geo: " << mpm_contact_pairs[i].non_mpm_id << std::endl;
-        if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 21) {
+        if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 20) {
           math::RotationMatrix<T> R_WC =
               math::RotationMatrix<T>::MakeFromOneUnitVector(
                   mpm_contact_pairs[i].normal, kZAxis);
@@ -267,7 +267,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         count = count + 1.0;
       }
       v_total_left = v_total_left / count;
-      v_total_right = v_total_right / count;
+      // v_total_right = v_total_right / count;
       if (time == 0.0) {
         std::ofstream F("output.txt");
         F << f_total_left(0) << ", " << f_total_left(1) << ", "
