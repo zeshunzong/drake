@@ -174,7 +174,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     double time = context.get_time();
     int current_step = std::round(time / manager_->plant().time_step());
     int ratio = std::round(0.005 / manager_->plant().time_step());
-    ratio = 625;
+    ratio = 1;
     unused(f_total_left, f_total_right, v_total_left, v_total_right);
     int left_count = 0;
     int right_count = 0;
@@ -272,7 +272,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         result->forces_to_rigid_bodies.emplace_back(spatial_force_C_W.Shift(
             Bo - mpm_contact_pairs[i].particle_in_contact_position));
 
-        if ((step == 0) && (current_step % ratio) == 0) {
+        if ((current_step % ratio) == 0) {
           if ((mpm_contact_pairs[i].non_mpm_id.get_value()) == 21) {
 
             if (mpm_contact_pairs[i].particle_in_contact_position(0) < 0) {
@@ -288,7 +288,19 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
         }
       }
 
-      if ((step == 0) && (current_step % ratio) == 0) {
+      
+      // contact forces have been recorded to mpm and rigid
+      // now advance mpm(small_dt)
+      mpm::GridData<T> grid_data_scratch;
+      mpm_solver_->AdvanceExplicitly(&result->mpm_state, *mpm_transfer_,
+                                     deformable_model_->mpm_model(), mpm_dt,
+                                     &grid_data_scratch, &mpm_scratch);
+      mpm_transfer_->SetUpTransfer(&(result->mpm_state.sparse_grid),
+                                   &(result->mpm_state.particles));
+    }
+    if ((current_step % ratio) == 0) {
+        f_total_left = f_total_left / num_mpm_steps;
+        f_total_right = f_total_right / num_mpm_steps;
         if (left_count > 0) {
             v_total_left = v_total_left / left_count;
         }
@@ -314,15 +326,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
             << v_total_right(1) << ", " << v_total_right(2) << std::endl;
         }
       }
-      // contact forces have been recorded to mpm and rigid
-      // now advance mpm(small_dt)
-      mpm::GridData<T> grid_data_scratch;
-      mpm_solver_->AdvanceExplicitly(&result->mpm_state, *mpm_transfer_,
-                                     deformable_model_->mpm_model(), mpm_dt,
-                                     &grid_data_scratch, &mpm_scratch);
-      mpm_transfer_->SetUpTransfer(&(result->mpm_state.sparse_grid),
-                                   &(result->mpm_state.particles));
-    }
   }
 
   void CalcGridDataFreeMotion(const systems::Context<T>& context,

@@ -28,11 +28,11 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 0.5, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 0.8, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 2e-6,
+DEFINE_double(time_step, 50e-6,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 1e5, "Young's modulus of the deformable body [Pa].");
+DEFINE_double(E, 5e5, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
 DEFINE_double(nu, 0.4, "Poisson's ratio of the deformable body, unitless.");
 DEFINE_double(density, 1e3,
@@ -146,7 +146,7 @@ int do_main() {
 
 
   unused(left_prismatic_joint_x, right_prismatic_joint_x);
-  double ratio = 2.0;
+  double ratio = 10.0;
   ModelInstanceIndex free_body_model_instance =
       plant.AddModelInstance("free_body_instance");
   const SpatialInertia<double> free_body_box_spatial =
@@ -235,7 +235,7 @@ int do_main() {
   double kf = (box_width * box_width * box_width * FLAGS_rho * 2.0 +
                box_width * box_width * box_width * FLAGS_rho * ratio) *
               1e4;
-  owned_deformable_model->maniskill_params.num_mpm_substeps = 1;
+  owned_deformable_model->maniskill_params.num_mpm_substeps = 30;
   owned_deformable_model->maniskill_params.friction_mu = 0.8;
   owned_deformable_model->maniskill_params.friction_kf = kf;
   owned_deformable_model->maniskill_params.contact_damping = 10.0;
@@ -277,7 +277,7 @@ int do_main() {
       &plant_context, plant.GetBodyByName("free_box"),
       math::RigidTransformd{Vector3d(0.0, 0, box_width / 2.0 * 0.0)});
 
-  const VectorXd external_normal_force = VectorXd::Ones(1) * 10.0;
+  const VectorXd external_normal_force = VectorXd::Ones(1) * 50.0;
   plant.get_actuation_input_port(right_box_model_instance).FixValue(&plant_context,
   -external_normal_force);
   plant.get_actuation_input_port(left_box_model_instance).FixValue(&plant_context,
