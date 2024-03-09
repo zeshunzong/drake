@@ -30,7 +30,7 @@
 
 DEFINE_double(simulation_time, 0.5, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 5e-3,
+DEFINE_double(time_step, 0.00125,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e5, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 100, "density.");
@@ -104,7 +104,7 @@ int do_main() {
 
   double box_width = 0.4 / 4;
 
-  Vector3<double> g(0, 0, -10.0);
+  Vector3<double> g(0, 0, -9.81);
   plant.mutable_gravity_field().set_gravity_vector(g);
 
   // box controlled on the left
@@ -146,7 +146,7 @@ int do_main() {
 
 
   unused(left_prismatic_joint_x, right_prismatic_joint_x);
-  double ratio = 4.0;
+  double ratio = 2.0;
   ModelInstanceIndex free_body_model_instance =
       plant.AddModelInstance("free_body_instance");
   const SpatialInertia<double> free_body_box_spatial =
