@@ -30,7 +30,7 @@
 
 DEFINE_double(simulation_time, 1.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 50e-6,
+DEFINE_double(time_step, 100e-6,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e5, "Young's modulus of the deformable body [Pa].");
 DEFINE_double(rho, 400, "density.");
