@@ -174,7 +174,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     double time = context.get_time();
     int current_step = std::round(time / manager_->plant().time_step());
     int ratio = std::round(0.005 / manager_->plant().time_step());
-    ratio = 1;
+    ratio = 31;
     unused(f_total_left, f_total_right, v_total_left, v_total_right);
     int left_count = 0;
     int right_count = 0;

@@ -234,7 +234,7 @@ int do_main() {
 //   owned_deformable_model->SetMpmFriction(0.8);
   double kf = (box_width * box_width * box_width * FLAGS_rho) *
               1e4;
-  owned_deformable_model->maniskill_params.num_mpm_substeps = 25;
+  owned_deformable_model->maniskill_params.num_mpm_substeps = 15;
   owned_deformable_model->maniskill_params.friction_mu = 0.8;
   owned_deformable_model->maniskill_params.friction_kf = kf;
   owned_deformable_model->maniskill_params.contact_damping = 10.0;
