@@ -28,7 +28,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 3.5, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -244,7 +244,7 @@ int do_main() {
                                "ground_visual", std::move(illustration_props));
 
   double box_width = 0.4 / 4;
-  double ratio = 15.0;
+  double ratio = 150.0;
 
   // a dummy box for lifting in z-direction
   const drake::multibody::UnitInertia<double> unit_inertia(0, 0, 0);
