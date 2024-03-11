@@ -83,7 +83,7 @@ struct MpmState {
                  ((particles_per_dim+2) * (particles_per_dim+2) * (particles_per_dim+2));
     double mp = vol * common_density;
     for (int i = 0; i <= particles_per_dim+1; ++i) {
-      for (int j = 0; j <= particles_per_dim+1; ++j) {
+      for (int j = 1; j <= particles_per_dim+0; ++j) {
         for (int k = 0; k <= particles_per_dim+1; ++k) {
           particles.AddParticle(
               pose * (bounding_box[0] + Vector3<T>(i * dx, j * dx, k * dx)),
