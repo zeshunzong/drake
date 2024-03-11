@@ -272,7 +272,7 @@ int do_main() {
       plant.AddModelInstance("left_box_instance");
   const SpatialInertia<double> left_box_spatial =
       SpatialInertia<double>::SolidBoxWithDensity(FLAGS_rho, box_width / 6.0,
-                                                  box_width * 1.2, box_width * 1.2);
+                                                  box_width * 1.4, box_width * 1.0);
   const RigidBody<double>& left_box =
       plant.AddRigidBody("left_box", left_box_model_instance, left_box_spatial);
   const auto& left_prismatic_joint_x = plant.AddJoint<PrismaticJoint>(
@@ -293,7 +293,7 @@ int do_main() {
       plant.AddModelInstance("right_box_instance");
   const SpatialInertia<double> right_box_spatial =
       SpatialInertia<double>::SolidBoxWithDensity(FLAGS_rho, box_width / 4.0,
-                                                  box_width * 1.2, box_width * 1.2);
+                                                  box_width * 1.4, box_width * 1.0);
   const RigidBody<double>& right_box = plant.AddRigidBody(
       "right_box", right_box_model_instance, right_box_spatial);
   const auto& right_prismatic_joint_x = plant.AddJoint<PrismaticJoint>(
@@ -329,14 +329,14 @@ int do_main() {
   unused(light_blue, red, green, blue, dark_blue, orange);
 
   plant.RegisterVisualGeometry(left_box, RigidTransformd::Identity(),
-                               Box(box_width / 6.0, box_width * 1.2, box_width * 1.2),
+                               Box(box_width / 6.0, box_width * 1.4, box_width * 1.0),
                                "LeftCubeV", grey);
   plant.RegisterCollisionGeometry(
       left_box, RigidTransformd::Identity(),
       Box(box_width / 6.0, box_width * 1.4, box_width), "LeftCube",
       compliant_hydro_props);
   plant.RegisterVisualGeometry(right_box, RigidTransformd::Identity(),
-                               Box(box_width / 6.0, box_width * 1.2, box_width * 1.2),
+                               Box(box_width / 6.0, box_width * 1.4, box_width * 1.0),
                                "RightCubeV", grey);
   plant.RegisterCollisionGeometry(
       right_box, RigidTransformd::Identity(),
