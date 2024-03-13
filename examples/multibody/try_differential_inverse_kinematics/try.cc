@@ -28,7 +28,7 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 4.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -136,23 +136,23 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
         target_z_pos -= fraction * 0.18 * box_width_;
       }
       if ((context.get_time() >= shake_start_ + 11 * delta_t_) &&
-          (context.get_time() < shake_start_ + 12 * delta_t_)) {
+          (context.get_time() < shake_start_ + 13 * delta_t_)) {
         fraction = 1 - (context.get_time() - (shake_start_ + 11 * delta_t_)) /
                            delta_t_;
         target_z_pos += fraction * 0.18 * box_width_;
       }
-    //   if ((context.get_time() >= shake_start_ + 13 * delta_t_) &&
-    //       (context.get_time() < shake_start_ + 15 * delta_t_)) {
-    //     fraction = 1 - (context.get_time() - (shake_start_ + 13 * delta_t_)) /
-    //                        delta_t_;
-    //     target_z_pos -= fraction * 0.18 * box_width_;
-    //   }
-    //   if ((context.get_time() >= shake_start_ + 15 * delta_t_) &&
-    //       (context.get_time() < shake_start_ + 16 * delta_t_)) {
-    //     fraction = 1 - (context.get_time() - (shake_start_ + 15 * delta_t_)) /
-    //                        delta_t_;
-    //     target_z_pos += fraction * 0.18 * box_width_;
-    //   }
+      if ((context.get_time() >= shake_start_ + 13 * delta_t_) &&
+          (context.get_time() < shake_start_ + 15 * delta_t_)) {
+        fraction = 1 - (context.get_time() - (shake_start_ + 13 * delta_t_)) /
+                           delta_t_;
+        target_z_pos -= fraction * 0.18 * box_width_;
+      }
+      if ((context.get_time() >= shake_start_ + 15 * delta_t_) &&
+          (context.get_time() < shake_start_ + 16 * delta_t_)) {
+        fraction = 1 - (context.get_time() - (shake_start_ + 15 * delta_t_)) /
+                           delta_t_;
+        target_z_pos += fraction * 0.18 * box_width_;
+      }
     }
     state_value << target_z_pos, 0;
     output->set_value(state_value);
@@ -162,10 +162,10 @@ class DummyZBoxController : public drake::systems::LeafSystem<double> {
   const multibody::MultibodyPlant<double>& plant_;
   double initial_height_ = 0.0;
   double lift_start_ = 0.4;
-  double lift_duration_ = 0.8;
+  double lift_duration_ = 1.6;
   double target_z_displacement_ = 2.0;
   double box_width_;
-  double shake_start_ = 1.8;
+  double shake_start_ = 2.2;
   double delta_t_ = 0.08;
 };
 
